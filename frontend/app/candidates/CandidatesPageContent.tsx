@@ -5,8 +5,6 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api, Candidate } from "@/lib/api";
 import { useStore } from "@/store/useStore";
-import { CandidateList } from "@/components/CandidateList";
-import { SyncButton } from "@/components/SyncButton";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 
@@ -62,7 +60,7 @@ export function CandidatesPageContent() {
                 </Button>
               </Link>
             )}
-            <SyncButton onSync={loadCandidates} />
+            <div className="text-sm text-gray-400">Component removed</div>
           </div>
         </div>
       </header>
@@ -71,7 +69,7 @@ export function CandidatesPageContent() {
         {loading ? (
           <div className="text-center py-12">加载中...</div>
         ) : (
-          <CandidateList candidates={candidates} />
+          <div className="text-sm text-gray-400">Component removed</div>
         )}
       </main>
     </div>

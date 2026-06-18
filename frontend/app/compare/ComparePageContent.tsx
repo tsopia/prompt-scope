@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api, Candidate, CompareResult } from "@/lib/api";
 import { useStore } from "@/store/useStore";
-import { ComparePanel } from "@/components/ComparePanel";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2 } from "lucide-react";
 
@@ -92,11 +91,7 @@ export function ComparePageContent() {
           </div>
         ) : (
           candidateA && candidateB && (
-            <ComparePanel
-              candidateA={candidateA}
-              candidateB={candidateB}
-              result={displayResult}
-            />
+            <div className="text-sm text-gray-400">Component removed</div>
           )
         )}
       </main>
