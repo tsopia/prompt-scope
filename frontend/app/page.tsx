@@ -9,15 +9,11 @@ export default function Page() {
   const [experiments, setExperiments] = useState<Record<string, Candidate[]>>({});
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [openExperimentId, setOpenExperimentId] = useState<string | null>(null);
 
   const loadExperiments = async () => {
     try {
       const data = await api.getExperiments();
       setExperiments(data);
-      // 默认展开第一个实验
-      const firstId = Object.keys(data)[0] ?? null;
-      setOpenExperimentId((prev) => prev ?? firstId);
     } catch (e) {
       console.error("Failed to load experiments:", e);
     } finally {
@@ -37,10 +33,7 @@ export default function Page() {
     });
   };
 
-  // 右栏显示当前展开实验的所有 candidates，用于 CostChart
-  const allCandidatesInView = openExperimentId
-    ? (experiments[openExperimentId] ?? [])
-    : Object.values(experiments).flat();
+  const allCandidatesInView = Object.values(experiments).flat();
 
   const selectedCandidates = Object.values(experiments)
     .flat()
