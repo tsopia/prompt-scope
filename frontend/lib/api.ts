@@ -11,6 +11,8 @@ export interface Candidate {
   cost: number;
   latency: number;
   score?: number;
+  input_tokens?: number;
+  output_tokens?: number;
 }
 
 export interface CompareResult {
