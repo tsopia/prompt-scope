@@ -68,7 +68,6 @@ export default function Page() {
         {/* Right: Compare Workspace */}
         <main className="flex-1 overflow-y-auto">
           <CompareWorkspace
-            key={selectedIds.join(",")}
             selectedCandidates={selectedCandidates}
             allCandidates={allCandidatesInView}
             selectedIds={selectedIds}

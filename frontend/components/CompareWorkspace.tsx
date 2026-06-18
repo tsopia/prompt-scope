@@ -1,6 +1,6 @@
 // frontend/components/CompareWorkspace.tsx
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Candidate, CompareResult, api } from "@/lib/api";
 import { JudgeResult } from "./JudgeResult";
 import { CostChart } from "./CostChart";
@@ -20,6 +20,14 @@ export function CompareWorkspace({
   const [judgeResult, setJudgeResult] = useState<CompareResult | null>(null);
   const [judging, setJudging] = useState(false);
   const [judgeError, setJudgeError] = useState<string | null>(null);
+
+  // Reset judge state when selection changes
+  const selectionKey = selectedCandidates.map((c) => c.id).join(",");
+  useEffect(() => {
+    setJudgeResult(null);
+    setJudgeError(null);
+    setJudging(false);
+  }, [selectionKey]);
 
   const handleJudge = async () => {
     if (selectedCandidates.length !== 2) return;
