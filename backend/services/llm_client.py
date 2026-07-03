@@ -1,3 +1,4 @@
+import json
 import httpx
 
 from models.entities import ModelProvider
@@ -13,26 +14,52 @@ class LLMClientError(Exception):
         self.status_code = status_code
 
 
+def _normalize_tool_calls(message: dict) -> list | None:
+    raw = message.get("tool_calls")
+    if not raw:
+        return None
+    normalized = []
+    for tc in raw:
+        fn = tc.get("function") or {}
+        args = fn.get("arguments")
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except (ValueError, TypeError):
+                pass  # 保留原始字符串
+        normalized.append({"id": tc.get("id"), "name": fn.get("name"),
+                           "arguments": args})
+    return normalized
+
+
 def _openai_call(client: httpx.Client, provider: ModelProvider, model: str,
-                 messages: list, model_params: dict | None) -> dict:
+                 messages: list, model_params: dict | None, tools: list | None) -> dict:
+    payload = {"model": model, "messages": messages, **(model_params or {})}
+    if tools:
+        payload["tools"] = tools
     resp = client.post(
         f"{provider.base_url.rstrip('/')}/chat/completions",
         headers={"Authorization": f"Bearer {provider.api_key}"},
-        json={"model": model, "messages": messages, **(model_params or {})},
+        json=payload,
         timeout=DEFAULT_TIMEOUT,
     )
     resp.raise_for_status()
     data = resp.json()
+    message = data["choices"][0]["message"]
     usage = data.get("usage") or {}
     return {
-        "content": data["choices"][0]["message"]["content"],
+        "content": message.get("content"),
+        "tool_calls": _normalize_tool_calls(message),
+        "raw_message": message,
         "input_tokens": usage.get("prompt_tokens"),
         "output_tokens": usage.get("completion_tokens"),
     }
 
 
 def _anthropic_call(client: httpx.Client, provider: ModelProvider, model: str,
-                    messages: list, model_params: dict | None) -> dict:
+                    messages: list, model_params: dict | None, tools: list | None) -> dict:
+    if tools:
+        raise LLMClientError("anthropic provider 暂不支持工具回放（Phase 4 计划）")
     params = dict(model_params or {})
     max_tokens = params.pop("max_tokens", DEFAULT_MAX_TOKENS)
     base = provider.base_url.rstrip("/")
@@ -52,20 +79,22 @@ def _anthropic_call(client: httpx.Client, provider: ModelProvider, model: str,
     return {
         "content": "".join(b["text"] for b in data["content"]
                            if b.get("type") == "text"),
+        "tool_calls": None,
+        "raw_message": None,
         "input_tokens": usage.get("input_tokens"),
         "output_tokens": usage.get("output_tokens"),
     }
 
 
 def chat_completion(provider: ModelProvider, model: str, messages: list,
-                    model_params: dict | None = None,
+                    model_params: dict | None = None, tools: list | None = None,
                     client: httpx.Client | None = None) -> dict:
     own_client = client is None
     client = client or httpx.Client()
     try:
         if provider.provider_type == "anthropic":
-            return _anthropic_call(client, provider, model, messages, model_params)
-        return _openai_call(client, provider, model, messages, model_params)
+            return _anthropic_call(client, provider, model, messages, model_params, tools)
+        return _openai_call(client, provider, model, messages, model_params, tools)
     except httpx.HTTPStatusError as e:
         raise LLMClientError(
             f"provider returned {e.response.status_code}: {e.response.text[:500]}",

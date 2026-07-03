@@ -25,7 +25,8 @@ def test_openai_compatible_success():
     out = chat_completion(openai_provider(), "gpt-4o",
                           [{"role": "user", "content": "hi"}],
                           client=make_client(handler))
-    assert out == {"content": "hello", "input_tokens": 10, "output_tokens": 5}
+    assert out == {"content": "hello", "tool_calls": None, "raw_message": {"content": "hello"},
+                   "input_tokens": 10, "output_tokens": 5}
 
 
 def test_anthropic_success():
@@ -42,7 +43,8 @@ def test_anthropic_success():
     out = chat_completion(provider, "claude-x",
                           [{"role": "user", "content": "hi"}],
                           client=make_client(handler))
-    assert out == {"content": "hey", "input_tokens": 8, "output_tokens": 3}
+    assert out == {"content": "hey", "tool_calls": None, "raw_message": None,
+                   "input_tokens": 8, "output_tokens": 3}
 
 
 def test_anthropic_base_url_with_v1_suffix_not_doubled():
@@ -58,7 +60,8 @@ def test_anthropic_base_url_with_v1_suffix_not_doubled():
     out = chat_completion(provider, "claude-x",
                           [{"role": "user", "content": "hi"}],
                           client=make_client(handler))
-    assert out == {"content": "hey", "input_tokens": 8, "output_tokens": 3}
+    assert out == {"content": "hey", "tool_calls": None, "raw_message": None,
+                   "input_tokens": 8, "output_tokens": 3}
 
 
 def test_model_params_passed_through():
@@ -95,3 +98,66 @@ def test_network_error_raises_llm_client_error():
         chat_completion(openai_provider(), "gpt-4o",
                         [{"role": "user", "content": "hi"}],
                         client=make_client(handler))
+
+
+def test_openai_tools_passed_and_tool_calls_normalized():
+    seen = {}
+
+    def handler(request):
+        import json as _json
+        seen.update(_json.loads(request.content))
+        return httpx.Response(200, json={
+            "choices": [{"message": {
+                "role": "assistant", "content": None,
+                "tool_calls": [{"id": "call_1", "type": "function",
+                                "function": {"name": "get_weather",
+                                             "arguments": "{\"city\": \"北京\"}"}}]}}],
+            "usage": {"prompt_tokens": 20, "completion_tokens": 10}})
+
+    tools = [{"type": "function", "function": {"name": "get_weather", "parameters": {}}}]
+    out = chat_completion(openai_provider(), "gpt-4o",
+                          [{"role": "user", "content": "天气"}],
+                          tools=tools, client=make_client(handler))
+    assert seen["tools"] == tools
+    assert out["tool_calls"] == [{"id": "call_1", "name": "get_weather",
+                                  "arguments": {"city": "北京"}}]
+    assert out["raw_message"]["tool_calls"][0]["id"] == "call_1"
+    assert out["content"] is None
+
+
+def test_openai_unparseable_tool_arguments_kept_raw():
+    def handler(request):
+        return httpx.Response(200, json={
+            "choices": [{"message": {
+                "role": "assistant", "content": None,
+                "tool_calls": [{"id": "c1", "type": "function",
+                                "function": {"name": "t", "arguments": "not-json"}}]}}],
+            "usage": {}})
+
+    out = chat_completion(openai_provider(), "gpt-4o",
+                          [{"role": "user", "content": "x"}],
+                          tools=[{"type": "function", "function": {"name": "t"}}],
+                          client=make_client(handler))
+    assert out["tool_calls"][0]["arguments"] == "not-json"
+
+
+def test_no_tools_response_has_none_tool_calls():
+    def handler(request):
+        return httpx.Response(200, json={
+            "choices": [{"message": {"role": "assistant", "content": "hi"}}],
+            "usage": {}})
+
+    out = chat_completion(openai_provider(), "gpt-4o",
+                          [{"role": "user", "content": "x"}],
+                          client=make_client(handler))
+    assert out["tool_calls"] is None
+    assert out["content"] == "hi"
+
+
+def test_anthropic_with_tools_rejected():
+    provider = ModelProvider(name="ant2", base_url="https://api.anthropic.test",
+                             api_key="ak", provider_type="anthropic")
+    with pytest.raises(LLMClientError, match="暂不支持工具回放"):
+        chat_completion(provider, "claude-x", [{"role": "user", "content": "x"}],
+                        tools=[{"type": "function", "function": {"name": "t"}}],
+                        client=make_client(lambda r: httpx.Response(200, json={})))

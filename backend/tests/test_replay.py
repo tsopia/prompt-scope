@@ -1,0 +1,190 @@
+import json
+
+import httpx
+import pytest
+
+from models.entities import (ModelPricing, ModelProvider, Observation, Project,
+                             ReplayRun, Trace)
+from services.replay_service import MAX_REPLAY_STEPS, execute_replay
+
+
+@pytest.fixture()
+def seeded(db_session):
+    p = Project(name="demo")
+    db_session.add(p)
+    db_session.flush()
+    provider = ModelProvider(name="oai", base_url="https://api.test.com/v1",
+                             api_key="sk-x", provider_type="openai")
+    db_session.add(provider)
+    db_session.flush()
+    db_session.add(ModelPricing(model="cheap-model", input_price_per_1k=0.001,
+                                output_price_per_1k=0.002,
+                                provider_id=provider.id))
+    t = Trace(id="src-1", project_id=p.id, name="weather-run",
+              input={"q": "北京天气"}, output={"a": "晴"})
+    db_session.add(t)
+    db_session.add_all([
+        Observation(
+            id="ob-llm", trace_id="src-1", type="llm", name="plan", seq=0,
+            model="gpt-4o",
+            messages=[{"role": "system", "content": "你是天气助手"},
+                      {"role": "user", "content": "北京天气"}],
+            tool_definitions=[{"type": "function",
+                               "function": {"name": "get_weather",
+                                            "parameters": {}}}]),
+        Observation(id="ob-tool", trace_id="src-1", parent_id="ob-llm",
+                    type="tool", name="get_weather", seq=1,
+                    tool_input={"city": "北京"},
+                    tool_output={"weather": "晴", "temp": 32}),
+    ])
+    db_session.commit()
+    return p
+
+
+def scripted_client(responses: list[dict]):
+    """按调用次序依次返回 responses 中的 JSON。"""
+    calls = {"n": 0, "payloads": []}
+
+    def handler(request):
+        calls["payloads"].append(json.loads(request.content))
+        body = responses[min(calls["n"], len(responses) - 1)]
+        calls["n"] += 1
+        return httpx.Response(200, json=body)
+
+    return httpx.Client(transport=httpx.MockTransport(handler)), calls
+
+
+def tool_call_response(name, args_json):
+    return {"choices": [{"message": {
+        "role": "assistant", "content": None,
+        "tool_calls": [{"id": "c1", "type": "function",
+                        "function": {"name": name, "arguments": args_json}}]}}],
+        "usage": {"prompt_tokens": 50, "completion_tokens": 10}}
+
+
+def final_response(text):
+    return {"choices": [{"message": {"role": "assistant", "content": text}}],
+            "usage": {"prompt_tokens": 60, "completion_tokens": 20}}
+
+
+def make_run(db_session, seeded, **over):
+    run = ReplayRun(project_id=seeded.id, source_trace_id="src-1",
+                    override_model="cheap-model", status="pending", **over)
+    db_session.add(run)
+    db_session.commit()
+    return run
+
+
+def test_replay_happy_path_with_matching_tool(db_session, seeded):
+    client, calls = scripted_client([
+        tool_call_response("get_weather", '{"city": "北京"}'),
+        final_response("北京晴 32 度"),
+    ])
+    run = execute_replay(db_session, make_run(db_session, seeded), client=client)
+
+    assert run.status == "success"
+    assert run.divergences == []
+    result = db_session.get(Trace, run.result_trace_id)
+    assert result.origin == "replay"
+    assert result.output == "北京晴 32 度"
+    obs = result.observations
+    # llm-step-0 + mocked tool + llm-step-1
+    assert [o.type for o in obs] == ["llm", "tool", "llm"]
+    assert obs[1].meta == {"mocked": True, "recorded_input": {"city": "北京"}}
+    assert obs[1].tool_output == {"weather": "晴", "temp": 32}
+    # 第二次调用的消息里带了录制的工具结果
+    second_payload = calls["payloads"][1]
+    assert any("晴" in json.dumps(m, ensure_ascii=False)
+               for m in second_payload["messages"])
+    # 成本按 pricing 计算并聚合
+    assert result.total_cost == pytest.approx(
+        (50 + 60) / 1000 * 0.001 + (10 + 20) / 1000 * 0.002)
+
+
+def test_replay_param_mismatch_recorded_but_continues(db_session, seeded):
+    client, _ = scripted_client([
+        tool_call_response("get_weather", '{"city": "上海"}'),
+        final_response("done"),
+    ])
+    run = execute_replay(db_session, make_run(db_session, seeded), client=client)
+    assert run.status == "success"
+    assert len(run.divergences) == 1
+    d = run.divergences[0]
+    assert d["type"] == "param_mismatch"
+    assert d["recorded_input"] == {"city": "北京"}
+    assert d["actual_input"] == {"city": "上海"}
+    # 仍返回录制结果
+    result = db_session.get(Trace, run.result_trace_id)
+    assert result.observations[1].tool_output == {"weather": "晴", "temp": 32}
+
+
+def test_replay_unrecorded_call_gets_error_result(db_session, seeded):
+    client, calls = scripted_client([
+        tool_call_response("get_stock", '{"code": "AAPL"}'),
+        final_response("done"),
+    ])
+    run = execute_replay(db_session, make_run(db_session, seeded), client=client)
+    assert run.status == "success"
+    assert run.divergences[0]["type"] == "unrecorded_call"
+    result = db_session.get(Trace, run.result_trace_id)
+    tool_ob = result.observations[1]
+    assert tool_ob.status == "error"
+    assert "不可用" in json.dumps(tool_ob.tool_output, ensure_ascii=False)
+
+
+def test_replay_prompt_override_replaces_system(db_session, seeded):
+    client, calls = scripted_client([final_response("ok")])
+    run = execute_replay(
+        db_session,
+        make_run(db_session, seeded, override_prompt_text="你是简洁的天气播报员"),
+        client=client)
+    first_payload = calls["payloads"][0]
+    assert first_payload["messages"][0] == {
+        "role": "system", "content": "你是简洁的天气播报员"}
+    assert run.status == "success"
+
+
+def test_replay_model_error_keeps_partial_trace(db_session, seeded):
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(200, json=tool_call_response(
+                "get_weather", '{"city": "北京"}'))
+        return httpx.Response(500, json={"error": "boom"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    run = execute_replay(db_session, make_run(db_session, seeded), client=client)
+    assert run.status == "failed"
+    assert run.error and "500" in run.error
+    # 部分链路已落库
+    result = db_session.get(Trace, run.result_trace_id)
+    assert result is not None
+    assert result.status == "error"
+    assert [o.type for o in result.observations] == ["llm", "tool"]
+
+
+def test_replay_max_steps_guard(db_session, seeded):
+    # 永远返回 tool_call → 触发步数护栏
+    client, _ = scripted_client([
+        tool_call_response("get_weather", '{"city": "北京"}')])
+    run = execute_replay(db_session, make_run(db_session, seeded), client=client)
+    assert run.status == "failed"
+    assert any(d["type"] == "max_steps_exceeded" for d in run.divergences)
+    result = db_session.get(Trace, run.result_trace_id)
+    assert len([o for o in result.observations if o.type == "llm"]) == MAX_REPLAY_STEPS
+
+
+def test_replay_source_without_llm_fails_cleanly(db_session, seeded):
+    from fastapi import HTTPException
+    t = Trace(id="src-empty", project_id=seeded.id, name="empty")
+    db_session.add(t)
+    db_session.commit()
+    run = ReplayRun(project_id=seeded.id, source_trace_id="src-empty",
+                    override_model="cheap-model", status="pending")
+    db_session.add(run)
+    db_session.commit()
+    with pytest.raises(HTTPException) as exc:
+        execute_replay(db_session, run)
+    assert exc.value.status_code == 400

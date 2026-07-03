@@ -3,9 +3,10 @@ import json
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from models.entities import Evaluation, ModelPricing, ModelProvider, Trace
+from models.entities import Evaluation, Trace
 from services.ingest_service import compute_cost
 from services.llm_client import LLMClientError, chat_completion
+from services.providers import resolve_provider
 
 MAX_FIELD_CHARS = 4000
 MAX_STEP_CHARS = 200
@@ -83,19 +84,6 @@ def _extract_json(content: str) -> dict:
     return json.loads(content[start:end + 1])
 
 
-def _resolve_provider(db: Session, judge_model: str) -> ModelProvider:
-    pricing = db.query(ModelPricing).filter(
-        ModelPricing.model == judge_model).first()
-    if pricing is None or pricing.provider_id is None:
-        raise HTTPException(status_code=400,
-                            detail=f"judge model 未配置 provider: {judge_model}")
-    provider = db.get(ModelProvider, pricing.provider_id)
-    if provider is None:
-        raise HTTPException(status_code=400,
-                            detail=f"judge model 的 provider 不存在: {judge_model}")
-    return provider
-
-
 def run_judge(db: Session, subject_trace_id: str, judge_model: str,
               compare_trace_id: str | None = None,
               context_mode: str = "output_only", force: bool = False,
@@ -119,7 +107,7 @@ def run_judge(db: Session, subject_trace_id: str, judge_model: str,
         if cached is not None:
             return cached
 
-    provider = _resolve_provider(db, judge_model)
+    provider = resolve_provider(db, judge_model)
     trace_context = (_trace_context(subject, compare)
                      if context_mode == "with_trace" else "")
     if compare is not None:
