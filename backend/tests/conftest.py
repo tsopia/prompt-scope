@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from db import Base
+import models.entities  # noqa: F401  确保建表元数据注册
 
 
 @pytest.fixture()
