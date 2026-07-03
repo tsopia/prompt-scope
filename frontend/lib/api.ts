@@ -113,6 +113,27 @@ export interface JudgeModel {
   provider_name: string;
 }
 
+export interface Evaluation {
+  id: string;
+  subject_trace_id: string;
+  compare_trace_id: string | null;
+  judge_model: string;
+  context_mode: string;
+  score: number | null;
+  score_b: number | null;
+  verdict: string | null;
+  reasoning: string | null;
+  cost: number | null;
+  created_at: string;
+}
+
+export interface JudgeRunResult {
+  judge_model: string;
+  status: "ok" | "error";
+  evaluation: Evaluation | null;
+  error: string | null;
+}
+
 export const api = {
   getProjects: () => get<Project[]>("/api/projects"),
   getTraces: (params: {
@@ -140,4 +161,11 @@ export const api = {
     send<Pricing>("POST", "/api/pricing", body),
   deletePricing: (id: string) => send<{ deleted: boolean }>("DELETE", `/api/pricing/${id}`),
   getJudgeModels: () => get<JudgeModel[]>("/api/judge-models"),
+  getEvaluations: (subjectId: string, compareId?: string) => {
+    const q = new URLSearchParams({ subject_trace_id: subjectId });
+    if (compareId) q.set("compare_trace_id", compareId);
+    return get<Evaluation[]>(`/api/evaluations?${q.toString()}`);
+  },
+  evaluate: (body: { subject_trace_id: string; compare_trace_id?: string; judge_models: string[]; force?: boolean }) =>
+    send<{ results: JudgeRunResult[] }>("POST", "/api/evaluations", body),
 };

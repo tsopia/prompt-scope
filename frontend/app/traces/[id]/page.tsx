@@ -46,6 +46,10 @@ export default function TraceDetailPage() {
           {trace.status === "error" && (
             <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">error</span>
           )}
+          <Link href={`/compare?a=${trace.id}`}
+                className="text-xs px-3 py-1 rounded-md border border-[#6366F1] text-[#6366F1] hover:bg-[#EEF0FF]">
+            加入对比
+          </Link>
           <span className="ml-auto text-xs text-gray-500 font-mono">
             {formatTokens(trace.total_input_tokens)} / {formatTokens(trace.total_output_tokens)} tokens
             · {formatCost(trace.total_cost)} · {formatLatency(trace.latency_ms)}

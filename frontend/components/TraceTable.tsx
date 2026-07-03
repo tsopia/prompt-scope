@@ -3,7 +3,9 @@ import { useRouter } from "next/navigation";
 import { TraceSummary } from "@/lib/api";
 import { formatCost, formatLatency, formatTokens } from "@/lib/format";
 
-export function TraceTable({ traces }: { traces: TraceSummary[] }) {
+export function TraceTable({ traces, compareIds, onToggleCompare }: {
+  traces: TraceSummary[]; compareIds: string[]; onToggleCompare: (id: string) => void;
+}) {
   const router = useRouter();
 
   if (traces.length === 0) {
@@ -18,6 +20,7 @@ export function TraceTable({ traces }: { traces: TraceSummary[] }) {
     <table className="w-full text-sm">
       <thead>
         <tr className="text-left text-xs text-gray-400 uppercase tracking-wider border-b border-[#E5E7EB]">
+          <th className="px-2 py-2"></th>
           <th className="px-4 py-2">名称</th>
           <th className="px-4 py-2">来源</th>
           <th className="px-4 py-2">模型</th>
@@ -35,6 +38,10 @@ export function TraceTable({ traces }: { traces: TraceSummary[] }) {
             onClick={() => router.push(`/traces/${t.id}`)}
             className="border-b border-[#F3F4F6] hover:bg-[#F5F6FF] cursor-pointer"
           >
+            <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
+              <input type="checkbox" checked={compareIds.includes(t.id)}
+                     onChange={() => onToggleCompare(t.id)} />
+            </td>
             <td className="px-4 py-3 font-medium">{t.name || t.id.slice(0, 8)}</td>
             <td className="px-4 py-3">
               <span
