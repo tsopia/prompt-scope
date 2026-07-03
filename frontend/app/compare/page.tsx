@@ -3,7 +3,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api, TraceDetail, TraceSummary } from "@/lib/api";
-import { alignTraces } from "@/lib/align";
+import { alignTraces, flattenTree } from "@/lib/align";
 import { formatCost, formatLatency } from "@/lib/format";
 import { AlignedTraceView } from "@/components/AlignedTraceView";
 import { JudgePanel } from "@/components/JudgePanel";
@@ -16,6 +16,8 @@ function pct(a: number | null, b: number | null): string {
 }
 
 function Summary({ a, b }: { a: TraceDetail; b: TraceDetail }) {
+  const stepsA = flattenTree(a.observations).length;
+  const stepsB = flattenTree(b.observations).length;
   const items = [
     { label: "总成本", value: `${formatCost(a.total_cost)} → ${formatCost(b.total_cost)}`,
       delta: pct(a.total_cost, b.total_cost) },
@@ -23,6 +25,7 @@ function Summary({ a, b }: { a: TraceDetail; b: TraceDetail }) {
       delta: pct(a.latency_ms, b.latency_ms) },
     { label: "Tokens (in)", value: `${a.total_input_tokens} → ${b.total_input_tokens}`,
       delta: pct(a.total_input_tokens, b.total_input_tokens) },
+    { label: "步数", value: `${stepsA} → ${stepsB}`, delta: pct(stepsA, stepsB) },
   ];
   return (
     <div className="bg-white rounded-lg border border-[#E5E7EB] px-4 py-3 mb-4 flex flex-wrap gap-x-8 gap-y-2">
