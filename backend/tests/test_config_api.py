@@ -70,6 +70,31 @@ def test_pricing_crud_and_judge_models(client):
     assert client.get("/api/judge-models").json() == []
 
 
+def test_update_provider_name_collision_409(client):
+    client.post("/api/providers", json={
+        "name": "provider-a", "base_url": "u", "api_key": "k",
+        "provider_type": "openai"})
+    pid_b = client.post("/api/providers", json={
+        "name": "provider-b", "base_url": "u", "api_key": "k",
+        "provider_type": "openai"}).json()["id"]
+
+    resp = client.put(f"/api/providers/{pid_b}", json={
+        "name": "provider-a", "base_url": "u", "provider_type": "openai"})
+    assert resp.status_code == 409
+
+
+def test_update_pricing_model_collision_409(client):
+    client.post("/api/pricing", json={
+        "model": "model-a", "input_price_per_1k": 1, "output_price_per_1k": 1})
+    price_id_b = client.post("/api/pricing", json={
+        "model": "model-b", "input_price_per_1k": 1,
+        "output_price_per_1k": 1}).json()["id"]
+
+    resp = client.put(f"/api/pricing/{price_id_b}", json={
+        "model": "model-a", "input_price_per_1k": 1, "output_price_per_1k": 1})
+    assert resp.status_code == 409
+
+
 def test_provider_delete_clears_pricing_reference(client):
     pid = client.post("/api/providers", json={
         "name": "p", "base_url": "u", "api_key": "k",

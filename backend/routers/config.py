@@ -45,6 +45,9 @@ def update_provider(provider_id: str, payload: ProviderIn,
     p = db.get(ModelProvider, provider_id)
     if p is None:
         raise HTTPException(status_code=404, detail="provider not found")
+    if payload.name != p.name and db.query(ModelProvider).filter(
+            ModelProvider.name == payload.name).first():
+        raise HTTPException(status_code=409, detail="provider name already exists")
     p.name = payload.name
     p.base_url = payload.base_url
     p.provider_type = payload.provider_type
@@ -92,6 +95,9 @@ def update_pricing(pricing_id: str, payload: PricingIn,
     r = db.get(ModelPricing, pricing_id)
     if r is None:
         raise HTTPException(status_code=404, detail="pricing not found")
+    if payload.model != r.model and db.query(ModelPricing).filter(
+            ModelPricing.model == payload.model).first():
+        raise HTTPException(status_code=409, detail="model pricing already exists")
     r.model = payload.model
     r.input_price_per_1k = payload.input_price_per_1k
     r.output_price_per_1k = payload.output_price_per_1k
