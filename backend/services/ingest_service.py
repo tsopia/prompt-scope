@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from models.entities import ModelPricing, Observation, Trace
@@ -23,10 +24,12 @@ def _latency_ms(start, end) -> int | None:
 
 def _apply_observation(db: Session, trace_id: str, data: ObservationIn) -> None:
     ob = db.get(Observation, data.id)
+    if ob is not None and ob.trace_id != trace_id:
+        raise HTTPException(status_code=409,
+                            detail="observation id already exists in another trace")
     if ob is None:
         ob = Observation(id=data.id, trace_id=trace_id)
         db.add(ob)
-    ob.trace_id = trace_id
     ob.parent_id = data.parent_id
     ob.type = data.type
     ob.name = data.name
@@ -63,10 +66,12 @@ def _recompute_aggregates(db: Session, trace: Trace) -> None:
 def ingest(db: Session, project_id: str, payload: IngestRequest) -> Trace:
     data = payload.trace
     trace = db.get(Trace, data.id)
+    if trace is not None and trace.project_id != project_id:
+        raise HTTPException(status_code=409,
+                            detail="trace id already exists in another project")
     if trace is None:
         trace = Trace(id=data.id, project_id=project_id)
         db.add(trace)
-    trace.project_id = project_id
     trace.name = data.name
     trace.origin = data.origin
     trace.status = data.status

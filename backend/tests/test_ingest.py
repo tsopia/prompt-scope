@@ -110,6 +110,36 @@ def test_tool_observation_requires_input_and_result(client, api_key):
     assert any(loc[-1] == "tool_input" for loc in locs)
 
 
+def test_ingest_cannot_hijack_other_projects_trace(client, db_session, api_key):
+    raw_a, _ = api_key
+    client.post("/api/ingest", json=PAYLOAD, headers={"Authorization": f"Bearer {raw_a}"})
+
+    from models.entities import ApiKey, Project
+    from services.auth import generate_api_key
+    p2 = Project(name="other")
+    db_session.add(p2)
+    db_session.flush()
+    raw_b, key_hash_b, prefix_b = generate_api_key()
+    db_session.add(ApiKey(project_id=p2.id, key_hash=key_hash_b, prefix=prefix_b))
+    db_session.commit()
+
+    resp = client.post("/api/ingest", json=PAYLOAD,
+                       headers={"Authorization": f"Bearer {raw_b}"})
+    assert resp.status_code == 409
+    from models.entities import Trace
+    assert db_session.get(Trace, "tr-1").project_id != p2.id
+
+
+def test_ingest_cannot_move_observation_across_traces(client, db_session, api_key):
+    raw, _ = api_key
+    h = {"Authorization": f"Bearer {raw}"}
+    client.post("/api/ingest", json=PAYLOAD, headers=h)
+    other = {"trace": {"id": "tr-other", "name": "second"},
+             "observations": [{"id": "ob-1", "type": "span", "name": "steal"}]}
+    resp = client.post("/api/ingest", json=other, headers=h)
+    assert resp.status_code == 409
+
+
 def test_unknown_model_cost_is_null(client, db_session, api_key):
     raw, _ = api_key
     payload = {
