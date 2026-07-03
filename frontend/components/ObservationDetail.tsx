@@ -78,6 +78,16 @@ export function ObservationDetail({ node }: { node: ObservationNode }) {
           )}
         </>
       )}
+
+      {node.type === "span" && (
+        <Section title="基础信息">
+          <div className="text-sm text-gray-600 space-y-1">
+            <p>开始时间：{node.started_at ? new Date(node.started_at).toLocaleString("zh-CN") : "—"}</p>
+            <p>结束时间：{node.ended_at ? new Date(node.ended_at).toLocaleString("zh-CN") : "—"}</p>
+            <p>状态：{node.status}</p>
+          </div>
+        </Section>
+      )}
     </div>
   );
 }
