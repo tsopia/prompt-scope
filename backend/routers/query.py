@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from db import get_db
 from models.entities import Observation, Project, Trace
@@ -30,7 +30,8 @@ def list_traces(
     if search:
         q = q.filter(Trace.name.ilike(f"%{search}%"))
     total = q.count()
-    rows = q.order_by(Trace.created_at.desc()).offset(offset).limit(limit).all()
+    rows = (q.options(selectinload(Trace.observations))
+            .order_by(Trace.created_at.desc()).offset(offset).limit(limit).all())
 
     items = []
     for t in rows:
