@@ -134,6 +134,30 @@ export interface JudgeRunResult {
   error: string | null;
 }
 
+export interface Divergence {
+  type: string;
+  tool?: string;
+  step: number;
+  recorded_input?: unknown;
+  actual_input?: unknown;
+  arguments?: unknown;
+}
+
+export interface ReplayRun {
+  id: string;
+  source_trace_id: string;
+  result_trace_id: string | null;
+  status: string;
+  override_model: string | null;
+  override_model_params: Record<string, unknown> | null;
+  override_prompt_text: string | null;
+  override_prompt_version_id: string | null;
+  divergences: Divergence[] | null;
+  error: string | null;
+  created_at: string;
+  finished_at: string | null;
+}
+
 export const api = {
   getProjects: () => get<Project[]>("/api/projects"),
   getTraces: (params: {
@@ -168,4 +192,12 @@ export const api = {
   },
   evaluate: (body: { subject_trace_id: string; compare_trace_id?: string; judge_models: string[]; force?: boolean }) =>
     send<{ results: JudgeRunResult[] }>("POST", "/api/evaluations", body),
+  createReplay: (body: {
+    source_trace_id: string;
+    override_model?: string;
+    override_model_params?: Record<string, unknown>;
+    override_prompt_text?: string;
+  }) => send<ReplayRun>("POST", "/api/replays", body),
+  getReplays: (sourceTraceId: string) =>
+    get<ReplayRun[]>(`/api/replays?source_trace_id=${encodeURIComponent(sourceTraceId)}`),
 };
