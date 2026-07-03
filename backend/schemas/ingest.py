@@ -7,7 +7,7 @@ from pydantic_core import InitErrorDetails
 
 class TraceIn(BaseModel):
     id: str = Field(max_length=64)
-    name: str = ""
+    name: str = Field(default="", max_length=255)
     origin: Literal["live", "replay"] = "live"
     status: Literal["running", "success", "error"] = "success"
     input: Any = None
@@ -22,7 +22,7 @@ class ObservationIn(BaseModel):
     id: str = Field(max_length=64)
     parent_id: str | None = None
     type: Literal["llm", "tool", "span"]
-    name: str = ""
+    name: str = Field(default="", max_length=255)
     seq: int = 0
     status: Literal["success", "error"] = "success"
     error: str | None = None
@@ -30,7 +30,7 @@ class ObservationIn(BaseModel):
     ended_at: datetime | None = None
     metadata: dict | None = None
     # llm
-    model: str | None = None
+    model: str | None = Field(default=None, max_length=128)
     model_params: dict | None = None
     messages: list | None = None
     tool_definitions: list | None = None

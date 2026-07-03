@@ -110,6 +110,14 @@ def test_tool_observation_requires_input_and_result(client, api_key):
     assert any(loc[-1] == "tool_input" for loc in locs)
 
 
+def test_trace_name_over_max_length_is_rejected(client, api_key):
+    raw, _ = api_key
+    bad = {**PAYLOAD, "trace": {**PAYLOAD["trace"], "name": "x" * 300}}
+    resp = client.post("/api/ingest", json=bad,
+                       headers={"Authorization": f"Bearer {raw}"})
+    assert resp.status_code == 422
+
+
 def test_ingest_cannot_hijack_other_projects_trace(client, db_session, api_key):
     raw_a, _ = api_key
     client.post("/api/ingest", json=PAYLOAD, headers={"Authorization": f"Bearer {raw_a}"})
