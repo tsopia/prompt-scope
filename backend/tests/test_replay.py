@@ -144,6 +144,26 @@ def test_replay_prompt_override_replaces_system(db_session, seeded):
     assert run.status == "success"
 
 
+def test_replay_result_trace_records_prompt_version(db_session, seeded):
+    from models.entities import Prompt, PromptVersion
+
+    pr = Prompt(project_id=seeded.id, name="p")
+    db_session.add(pr)
+    db_session.flush()
+    v = PromptVersion(prompt_id=pr.id, version=1, content="新 system")
+    db_session.add(v)
+    db_session.commit()
+    client, calls = scripted_client([final_response("ok")])
+    run = execute_replay(
+        db_session,
+        make_run(db_session, seeded, override_prompt_version_id=v.id),
+        client=client)
+    assert run.status == "success"
+    result = db_session.get(Trace, run.result_trace_id)
+    assert result.prompt_version_id == v.id
+    assert calls["payloads"][0]["messages"][0]["content"] == "新 system"
+
+
 def test_replay_model_error_keeps_partial_trace(db_session, seeded):
     calls = {"n": 0}
 
@@ -188,3 +208,93 @@ def test_replay_source_without_llm_fails_cleanly(db_session, seeded):
     with pytest.raises(HTTPException) as exc:
         execute_replay(db_session, run)
     assert exc.value.status_code == 400
+
+
+def test_single_point_replay_uses_target_subtree(db_session, seeded):
+    # 给源 trace 加第二个 llm 节点（多阶段）及其子 tool
+    db_session.add_all([
+        Observation(id="ob-llm2", trace_id="src-1", type="llm", name="answer",
+                    seq=2, model="gpt-4o",
+                    messages=[{"role": "system", "content": "阶段二"},
+                              {"role": "user", "content": "汇总"}],
+                    tool_definitions=[{"type": "function",
+                                       "function": {"name": "summarize",
+                                                    "parameters": {}}}]),
+        Observation(id="ob-tool2", trace_id="src-1", parent_id="ob-llm2",
+                    type="tool", name="summarize", seq=3,
+                    tool_input={"n": 1}, tool_output={"s": "ok"}),
+    ])
+    db_session.commit()
+
+    client, calls = scripted_client([
+        tool_call_response("summarize", '{"n": 1}'),
+        final_response("汇总完成"),
+    ])
+    run = execute_replay(db_session,
+                         make_run(db_session, seeded,
+                                  target_observation_id="ob-llm2"),
+                         client=client)
+    assert run.status == "success"
+    assert run.divergences == []
+    # 初始消息来自目标节点而非入口节点
+    assert calls["payloads"][0]["messages"][0]["content"] == "阶段二"
+    result = db_session.get(Trace, run.result_trace_id)
+    assert result.meta["target_observation_id"] == "ob-llm2"
+
+
+def test_single_point_replay_does_not_consume_other_subtree_tools(db_session, seeded):
+    # 目标节点子树没有录制 get_weather——即使入口节点子树有，也应记 unrecorded_call
+    db_session.add(Observation(
+        id="ob-llm2", trace_id="src-1", type="llm", name="answer", seq=2,
+        model="gpt-4o", messages=[{"role": "user", "content": "x"}],
+        tool_definitions=[{"type": "function",
+                           "function": {"name": "get_weather",
+                                        "parameters": {}}}]))
+    db_session.commit()
+    client, _ = scripted_client([
+        tool_call_response("get_weather", '{"city": "北京"}'),
+        final_response("done"),
+    ])
+    run = execute_replay(db_session,
+                         make_run(db_session, seeded,
+                                  target_observation_id="ob-llm2"),
+                         client=client)
+    assert run.divergences[0]["type"] == "unrecorded_call"
+
+
+def test_single_point_replay_keeps_upstream_context(db_session, seeded):
+    db_session.add(Observation(
+        id="ob-llm2", trace_id="src-1", type="llm", name="answer", seq=2,
+        model="gpt-4o",
+        messages=[{"role": "system", "content": "你是助手"},
+                  {"role": "user", "content": "北京天气"},
+                  {"role": "tool", "content": "{\"weather\": \"晴\"}"}]))
+    db_session.commit()
+    client, calls = scripted_client([final_response("晴")])
+    run = execute_replay(db_session,
+                         make_run(db_session, seeded,
+                                  target_observation_id="ob-llm2"),
+                         client=client)
+    assert run.status == "success"
+    sent = calls["payloads"][0]["messages"]
+    assert len(sent) == 3  # 上游 tool 消息未被截断
+    assert sent[2]["role"] == "tool"
+
+
+def test_single_point_replay_invalid_target_400(db_session, seeded):
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as exc:
+        execute_replay(db_session,
+                       make_run(db_session, seeded,
+                                target_observation_id="ob-tool"))
+    assert exc.value.status_code == 400
+
+
+def test_wall_clock_guard(db_session, seeded, monkeypatch):
+    import services.replay_service as rs
+    monkeypatch.setattr(rs, "MAX_REPLAY_WALL_SECONDS", -1)  # 立即超限
+    client, _ = scripted_client([final_response("never reached")])
+    run = execute_replay(db_session, make_run(db_session, seeded),
+                         client=client)
+    assert run.status == "failed"
+    assert any(d["type"] == "wall_clock_exceeded" for d in run.divergences)

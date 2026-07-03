@@ -75,6 +75,24 @@ def test_judge_cache_hit_skips_llm(db_session, seeded):
     assert second.id == first.id
 
 
+def test_judge_force_then_cache_returns_latest(db_session, seeded):
+    c1 = judge_http_client({"score_a": 5.0, "score_b": 5.0,
+                            "verdict": "not_replaceable", "reasoning": "first"})
+    first = judge_service.run_judge(db_session, "tr-a", "judge-model",
+                                    compare_trace_id="tr-b", client=c1)
+    import time
+    time.sleep(0.01)  # 保证 created_at 有序
+    c2 = judge_http_client({"score_a": 9.0, "score_b": 9.0,
+                            "verdict": "replaceable", "reasoning": "second"})
+    second = judge_service.run_judge(db_session, "tr-a", "judge-model",
+                                     compare_trace_id="tr-b", force=True,
+                                     client=c2)
+    cached = judge_service.run_judge(db_session, "tr-a", "judge-model",
+                                     compare_trace_id="tr-b")
+    assert cached.id == second.id
+    assert cached.reasoning == "second"
+
+
 def test_judge_unparseable_output_returns_502(db_session, seeded):
     from fastapi import HTTPException
 

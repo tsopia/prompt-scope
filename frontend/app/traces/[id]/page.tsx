@@ -71,6 +71,14 @@ export default function TraceDetailPage() {
           <TraceTree nodes={trace.observations} selectedId={selectedId} onSelect={setSelectedId} />
         </div>
         <div className="bg-white rounded-lg border border-[#E5E7EB] overflow-y-auto max-h-[70vh]">
+          {trace.origin === "live" && selected?.type === "llm" && (
+            <div className="px-3 py-2 border-b border-[#F3F4F6] flex justify-end">
+              <Link href={`/replay/${trace.id}?target=${selected.id}`}
+                    className="text-xs px-3 py-1 rounded-md border border-[#6366F1] text-[#6366F1] hover:bg-[#EEF0FF]">
+                单点回放此步 ▶
+              </Link>
+            </div>
+          )}
           {selected ? (
             <ObservationDetail node={selected} />
           ) : (

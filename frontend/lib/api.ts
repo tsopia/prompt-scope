@@ -158,6 +158,36 @@ export interface ReplayRun {
   finished_at: string | null;
 }
 
+export interface PromptSummary {
+  id: string;
+  name: string;
+  version_count: number;
+  latest_version: number;
+  created_at: string;
+}
+
+export interface PromptVersionInfo {
+  id: string;
+  version: number;
+  content: string;
+  created_at: string;
+}
+
+export interface PromptDetail {
+  id: string;
+  name: string;
+  project_id: string;
+  versions: PromptVersionInfo[];
+}
+
+export interface VersionTrace {
+  id: string;
+  name: string;
+  origin: string;
+  total_cost: number | null;
+  created_at: string;
+}
+
 export const api = {
   getProjects: () => get<Project[]>("/api/projects"),
   getTraces: (params: {
@@ -194,10 +224,21 @@ export const api = {
     send<{ results: JudgeRunResult[] }>("POST", "/api/evaluations", body),
   createReplay: (body: {
     source_trace_id: string;
+    target_observation_id?: string;
     override_model?: string;
     override_model_params?: Record<string, unknown>;
     override_prompt_text?: string;
+    override_prompt_version_id?: string;
   }) => send<ReplayRun>("POST", "/api/replays", body),
   getReplays: (sourceTraceId: string) =>
     get<ReplayRun[]>(`/api/replays?source_trace_id=${encodeURIComponent(sourceTraceId)}`),
+  getPrompts: (projectId: string) =>
+    get<PromptSummary[]>(`/api/prompts?project_id=${encodeURIComponent(projectId)}`),
+  createPrompt: (body: { project_id: string; name: string; content: string }) =>
+    send<PromptDetail>("POST", "/api/prompts", body),
+  getPrompt: (id: string) => get<PromptDetail>(`/api/prompts/${id}`),
+  addPromptVersion: (id: string, content: string) =>
+    send<PromptVersionInfo>("POST", `/api/prompts/${id}/versions`, { content }),
+  getVersionTraces: (versionId: string) =>
+    get<VersionTrace[]>(`/api/prompt-versions/${versionId}/traces`),
 };

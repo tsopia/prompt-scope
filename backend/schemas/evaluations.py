@@ -36,3 +36,22 @@ class JudgeRunResult(BaseModel):
 
 class EvaluateResponse(BaseModel):
     results: list[JudgeRunResult]
+
+
+class BatchEvaluateRequest(BaseModel):
+    subject_trace_ids: list[str] = Field(min_length=1, max_length=50)
+    judge_models: list[str] = Field(min_length=1)
+    context_mode: Literal["output_only", "with_trace"] = "output_only"
+    force: bool = False
+
+
+class BatchEvaluateItem(BaseModel):
+    subject_trace_id: str
+    judge_model: str
+    status: Literal["ok", "error"]
+    evaluation: EvaluationOut | None = None
+    error: str | None = None
+
+
+class BatchEvaluateResponse(BaseModel):
+    results: list[BatchEvaluateItem]

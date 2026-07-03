@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { api, Divergence, JudgeModel, ObservationNode, ReplayRun, TraceDetail } from "@/lib/api";
+import { api, Divergence, JudgeModel, ObservationNode, PromptDetail, PromptSummary, ReplayRun, TraceDetail } from "@/lib/api";
 import { formatCost, formatLatency } from "@/lib/format";
 
 function flatten(nodes: ObservationNode[]): ObservationNode[] {
@@ -16,10 +16,9 @@ function modelSummary(trace: TraceDetail): string {
   return models.join(", ");
 }
 
-function findSystemPrompt(trace: TraceDetail): string {
-  const llmNode = flatten(trace.observations).find((o) => o.type === "llm");
-  if (!llmNode?.messages) return "";
-  const sys = llmNode.messages.find((m) => (m as Record<string, unknown>).role === "system");
+function findSystemPrompt(node: ObservationNode | null | undefined): string {
+  if (!node?.messages) return "";
+  const sys = node.messages.find((m) => (m as Record<string, unknown>).role === "system");
   if (!sys) return "";
   const content = (sys as Record<string, unknown>).content;
   return typeof content === "string" ? content : "";
@@ -115,8 +114,10 @@ function ReplayResultCard({ run, sourceId }: { run: ReplayRun; sourceId: string 
   );
 }
 
-export default function ReplayPage() {
+function ReplayContent() {
   const { id } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const targetId = searchParams.get("target");
   const [trace, setTrace] = useState<TraceDetail | null>(null);
   const [replays, setReplays] = useState<ReplayRun[]>([]);
   const [judgeModels, setJudgeModels] = useState<JudgeModel[]>([]);
@@ -126,33 +127,72 @@ export default function ReplayPage() {
   const [temperature, setTemperature] = useState("");
   const [prompt, setPrompt] = useState("");
   const [promptEdited, setPromptEdited] = useState(false);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+
+  const [libraryPrompts, setLibraryPrompts] = useState<PromptSummary[]>([]);
+  const [selectedPromptId, setSelectedPromptId] = useState("");
+  const [libraryDetail, setLibraryDetail] = useState<PromptDetail | null>(null);
 
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [lastRun, setLastRun] = useState<ReplayRun | null>(null);
 
+  const targetNode = useMemo(() => {
+    if (!trace || !targetId) return null;
+    return flatten(trace.observations).find((o) => o.id === targetId) ?? null;
+  }, [trace, targetId]);
+
   useEffect(() => {
     api.getTrace(id)
       .then((t) => {
         setTrace(t);
-        setPrompt(findSystemPrompt(t));
+        const target = targetId ? flatten(t.observations).find((o) => o.id === targetId) ?? null : null;
+        setPrompt(findSystemPrompt(target ?? flatten(t.observations).find((o) => o.type === "llm")));
       })
       .catch((e) => setLoadError(String(e)));
     api.getReplays(id).then(setReplays).catch(() => {});
     api.getJudgeModels().then(setJudgeModels).catch(() => setJudgeModels([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  useEffect(() => {
+    if (!trace) return;
+    api.getPrompts(trace.project_id).then(setLibraryPrompts).catch(() => setLibraryPrompts([]));
+  }, [trace]);
+
   const summary = useMemo(() => (trace ? modelSummary(trace) : ""), [trace]);
+
+  const selectLibraryPrompt = (promptId: string) => {
+    setSelectedPromptId(promptId);
+    setLibraryDetail(null);
+    setSelectedVersionId(null);
+    if (!promptId) return;
+    api.getPrompt(promptId).then(setLibraryDetail).catch(() => setLibraryDetail(null));
+  };
+
+  const selectLibraryVersion = (versionId: string) => {
+    setSelectedVersionId(versionId || null);
+    if (!versionId || !libraryDetail) return;
+    const v = libraryDetail.versions.find((x) => x.id === versionId);
+    if (v) {
+      setPrompt(v.content);
+      setPromptEdited(false);
+    }
+  };
 
   const runReplay = async () => {
     setRunning(true);
     setRunError(null);
     try {
+      const useVersion = selectedVersionId && !promptEdited;
+      const useTarget = Boolean(targetId) && targetNode !== null;
       const run = await api.createReplay({
         source_trace_id: id,
+        target_observation_id: useTarget ? targetId! : undefined,
         override_model: model || undefined,
         override_model_params: temperature !== "" ? { temperature: parseFloat(temperature) } : undefined,
-        override_prompt_text: promptEdited ? prompt : undefined,
+        override_prompt_version_id: useVersion ? selectedVersionId : undefined,
+        override_prompt_text: !useVersion && promptEdited ? prompt : undefined,
       });
       setLastRun(run);
       setReplays(await api.getReplays(id));
@@ -163,11 +203,11 @@ export default function ReplayPage() {
     }
   };
 
-  if (loadError) return <main className="p-8 text-sm text-red-500">加载失败：{loadError}</main>;
-  if (!trace) return <main className="p-8 text-sm text-gray-400">加载中…</main>;
+  if (loadError) return <p className="text-sm text-red-500">加载失败：{loadError}</p>;
+  if (!trace) return <p className="text-sm text-gray-400">加载中…</p>;
 
   return (
-    <main className="max-w-4xl mx-auto p-6">
+    <>
       <div className="mb-4">
         <Link href={`/traces/${trace.id}`} className="text-xs text-[#6366F1]">← 返回 trace</Link>
         <h2 className="text-base font-semibold mt-2">回放配置</h2>
@@ -181,6 +221,17 @@ export default function ReplayPage() {
             {trace.origin}
           </span>
         </div>
+        {targetId && (
+          targetNode ? (
+            <p className="text-sm text-[#6366F1] mb-1">
+              单点回放：{targetNode.name || targetNode.id.slice(0, 8)}（step {targetNode.seq}）
+            </p>
+          ) : (
+            <p className="text-sm text-orange-600 mb-1">
+              未找到目标节点（target={targetId}），已按普通回放处理。
+            </p>
+          )
+        )}
         <div className="flex flex-wrap gap-x-8 gap-y-1 text-sm">
           <div><span className="text-gray-400 mr-2">模型</span><span className="font-mono">{summary || "—"}</span></div>
           <div><span className="text-gray-400 mr-2">总成本</span><span className="font-mono">{formatCost(trace.total_cost)}</span></div>
@@ -205,6 +256,31 @@ export default function ReplayPage() {
           <input type="number" step="0.1" className="border border-[#E5E7EB] rounded-md px-2 py-1.5 text-sm w-32"
                  value={temperature} onChange={(e) => setTemperature(e.target.value)}
                  placeholder="不覆盖" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">从 Prompt 库选择</label>
+          <div className="flex gap-2">
+            <select className="border border-[#E5E7EB] rounded-md px-2 py-1.5 text-sm flex-1"
+                    value={selectedPromptId}
+                    onChange={(e) => selectLibraryPrompt(e.target.value)}>
+              <option value="">（不使用 Prompt 库）</option>
+              {libraryPrompts.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <select className="border border-[#E5E7EB] rounded-md px-2 py-1.5 text-sm flex-1"
+                    value={selectedVersionId ?? ""}
+                    disabled={!libraryDetail}
+                    onChange={(e) => selectLibraryVersion(e.target.value)}>
+              <option value="">选择版本</option>
+              {libraryDetail?.versions
+                .slice()
+                .sort((a, b) => b.version - a.version)
+                .map((v) => (
+                  <option key={v.id} value={v.id}>v{v.version}</option>
+                ))}
+            </select>
+          </div>
         </div>
         <div>
           <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">System Prompt</label>
@@ -239,6 +315,16 @@ export default function ReplayPage() {
           </div>
         )}
       </section>
+    </>
+  );
+}
+
+export default function ReplayPage() {
+  return (
+    <main className="max-w-4xl mx-auto p-6">
+      <Suspense fallback={<p className="text-sm text-gray-400">加载中…</p>}>
+        <ReplayContent />
+      </Suspense>
     </main>
   );
 }
