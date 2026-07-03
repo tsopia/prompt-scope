@@ -140,6 +140,10 @@ def run_judge(db: Session, subject_trace_id: str, judge_model: str,
         raise HTTPException(status_code=502,
                             detail=f"judge 调用失败: {e}") from e
 
+    if not result.get("content"):
+        raise HTTPException(status_code=502,
+                            detail="judge 返回空内容（模型可能触发了 tool_call 或 refusal）")
+
     try:
         parsed = _extract_json(result["content"])
         verdict = str(parsed["verdict"])

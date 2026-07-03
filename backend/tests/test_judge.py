@@ -91,6 +91,21 @@ def test_judge_unparseable_output_returns_502(db_session, seeded):
     assert db_session.query(Evaluation).count() == 0  # 失败不落库
 
 
+def test_judge_null_content_returns_clean_502(db_session, seeded):
+    from fastapi import HTTPException
+
+    def handler(request):
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": None}}], "usage": {}})
+
+    with pytest.raises(HTTPException) as exc:
+        judge_service.run_judge(
+            db_session, "tr-a", "judge-model", compare_trace_id="tr-b",
+            client=httpx.Client(transport=httpx.MockTransport(handler)))
+    assert exc.value.status_code == 502
+    assert db_session.query(Evaluation).count() == 0
+
+
 def test_judge_unconfigured_model_400(db_session, seeded):
     from fastapi import HTTPException
 
