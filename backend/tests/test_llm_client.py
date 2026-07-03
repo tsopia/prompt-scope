@@ -45,6 +45,22 @@ def test_anthropic_success():
     assert out == {"content": "hey", "input_tokens": 8, "output_tokens": 3}
 
 
+def test_anthropic_base_url_with_v1_suffix_not_doubled():
+    provider = ModelProvider(name="ant", base_url="https://api.anthropic.test/v1",
+                             api_key="ak-test", provider_type="anthropic")
+
+    def handler(request):
+        assert request.url.path == "/v1/messages"
+        return httpx.Response(200, json={
+            "content": [{"type": "text", "text": "hey"}],
+            "usage": {"input_tokens": 8, "output_tokens": 3}})
+
+    out = chat_completion(provider, "claude-x",
+                          [{"role": "user", "content": "hi"}],
+                          client=make_client(handler))
+    assert out == {"content": "hey", "input_tokens": 8, "output_tokens": 3}
+
+
 def test_model_params_passed_through():
     seen = {}
 

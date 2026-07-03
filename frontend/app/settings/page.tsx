@@ -37,11 +37,17 @@ export default function SettingsPage() {
 
   const addPricing = async () => {
     setError(null);
+    const inp = parseFloat(prForm.input);
+    const outp = parseFloat(prForm.output);
+    if (!Number.isFinite(inp) || !Number.isFinite(outp)) {
+      setError("价格必须是数字");
+      return;
+    }
     try {
       await api.createPricing({
         model: prForm.model,
-        input_price_per_1k: parseFloat(prForm.input),
-        output_price_per_1k: parseFloat(prForm.output),
+        input_price_per_1k: inp,
+        output_price_per_1k: outp,
         provider_id: prForm.provider_id || null,
       });
       setPrForm({ model: "", input: "", output: "", provider_id: "" });
@@ -81,7 +87,7 @@ export default function SettingsPage() {
         <div className="flex flex-wrap gap-2 items-center">
           <input className={inputCls} placeholder="名称" value={pForm.name}
                  onChange={(e) => setPForm({ ...pForm, name: e.target.value })} />
-          <input className={`${inputCls} w-72`} placeholder="Base URL（如 https://api.openai.com/v1）"
+          <input className={`${inputCls} w-72`} placeholder="Base URL（openai 兼容含 /v1；anthropic 填根地址）"
                  value={pForm.base_url}
                  onChange={(e) => setPForm({ ...pForm, base_url: e.target.value })} />
           <input className={inputCls} type="password" placeholder="API Key" value={pForm.api_key}

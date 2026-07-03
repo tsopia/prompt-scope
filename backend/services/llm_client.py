@@ -35,8 +35,11 @@ def _anthropic_call(client: httpx.Client, provider: ModelProvider, model: str,
                     messages: list, model_params: dict | None) -> dict:
     params = dict(model_params or {})
     max_tokens = params.pop("max_tokens", DEFAULT_MAX_TOKENS)
+    base = provider.base_url.rstrip("/")
+    if base.endswith("/v1"):
+        base = base[:-3]
     resp = client.post(
-        f"{provider.base_url.rstrip('/')}/v1/messages",
+        f"{base}/v1/messages",
         headers={"x-api-key": provider.api_key,
                  "anthropic-version": ANTHROPIC_VERSION},
         json={"model": model, "max_tokens": max_tokens,
