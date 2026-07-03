@@ -152,6 +152,9 @@ client = PromptScopeClient(base_url="http://localhost:8000", api_key="ps-xxxx")
 with client.trace("weather-agent-demo", input={"question": "北京今天天气怎么样？"}) as t:
     llm_id = t.llm("plan", model="gpt-4o",
                    messages=[{"role": "user", "content": "北京今天天气怎么样？"}],
+                   tool_definitions=[{"name": "get_weather",
+                                      "parameters": {"type": "object",
+                                                     "properties": {"city": {"type": "string"}}}}],
                    tool_calls=[{"name": "get_weather", "arguments": {"city": "北京"}}],
                    input_tokens=150, output_tokens=25)
     t.tool("get_weather", tool_input={"city": "北京"},
@@ -165,6 +168,13 @@ with client.trace("weather-agent-demo", input={"question": "北京今天天气�
 - `with` 代码块正常退出时自动 `flush`（调 `POST /api/ingest`，payload 会走与直接 HTTP 上报完全相同的 `IngestRequest` 校验）；`flush` 幂等，重复调用不会重复上报。
 - 代码块内抛出异常时，trace 的 `status` 会被自动标记为 `error`，然后原始异常会被重新抛出——**flush 上报本身失败不会掩盖或替换原始业务异常**：`flush` 若在异常路径下再次失败，只打印到 stderr，不吞掉、也不覆盖正在传播的原始异常。
 - 详细字段说明（`trace()` / `TraceContext.llm()` / `.tool()` / `.set_output()` 全部参数）见 `sdk/README.md`。
+
+### 让 trace 可回放的必需字段
+
+回放引擎（见下「重跑回放」一节）严格依赖上报数据的完整性，字段缺失不会报错，但会导致回放不可用或语义残缺：
+
+- **llm 节点必须记录完整 `messages` 与 `tool_definitions`**：`messages` 是回放的初始对话上下文（单点回放时还会被**原样**发给模型，见「单点回放」一节），缺失会导致回放请求语境不完整；`tool_definitions` 缺失会导致回放时模型收不到工具定义，无法产生工具调用，进而使 mock 工具链路完全失效。
+- **tool 节点必须挂 `parent`（对应的 llm 观测 id）且记录 `tool_input`/`tool_output`**：回放的 `RecordedTools` 按 `parent_id` 做子树隔离（尤其是单点回放场景），不挂 `parent` 的 tool 观测不会被任何回放消费到；缺失 `tool_input`/`tool_output` 会导致回放时的参数比对（`param_mismatch` 检测）与结果 mock 都失去依据。
 
 ## 查询 API
 
@@ -267,8 +277,9 @@ Phase 3 在对比与评分之上增加了「对源 trace 换模型/改参数/改
 1. 在 trace 详情页（`/traces/{id}`）左侧调用链树里选中任意一个 `type=llm` 的节点，右侧详情面板顶部出现「单点回放此步 ▶」，点击跳转 `/replay/{id}?target=<observation_id>`。
 2. 回放页检测到 URL 带 `target` 参数后，System Prompt 默认回填**该目标节点**（而非入口节点）消息序列里的 system 消息，页面明确提示"单点回放：{节点名}（step {seq}）"。
 3. 提交时请求体带上 `target_observation_id`，其余覆盖字段（模型/参数/Prompt）语义不变。
-4. **语义边界**：单点回放只以目标 `llm` observation 为起点重放，其消息历史截取到该节点自身的前缀（不会重放目标节点之前的其他 `llm` 节点）；工具调用 mock 仅消费**目标节点子树**下的录制结果——即 `RecordedTools` 只装载 `parent_id == target_observation_id` 的 `tool` observation，不会误用同一条源 trace 里其他分支/其他步骤录制的工具调用结果。不传 `target_observation_id` 时行为不变（仍是整条 trace 从入口 `llm` 节点开始回放，消费全部工具录制）。
-5. 单点回放产出的回放 trace，其 observation 的 `metadata` 会带上 `target_observation_id`，回放 trace 名称后缀为 `(replay:step-N)`（`N` 为目标节点的 `seq`），与整链路回放的 `(replay)` 后缀区分。
+4. **语义边界**：单点回放只以目标 `llm` observation 为起点重放，不会重放目标节点之前的其他 `llm` 节点；工具调用 mock 仅消费**目标节点子树**下的录制结果——即 `RecordedTools` 只装载 `parent_id == target_observation_id` 的 `tool` observation，不会误用同一条源 trace 里其他分支/其他步骤录制的工具调用结果。不传 `target_observation_id` 时行为不变（仍是整条 trace 从入口 `llm` 节点开始回放，消费全部工具录制）。
+5. **上游上下文原样发送**：目标节点录制的完整消息序列（含它自身之前的 assistant/tool 上游上下文）会**原样**发给模型，不做截断——因为 spec 语义是"上游输入用录制值"，这些消息是目标节点执行时的真实上下文，截掉会破坏语义。唯一可被覆盖的是其中的 system 消息（`override_prompt_text`/`override_prompt_version_id`）。整链路回放（不带 `target_observation_id`）则保持原有行为：消息历史截断到入口节点自身的 assistant/tool 前缀之前。
+6. 单点回放产出的回放 trace，其 **trace 的** `metadata` 会带上 `target_observation_id`（而非 observation 的 metadata），回放 trace 名称后缀为 `(replay:step-N)`（`N` 为目标节点的 `seq`），与整链路回放的 `(replay)` 后缀区分。
 
 ### Mock 机制说明
 

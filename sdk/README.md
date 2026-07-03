@@ -29,6 +29,9 @@ with client.trace("weather-agent-demo", input={"question": "北京今天天气�
         "plan",
         model="gpt-4o",
         messages=[{"role": "user", "content": "北京今天天气怎么样？"}],
+        tool_definitions=[{"name": "get_weather",
+                           "parameters": {"type": "object",
+                                          "properties": {"city": {"type": "string"}}}}],
         tool_calls=[{"name": "get_weather", "arguments": {"city": "北京"}}],
         input_tokens=150,
         output_tokens=25,
@@ -95,6 +98,13 @@ client.flush(t)   # 幂等：重复调用不会重复上报
 ### `TraceContext.set_output(output)`
 
 设置 trace 的最终输出。
+
+## 让 trace 可回放的必需字段
+
+PromptScope 的回放引擎直接复用上报的 trace/observation 数据，以下字段缺失不会在上报时报错，但会让回放不可用或语义残缺：
+
+- **llm 节点必须记录完整 `messages` 与 `tool_definitions`**：`messages` 是回放请求发给模型的初始上下文（单点回放时该节点录制的完整消息会原样发送，不做截断），`tool_definitions` 缺失会导致回放时模型收不到工具定义、无法产生工具调用，mock 工具链路整体失效。
+- **tool 节点必须挂 `parent`（对应的 llm 观测 id）且记录 `tool_input`/`tool_output`**：回放按 `parent_id` 做工具录制的子树隔离（尤其是单点回放场景），不挂 `parent` 的 tool 观测不会被回放消费到；缺失 `tool_input`/`tool_output` 会让参数比对与结果 mock 都没有依据。
 
 ## 鉴权与错误处理
 
