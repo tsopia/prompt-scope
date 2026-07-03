@@ -21,7 +21,8 @@ app = FastAPI(title="PromptScope", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    # comma-separated list of allowed frontend origins, defaults to local dev
+    allow_origins=os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000").split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
