@@ -1,21 +1,22 @@
 # PromptScope
 
-团队内部的 **Agent 调优与回放平台**：自建数据接入，以完整调用链路为核心，围绕 Agent 运行数据支撑对比评分与"重跑回放"，帮助团队在多模型/多 Prompt 方案之间做出低成本、可验证的替代决策。平台分四层能力：**数据接入**（通用 ingestion HTTP API，Agent 直接上报完整 trace）、**链路可视化**（Phase 1，已支持）、**对比 + 评分**（Phase 2，已支持）、**重跑回放**（Phase 3，已支持）。
+团队内部的 **Agent 调优与回放平台**：自建数据接入，以完整调用链路为核心，围绕 Agent 运行数据支撑对比评分与"重跑回放"，帮助团队在多模型/多 Prompt 方案之间做出低成本、可验证的替代决策。平台分四层能力：**数据接入**（通用 ingestion HTTP API + Python SDK，Agent 直接上报完整 trace）、**链路可视化**（Phase 1，已支持）、**对比 + 评分**（Phase 2，已支持）、**重跑回放**（Phase 3，已支持）、**打磨扩展**（Phase 4，已支持）。
 
-当前仓库已完成 **Phase 1 —— 数据地基**、**Phase 2 —— 对比与评分**、**Phase 3 —— 回放引擎**：Postgres/SQLite 数据模型、ingestion API、Python 上报示例、trace 列表与详情页（链路可视化）、双链路对齐对比工作台、多模型 LLM Judge、模型 Provider/定价配置页、换模型/改参数/改 Prompt 的重跑回放（mock 工具 + 偏离检测）。
+当前仓库已完成 **Phase 1 —— 数据地基**、**Phase 2 —— 对比与评分**、**Phase 3 —— 回放引擎**、**Phase 4 —— 打磨扩展**：Postgres/SQLite 数据模型、ingestion API、Python SDK 与上报示例、trace 列表与详情页（链路可视化）、双链路对齐对比工作台、多模型 LLM Judge、模型 Provider/定价配置页、换模型/改参数/改 Prompt 的重跑回放（mock 工具 + 偏离检测）、多阶段 trace 单点回放、Prompt 版本管理页、批量回放与批量评测端点。
 
 ## 架构
 
 ```
-Agent (用户代码)
+Agent (用户代码，或 sdk/promptscope Python SDK)
    │  HTTP 上报 (ingestion API, API Key 认证)
    ▼
 PromptScope Backend (FastAPI + Postgres)
    ├── Ingestion API      ← 接收 trace/observation
    ├── Query API          ← 前端读取
+   ├── Prompt API         ← prompt / 版本管理，trace 引用查询（Phase 4，已支持）
    ├── Config API         ← model_providers / model_pricings（Phase 2，已支持）
-   ├── Judge Service      ← 多模型评分（Phase 2，已支持）
-   └── Replay Engine      ← 调各家模型 API + mock 工具（Phase 3，已支持）
+   ├── Judge Service      ← 多模型评分（Phase 2，已支持，批量评测 Phase 4）
+   └── Replay Engine      ← 调各家模型 API + mock 工具（Phase 3，已支持；单点回放/批量回放 Phase 4）
    ▲
    │
 PromptScope Frontend (Next.js)
@@ -136,6 +137,35 @@ Key 无效或已吊销返回 `401`。
 
 参见 `examples/report_agent_run.py`，模拟一次"规划 → 调用 get_weather 工具 → 综合回答"的 Agent 运行并上报，可直接运行验证联通性。
 
+### Python SDK 快速上手
+
+`sdk/promptscope`（仅依赖 `httpx` 与标准库，未发布到 PyPI，以路径引用或复制文件的方式使用）把上报流程封装为 `trace` context manager + `llm`/`tool` 记录方法，`examples/report_agent_run.py` 即基于该 SDK 实现：
+
+```python
+import sys
+sys.path.insert(0, "/path/to/promptscope/sdk")
+
+from promptscope import PromptScopeClient
+
+client = PromptScopeClient(base_url="http://localhost:8000", api_key="ps-xxxx")
+
+with client.trace("weather-agent-demo", input={"question": "北京今天天气怎么样？"}) as t:
+    llm_id = t.llm("plan", model="gpt-4o",
+                   messages=[{"role": "user", "content": "北京今天天气怎么样？"}],
+                   tool_calls=[{"name": "get_weather", "arguments": {"city": "北京"}}],
+                   input_tokens=150, output_tokens=25)
+    t.tool("get_weather", tool_input={"city": "北京"},
+           tool_output={"weather": "晴", "temperature": 32}, parent=llm_id)
+    t.llm("answer", model="gpt-4o",
+          messages=[{"role": "user", "content": "北京今天天气怎么样？"}],
+          completion="北京今天晴，32°C。", input_tokens=220, output_tokens=35)
+    t.set_output({"answer": "北京今天晴，32°C。"})
+```
+
+- `with` 代码块正常退出时自动 `flush`（调 `POST /api/ingest`，payload 会走与直接 HTTP 上报完全相同的 `IngestRequest` 校验）；`flush` 幂等，重复调用不会重复上报。
+- 代码块内抛出异常时，trace 的 `status` 会被自动标记为 `error`，然后原始异常会被重新抛出——**flush 上报本身失败不会掩盖或替换原始业务异常**：`flush` 若在异常路径下再次失败，只打印到 stderr，不吞掉、也不覆盖正在传播的原始异常。
+- 详细字段说明（`trace()` / `TraceContext.llm()` / `.tool()` / `.set_output()` 全部参数）见 `sdk/README.md`。
+
 ## 查询 API
 
 | 接口 | 方法 | 说明 |
@@ -145,6 +175,30 @@ Key 无效或已吊销返回 `401`。
 | `/api/traces/{id}` | GET | Trace 详情，含按 `parent_id` 组装的调用链树 |
 | `/api/ingest` | POST | 上报 trace + observations（见上） |
 | `/api/health` | GET | 健康检查 |
+
+## Prompt 库
+
+Phase 4 新增的 `/prompts` 页支持给 Prompt 建版本历史、双版本对比查看差异、以及查询某个版本被哪些 trace 引用过。
+
+### /prompts 使用动线
+
+1. 左侧列表展示当前项目下的所有 prompt（`GET /api/prompts?project_id=`），每项显示名称与最新版本号（`latest_version`）、版本数（`version_count`）。
+2. 「新建 Prompt」表单提交 `POST /api/prompts`（`name` 在同一 `project_id` 下唯一，重复返回 `409`），创建时自动生成版本 1。
+3. 选中一个 prompt 后，右侧按版本号倒序展示版本历史（`GET /api/prompts/{id}`），每张版本卡片可「基于此版本新建」——编辑内容后提交 `POST /api/prompts/{id}/versions`，追加下一个版本号（不修改已有版本，版本历史不可变）。
+4. 每张版本卡片勾选框最多同时选中 2 个版本，选中两个后页面顶部出现并排的双版本对比（按版本号从小到大排列展示原文，纯文本对照，不做 diff 高亮）。
+5. 每张版本卡片下方「使用此版本的 traces」可展开，调用 `GET /api/prompt-versions/{version_id}/traces` 查询引用了该版本的 trace（trace 级 `prompt_version_id` 直接匹配，或该 trace 下任一 observation 的 `prompt_version_id` 匹配），按创建时间倒序最多返回 100 条。
+
+### Prompts API 端点表
+
+**`backend/routers/prompts.py`**（挂载于 `/api`，对照 `backend/schemas/prompts.py`）：
+
+| 端点 | 方法 | 说明 | 请求体字段 | 响应字段 |
+|------|------|------|------------|----------|
+| `/api/prompts` | GET | Prompt 列表（可选按 `project_id` 过滤，按创建时间倒序） | query: `project_id?` | `PromptSummary[]`：`id, name, version_count, latest_version, created_at` |
+| `/api/prompts` | POST | 创建 prompt + 初始版本 1（同 `project_id` 下 `name` 唯一，重复 409） | `project_id, name(≤255), content` | `PromptDetail`：`id, name, project_id, versions: VersionOut[]` |
+| `/api/prompts/{id}` | GET | Prompt 详情，含全部版本（不存在返回 404） | — | `PromptDetail` |
+| `/api/prompts/{id}/versions` | POST | 追加新版本（不存在返回 404，版本号自动 `max(existing)+1`） | `content` | `VersionOut`：`id, version, content, created_at` |
+| `/api/prompt-versions/{version_id}/traces` | GET | 查询引用该版本的 trace（trace 级或 observation 级 `prompt_version_id` 匹配，最多 100 条，按创建时间倒序） | — | `VersionTraceOut[]`：`id, name, origin, total_cost, created_at` |
 
 ## 对比与评分
 
@@ -187,6 +241,7 @@ Phase 2 在链路可视化之上增加了「两条 trace 对比 + LLM Judge 打�
 |------|------|------|------------|----------|
 | `/api/evaluations` | POST | 对一或多个 judge 模型跑评分，单个模型失败不影响其余模型 | `subject_trace_id, compare_trace_id?, judge_models(list[str], ≥1), context_mode("output_only"\|"with_trace", 默认 output_only), force(bool, 默认 false)` | `{results: [{judge_model, status("ok"\|"error"), evaluation?, error?}]}` |
 | `/api/evaluations` | GET | 按 `subject_trace_id` + `compare_trace_id` 查已跑过的评分记录（按创建时间倒序） | query: `subject_trace_id, compare_trace_id?` | `EvaluationOut[]`：`id, subject_trace_id, compare_trace_id, judge_model, context_mode, score, score_b, verdict, reasoning, cost, created_at` |
+| `/api/evaluations/batch` | POST | 批量评测：对多个 subject trace × 多个 judge 模型跑全量组合评分（笛卡尔积，均不带 `compare_trace_id`，即批量场景仅支持单 trace 评分），单个组合失败不影响其余组合 | `subject_trace_ids(list[str], 1-50), judge_models(list[str], ≥1), context_mode("output_only"\|"with_trace", 默认 output_only), force(bool, 默认 false)` | `{results: [{subject_trace_id, judge_model, status("ok"\|"error"), evaluation?, error?}]}` |
 
 补充说明：
 - `force=false`（默认）时，若已有相同 `(subject_trace_id, compare_trace_id, judge_model, context_mode)` 的评分记录，直接复用缓存，不重新调用模型。
@@ -204,6 +259,16 @@ Phase 3 在对比与评分之上增加了「对源 trace 换模型/改参数/改
 3. 点击「运行回放 ▶」，前端调用 `POST /api/replays`；请求同步执行完成后才返回（无轮询/无异步任务队列），返回后立即展示本次回放结果卡片。
 4. 结果卡片展示状态徽标（`success`/`failed`/`running`）、`error`（若有）、divergence 列表；若回放产出了 `result_trace_id`，提供「与源 trace 对比」（跳转 `/compare?a=<源id>&b=<result_trace_id>`）与「查看回放 trace」（跳转 `/traces/<result_trace_id>`）两个入口。
 5. 页面下方「历史回放」区块列出该源 trace 之前所有回放记录（`GET /api/replays?source_trace_id=`），按创建时间倒序。
+
+### 单点回放
+
+多阶段 trace（一条 trace 里有多个 `llm` observation）可以只回放其中一步，而不是从入口重跑整条链路：
+
+1. 在 trace 详情页（`/traces/{id}`）左侧调用链树里选中任意一个 `type=llm` 的节点，右侧详情面板顶部出现「单点回放此步 ▶」，点击跳转 `/replay/{id}?target=<observation_id>`。
+2. 回放页检测到 URL 带 `target` 参数后，System Prompt 默认回填**该目标节点**（而非入口节点）消息序列里的 system 消息，页面明确提示"单点回放：{节点名}（step {seq}）"。
+3. 提交时请求体带上 `target_observation_id`，其余覆盖字段（模型/参数/Prompt）语义不变。
+4. **语义边界**：单点回放只以目标 `llm` observation 为起点重放，其消息历史截取到该节点自身的前缀（不会重放目标节点之前的其他 `llm` 节点）；工具调用 mock 仅消费**目标节点子树**下的录制结果——即 `RecordedTools` 只装载 `parent_id == target_observation_id` 的 `tool` observation，不会误用同一条源 trace 里其他分支/其他步骤录制的工具调用结果。不传 `target_observation_id` 时行为不变（仍是整条 trace 从入口 `llm` 节点开始回放，消费全部工具录制）。
+5. 单点回放产出的回放 trace，其 observation 的 `metadata` 会带上 `target_observation_id`，回放 trace 名称后缀为 `(replay:step-N)`（`N` 为目标节点的 `seq`），与整链路回放的 `(replay)` 后缀区分。
 
 ### Mock 机制说明
 
@@ -228,23 +293,27 @@ Phase 3 在对比与评分之上增加了「对源 trace 换模型/改参数/改
 
 | 端点 | 方法 | 说明 | 请求体字段 | 响应字段 |
 |------|------|------|------------|----------|
-| `/api/replays` | POST | 创建并同步执行一次回放（源 trace 不存在返回 404） | `source_trace_id, override_model?, override_model_params?, override_prompt_text?, override_prompt_version_id?` | `ReplayRunOut`（见下） |
+| `/api/replays` | POST | 创建并同步执行一次回放（源 trace 不存在返回 404） | `source_trace_id, target_observation_id?, override_model?, override_model_params?, override_prompt_text?, override_prompt_version_id?` | `ReplayRunOut`（见下） |
+| `/api/replays/batch` | POST | 批量回放：对多条源 trace 依次执行同一份覆盖配置（整链路回放，不支持批量单点回放），单条失败不影响其余条 | `source_trace_ids(list[str], 1-20), override_model?, override_model_params?, override_prompt_text?, override_prompt_version_id?` | `{results: [{source_trace_id, status("ok"\|"error"), run?, error?}]}` |
 | `/api/replays/{id}` | GET | 取单条回放记录（不存在返回 404） | — | `ReplayRunOut` |
 | `/api/replays?source_trace_id=` | GET | 按源 trace 列出所有回放记录（按创建时间倒序） | query: `source_trace_id` | `ReplayRunOut[]` |
 
 `ReplayRunOut` 字段：`id, source_trace_id, result_trace_id, status("pending"\|"running"\|"success"\|"failed"), override_model, override_model_params, override_prompt_text, override_prompt_version_id, divergences, error, created_at, finished_at`。
 
+- `target_observation_id` 若填写，触发单点回放（见上「单点回放」一节）：必须是源 trace 里某个 `type=llm` 的 observation id，否则返回 `400`；批量回放端点不支持该字段（`BatchReplayRequest` 未包含）。
 - `override_prompt_version_id` 若填写，优先于 `override_prompt_text` 生效（从 `PromptVersion.content` 读取覆盖内容；版本不存在返回 404）。
 - `result_trace_id` 只有在回放至少产出一步 observation 并成功落库后才会非空；请求发起阶段（`pending`）或落库前失败时为 `null`。
+- `/api/replays` 与 `/api/replays/batch` 内部共享同一个 `_run_one()` 辅助函数（`backend/routers/replay.py`）执行单次回放全部前置校验（源 trace 存在性、`origin == "live"`）与异常兜底（`HTTPException`/意外异常都会把已创建的 `ReplayRun` 标记为 `failed` 并写入真实错误，不会让 run 卡在 `pending`/`running`），避免单点/整链路/批量三条路径出现校验或错误处理不一致。
 
 ### 限制说明
 
 - **anthropic provider 暂不支持工具回放**：若源 trace 的入口 LLM 调用带 `tool_definitions`，且回放实际使用的 provider（覆盖模型或源模型对应的 provider）`provider_type == "anthropic"`，直接返回 `400`，不发起任何调用（MVP 范围内的已知限制，非 anthropic 工具调用格式尚未适配）。
 - **`MAX_REPLAY_STEPS = 15`**：LLM ↔ mock 工具往返上限，超过后记 `max_steps_exceeded` 偏离并将 run 标记为 `failed`（但已产出的 observation 仍会落库，见下）。
-- **同步执行**：`POST /api/replays` 在请求内完成整个回放循环再返回，没有后台任务/轮询机制；耗时等于本次回放里所有 LLM 调用的真实耗时总和。
+- **`MAX_REPLAY_WALL_SECONDS = 240`**：单次回放循环的墙钟时间护栏（`backend/services/replay_service.py`），每一步开始前检查累计耗时是否已超过 240 秒，超过则记 `wall_clock_exceeded` 偏离、跳出循环并将 run 标记为 `failed`（`error` 写明"超过最大回放时长"），已产出的 observation 仍会落库——用于兜底 `MAX_REPLAY_STEPS` 未触发但单步调用耗时异常长（如模型 API 挂起）的场景，避免一次同步请求无限期占用后端 worker。
+- **同步执行**：`POST /api/replays` 在请求内完成整个回放循环再返回，没有后台任务/轮询机制；耗时等于本次回放里所有 LLM 调用的真实耗时总和，受上面的墙钟护栏约束。
 - 录制之外的调用不会中断回放，只如实记录偏离；provider 调用本身失败（网络错误、鉴权失败等）会中断循环，run 标记为 `failed` 并写入真实错误信息到 `error`，之前已产生的 observation（partial trace）仍会落库保留。
 - **同步执行**：回放请求超过约 5 分钟可能被前端代理断开（后端会继续执行完成，结果仍会出现在历史回放列表中；可稍后刷新查看）。
-- **形态限制**：MVP 仅支持"单轮输入 + 单入口 agent loop"形态的 trace；多轮对话或多阶段 pipeline trace 的回放行为未定义（Phase 4 计划支持单点回放）。
+- **形态限制**：MVP 仅支持"单轮输入 + 单入口 agent loop"形态的 trace；多轮对话或多阶段 pipeline trace 若需要只重跑其中一步，使用上面的单点回放（`target_observation_id`）。
 
 ## 项目结构
 
@@ -255,17 +324,19 @@ promptscope/
 │   ├── config.py         # DATABASE_URL 等配置
 │   ├── db.py             # SQLAlchemy engine/session
 │   ├── models/entities.py
-│   ├── schemas/          # ingest.py / query.py / config.py / evaluations.py / replay.py
+│   ├── schemas/          # ingest.py / query.py / config.py / evaluations.py / replay.py / prompts.py
 │   ├── services/         # auth / ingest_service / llm_client / judge_service / providers / replay_service
-│   ├── routers/          # ingest.py / query.py / config.py / evaluations.py / replay.py
+│   ├── routers/          # ingest.py / query.py / config.py / evaluations.py / replay.py / prompts.py
 │   └── scripts/create_project.py
 ├── frontend/
-│   ├── app/traces/       # trace 列表与详情页
+│   ├── app/traces/       # trace 列表与详情页（含"单点回放此步"入口）
 │   ├── app/compare/      # 双链路对齐对比工作台
-│   ├── app/replay/[id]/  # 回放配置与结果页
+│   ├── app/replay/[id]/  # 回放配置与结果页（支持整链路回放与单点回放）
+│   ├── app/prompts/      # Prompt 版本管理页
 │   ├── app/settings/     # provider / 定价配置页
 │   └── lib/align.ts      # LCS trace 对齐算法
-├── examples/report_agent_run.py
+├── sdk/promptscope/       # Python SDK：trace context manager + llm/tool 上报
+├── examples/report_agent_run.py   # 基于 SDK 的上报示例
 └── docker-compose.yml
 ```
 
@@ -273,7 +344,9 @@ promptscope/
 
 - **Phase 2 — 对比与评分** ✅：双链路对齐 + 差异高亮 + 成本汇总的对比工作台；多模型 LLM Judge；`model_providers` / `model_pricings` 配置页。
 - **Phase 3 — 回放引擎** ✅：对源 trace 换模型/改参数/改 Prompt 重跑，工具调用不真实执行、用录制结果 mock 回放，并做参数级偏离（divergence）验证；回放结果自动可与源 trace 对比。
-- **Phase 4 — 打磨扩展**：Prompt 版本管理页完善、多阶段 trace 单点回放（`ReplayRun.target_observation_id` 已预留）、Python SDK 封装、批量回放/批量评测。
+- **Phase 4 — 打磨扩展** ✅：Prompt 版本管理页（版本历史、双版本对比、trace 引用查询）；多阶段 trace 单点回放（`target_observation_id`，只重放目标节点及其子树录制）；Python SDK 封装（`sdk/promptscope`，trace context manager + llm/tool + 自动 flush）；批量回放（`POST /api/replays/batch`，1-20 条）与批量评测（`POST /api/evaluations/batch`，1-50 trace × judge 组合）；回放墙钟护栏（`MAX_REPLAY_WALL_SECONDS=240`）。
+
+**Phase 1-4 已全部完成。**
 
 ## License
 
