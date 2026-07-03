@@ -9,6 +9,7 @@ from services.llm_client import LLMClientError, chat_completion
 
 MAX_FIELD_CHARS = 4000
 MAX_STEP_CHARS = 200
+MAX_CONTEXT_STEPS = 50
 
 PAIR_PROMPT = """你是严格的 LLM 输出质量评审。任务输入与两个候选（A 为基准，B 为候选替代）的输出如下。
 
@@ -51,7 +52,10 @@ def _trace_models(trace: Trace) -> str:
 
 def _trace_context(trace: Trace, other: Trace | None) -> str:
     lines = ["", "【A 的调用链】" if other is not None else "【调用链】"]
-    for ob in trace.observations:
+    for i, ob in enumerate(trace.observations):
+        if i >= MAX_CONTEXT_STEPS:
+            lines.append(f"…（共 {len(trace.observations)} 步，仅展示前 {MAX_CONTEXT_STEPS} 步）")
+            break
         detail = ""
         if ob.type == "tool":
             detail = (f" 入参={_dump(ob.tool_input)[:MAX_STEP_CHARS]}"
@@ -59,7 +63,10 @@ def _trace_context(trace: Trace, other: Trace | None) -> str:
         lines.append(f"{ob.seq}. [{ob.type}] {ob.name}{detail}")
     if other is not None:
         lines.append("【B 的调用链】")
-        for ob in other.observations:
+        for i, ob in enumerate(other.observations):
+            if i >= MAX_CONTEXT_STEPS:
+                lines.append(f"…（共 {len(other.observations)} 步，仅展示前 {MAX_CONTEXT_STEPS} 步）")
+                break
             detail = ""
             if ob.type == "tool":
                 detail = (f" 入参={_dump(ob.tool_input)[:MAX_STEP_CHARS]}"

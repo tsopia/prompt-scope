@@ -25,6 +25,10 @@ def evaluate(payload: EvaluateRequest, db: Session = Depends(get_db)):
         except HTTPException as e:
             results.append(JudgeRunResult(
                 judge_model=judge_model, status="error", error=str(e.detail)))
+        except Exception as e:  # noqa: BLE001 — 单个 judge 的意外错误不应中断批次
+            results.append(JudgeRunResult(
+                judge_model=judge_model, status="error",
+                error=f"unexpected error: {e}"))
     return EvaluateResponse(results=results)
 
 

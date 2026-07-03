@@ -133,3 +133,29 @@ def test_get_evaluations_filter(client, db_session, seeded):
     resp = client.get("/api/evaluations?subject_trace_id=tr-a&compare_trace_id=tr-b")
     assert len(resp.json()) == 1
     assert resp.json()[0]["score"] == 5.0
+
+
+def test_trace_context_caps_step_count(db_session, seeded):
+    from models.entities import Observation, Trace
+    t = db_session.get(Trace, "tr-a")
+    for i in range(60):
+        db_session.add(Observation(id=f"ob-{i}", trace_id="tr-a", type="span",
+                                   name=f"step-{i}", seq=i))
+    db_session.commit()
+    db_session.refresh(t)
+    ctx = judge_service._trace_context(t, None)
+    assert "step-49" in ctx
+    assert "step-50" not in ctx
+    assert "共 60 步" in ctx
+
+
+def test_evaluations_endpoint_survives_unexpected_error(client, db_session, seeded, monkeypatch):
+    def exploding_run_judge(db, subject_trace_id, judge_model, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(judge_service, "run_judge", exploding_run_judge)
+    resp = client.post("/api/evaluations", json={
+        "subject_trace_id": "tr-a", "judge_models": ["judge-model"]})
+    assert resp.status_code == 200
+    assert resp.json()["results"][0]["status"] == "error"
+    assert "boom" in resp.json()["results"][0]["error"]
