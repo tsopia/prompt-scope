@@ -20,6 +20,7 @@ def create_replay(payload: ReplayRequest, db: Session = Depends(get_db)):
     run = ReplayRun(
         project_id=source.project_id,
         source_trace_id=payload.source_trace_id,
+        target_observation_id=payload.target_observation_id,
         override_model=payload.override_model,
         override_model_params=payload.override_model_params,
         override_prompt_text=payload.override_prompt_text,

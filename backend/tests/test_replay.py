@@ -188,3 +188,74 @@ def test_replay_source_without_llm_fails_cleanly(db_session, seeded):
     with pytest.raises(HTTPException) as exc:
         execute_replay(db_session, run)
     assert exc.value.status_code == 400
+
+
+def test_single_point_replay_uses_target_subtree(db_session, seeded):
+    # 给源 trace 加第二个 llm 节点（多阶段）及其子 tool
+    db_session.add_all([
+        Observation(id="ob-llm2", trace_id="src-1", type="llm", name="answer",
+                    seq=2, model="gpt-4o",
+                    messages=[{"role": "system", "content": "阶段二"},
+                              {"role": "user", "content": "汇总"}],
+                    tool_definitions=[{"type": "function",
+                                       "function": {"name": "summarize",
+                                                    "parameters": {}}}]),
+        Observation(id="ob-tool2", trace_id="src-1", parent_id="ob-llm2",
+                    type="tool", name="summarize", seq=3,
+                    tool_input={"n": 1}, tool_output={"s": "ok"}),
+    ])
+    db_session.commit()
+
+    client, calls = scripted_client([
+        tool_call_response("summarize", '{"n": 1}'),
+        final_response("汇总完成"),
+    ])
+    run = execute_replay(db_session,
+                         make_run(db_session, seeded,
+                                  target_observation_id="ob-llm2"),
+                         client=client)
+    assert run.status == "success"
+    assert run.divergences == []
+    # 初始消息来自目标节点而非入口节点
+    assert calls["payloads"][0]["messages"][0]["content"] == "阶段二"
+    result = db_session.get(Trace, run.result_trace_id)
+    assert result.meta["target_observation_id"] == "ob-llm2"
+
+
+def test_single_point_replay_does_not_consume_other_subtree_tools(db_session, seeded):
+    # 目标节点子树没有录制 get_weather——即使入口节点子树有，也应记 unrecorded_call
+    db_session.add(Observation(
+        id="ob-llm2", trace_id="src-1", type="llm", name="answer", seq=2,
+        model="gpt-4o", messages=[{"role": "user", "content": "x"}],
+        tool_definitions=[{"type": "function",
+                           "function": {"name": "get_weather",
+                                        "parameters": {}}}]))
+    db_session.commit()
+    client, _ = scripted_client([
+        tool_call_response("get_weather", '{"city": "北京"}'),
+        final_response("done"),
+    ])
+    run = execute_replay(db_session,
+                         make_run(db_session, seeded,
+                                  target_observation_id="ob-llm2"),
+                         client=client)
+    assert run.divergences[0]["type"] == "unrecorded_call"
+
+
+def test_single_point_replay_invalid_target_400(db_session, seeded):
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as exc:
+        execute_replay(db_session,
+                       make_run(db_session, seeded,
+                                target_observation_id="ob-tool"))
+    assert exc.value.status_code == 400
+
+
+def test_wall_clock_guard(db_session, seeded, monkeypatch):
+    import services.replay_service as rs
+    monkeypatch.setattr(rs, "MAX_REPLAY_WALL_SECONDS", -1)  # 立即超限
+    client, _ = scripted_client([final_response("never reached")])
+    run = execute_replay(db_session, make_run(db_session, seeded),
+                         client=client)
+    assert run.status == "failed"
+    assert any(d["type"] == "wall_clock_exceeded" for d in run.divergences)

@@ -4,13 +4,14 @@ from collections import defaultdict, deque
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from models.entities import PromptVersion, ReplayRun, Trace, gen_id, utcnow
+from models.entities import Observation, PromptVersion, ReplayRun, Trace, gen_id, utcnow
 from schemas.ingest import IngestRequest, ObservationIn, TraceIn
 from services.ingest_service import ingest
 from services.llm_client import LLMClientError, chat_completion
 from services.providers import resolve_provider
 
 MAX_REPLAY_STEPS = 15
+MAX_REPLAY_WALL_SECONDS = 240
 
 
 def stable_json(obj) -> str:
@@ -36,6 +37,15 @@ def _find_entry_llm(trace: Trace):
             return ob
     raise HTTPException(status_code=400,
                         detail="源 trace 没有 llm observation，无法回放")
+
+
+def _resolve_target(db: Session, source: Trace, target_observation_id: str):
+    target = db.get(Observation, target_observation_id)
+    if (target is None or target.trace_id != source.id
+            or target.type != "llm"):
+        raise HTTPException(status_code=400,
+                            detail="target_observation_id 必须是源 trace 的 llm observation")
+    return target
 
 
 def _initial_messages(entry, override_prompt: str | None) -> list[dict]:
@@ -77,17 +87,23 @@ def _resolve_prompt_override(db: Session, run: ReplayRun) -> str | None:
 
 
 def _persist_result(db, run, source, result_trace_id, observations,
-                    final_content, started_at) -> None:
+                    final_content, started_at, entry=None) -> None:
     """先落 trace 再把 result_trace_id 写回 run——顺序不能反：
     ReplayRun.result_trace_id 有 FK，trace 不存在时提前 commit 会在 Postgres 上外键违约。"""
+    metadata = {"replay_run_id": run.id, "source_trace_id": source.id}
+    if run.target_observation_id:
+        name_suffix = f"(replay:step-{entry.seq})"
+        metadata["target_observation_id"] = run.target_observation_id
+    else:
+        name_suffix = "(replay)"
     trace_in = TraceIn(
         id=result_trace_id,
-        name=f"{source.name or source.id[:8]} (replay)",
+        name=f"{source.name or source.id[:8]} {name_suffix}",
         origin="replay",
         status="success" if final_content is not None else "error",
         input=source.input,
         output=final_content,
-        metadata={"replay_run_id": run.id, "source_trace_id": source.id},
+        metadata=metadata,
         started_at=started_at,
         ended_at=utcnow(),
     )
@@ -100,7 +116,10 @@ def execute_replay(db: Session, run: ReplayRun, client=None) -> ReplayRun:
     source = db.get(Trace, run.source_trace_id)
     if source is None:
         raise HTTPException(status_code=404, detail="source trace not found")
-    entry = _find_entry_llm(source)
+    if run.target_observation_id:
+        entry = _resolve_target(db, source, run.target_observation_id)
+    else:
+        entry = _find_entry_llm(source)
 
     model = run.override_model or entry.model
     if not model:
@@ -115,8 +134,12 @@ def execute_replay(db: Session, run: ReplayRun, client=None) -> ReplayRun:
         raise HTTPException(status_code=400,
                             detail="anthropic provider 暂不支持工具回放")
 
-    recorded = RecordedTools([o for o in source.observations
-                              if o.type == "tool"])
+    if run.target_observation_id:
+        tool_observations = [o for o in source.observations
+                             if o.type == "tool" and o.parent_id == entry.id]
+    else:
+        tool_observations = [o for o in source.observations if o.type == "tool"]
+    recorded = RecordedTools(tool_observations)
     divergences: list[dict] = []
     observations: list[ObservationIn] = []
     result_trace_id = gen_id()  # 先本地持有，trace 落库后才写回 run（FK 约束）
@@ -128,6 +151,9 @@ def execute_replay(db: Session, run: ReplayRun, client=None) -> ReplayRun:
     final_content = None
     try:
         for step in range(MAX_REPLAY_STEPS):
+            if (utcnow() - started_at).total_seconds() > MAX_REPLAY_WALL_SECONDS:
+                divergences.append({"type": "wall_clock_exceeded", "step": step})
+                break
             t0 = utcnow()
             result = chat_completion(provider, model, messages,
                                      model_params=model_params or None,
@@ -185,17 +211,20 @@ def execute_replay(db: Session, run: ReplayRun, client=None) -> ReplayRun:
                                 "step": MAX_REPLAY_STEPS})
 
         _persist_result(db, run, source, result_trace_id, observations,
-                        final_content, started_at)
+                        final_content, started_at, entry=entry)
         run.divergences = divergences
         if final_content is not None:
             run.status = "success"
         else:
             run.status = "failed"
-            run.error = f"达到最大步数（{MAX_REPLAY_STEPS}）仍未产出最终回答"
+            if divergences and divergences[-1]["type"] == "wall_clock_exceeded":
+                run.error = f"超过最大回放时长（{MAX_REPLAY_WALL_SECONDS} 秒）仍未产出最终回答"
+            else:
+                run.error = f"达到最大步数（{MAX_REPLAY_STEPS}）仍未产出最终回答"
     except LLMClientError as e:
         if observations:
             _persist_result(db, run, source, result_trace_id, observations,
-                            None, started_at)
+                            None, started_at, entry=entry)
         run.divergences = divergences
         run.status = "failed"
         run.error = str(e)

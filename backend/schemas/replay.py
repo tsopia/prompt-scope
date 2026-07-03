@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict
 
 class ReplayRequest(BaseModel):
     source_trace_id: str
+    target_observation_id: str | None = None
     override_model: str | None = None
     override_model_params: dict | None = None
     override_prompt_text: str | None = None
