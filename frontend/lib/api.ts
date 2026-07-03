@@ -74,6 +74,66 @@ async function get<T>(path: string): Promise<T> {
   return resp.json();
 }
 
+async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const resp = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!resp.ok) {
+    let detail = `${resp.status}`;
+    try {
+      const data = await resp.json();
+      detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+    } catch { /* keep status */ }
+    throw new Error(detail);
+  }
+  return resp.json();
+}
+
+export interface Provider {
+  id: string;
+  name: string;
+  base_url: string;
+  provider_type: "openai" | "anthropic";
+  api_key_set: boolean;
+  created_at: string;
+}
+
+export interface Pricing {
+  id: string;
+  model: string;
+  input_price_per_1k: number;
+  output_price_per_1k: number;
+  provider_id: string | null;
+}
+
+export interface JudgeModel {
+  model: string;
+  provider_name: string;
+}
+
+export interface Evaluation {
+  id: string;
+  subject_trace_id: string;
+  compare_trace_id: string | null;
+  judge_model: string;
+  context_mode: string;
+  score: number | null;
+  score_b: number | null;
+  verdict: string | null;
+  reasoning: string | null;
+  cost: number | null;
+  created_at: string;
+}
+
+export interface JudgeRunResult {
+  judge_model: string;
+  status: "ok" | "error";
+  evaluation: Evaluation | null;
+  error: string | null;
+}
+
 export const api = {
   getProjects: () => get<Project[]>("/api/projects"),
   getTraces: (params: {
@@ -92,4 +152,20 @@ export const api = {
     return get<TraceListResult>(`/api/traces?${q.toString()}`);
   },
   getTrace: (id: string) => get<TraceDetail>(`/api/traces/${id}`),
+  getProviders: () => get<Provider[]>("/api/providers"),
+  createProvider: (body: { name: string; base_url: string; api_key: string; provider_type: string }) =>
+    send<Provider>("POST", "/api/providers", body),
+  deleteProvider: (id: string) => send<{ deleted: boolean }>("DELETE", `/api/providers/${id}`),
+  getPricing: () => get<Pricing[]>("/api/pricing"),
+  createPricing: (body: { model: string; input_price_per_1k: number; output_price_per_1k: number; provider_id?: string | null }) =>
+    send<Pricing>("POST", "/api/pricing", body),
+  deletePricing: (id: string) => send<{ deleted: boolean }>("DELETE", `/api/pricing/${id}`),
+  getJudgeModels: () => get<JudgeModel[]>("/api/judge-models"),
+  getEvaluations: (subjectId: string, compareId?: string) => {
+    const q = new URLSearchParams({ subject_trace_id: subjectId });
+    if (compareId) q.set("compare_trace_id", compareId);
+    return get<Evaluation[]>(`/api/evaluations?${q.toString()}`);
+  },
+  evaluate: (body: { subject_trace_id: string; compare_trace_id?: string; judge_models: string[]; force?: boolean }) =>
+    send<{ results: JudgeRunResult[] }>("POST", "/api/evaluations", body),
 };

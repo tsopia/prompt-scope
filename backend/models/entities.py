@@ -163,6 +163,7 @@ class Evaluation(Base):
     context_mode: Mapped[str] = mapped_column(String(16), default="output_only")
     # output_only | with_trace
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    score_b: Mapped[float | None] = mapped_column(Float, nullable=True)
     verdict: Mapped[str | None] = mapped_column(String(32), nullable=True)
     reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
     cost: Mapped[float | None] = mapped_column(Float, nullable=True)

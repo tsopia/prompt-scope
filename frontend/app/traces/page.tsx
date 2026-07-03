@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { api, TraceSummary } from "@/lib/api";
 import { useProject } from "@/contexts/ProjectContext";
 import { TraceTable } from "@/components/TraceTable";
@@ -18,6 +19,14 @@ export default function TracesPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [compareIds, setCompareIds] = useState<string[]>([]);
+
+  const toggleCompare = (id: string) =>
+    setCompareIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= 2) return [prev[1], id];
+      return [...prev, id];
+    });
 
   useEffect(() => {
     if (!currentProject) return;
@@ -46,6 +55,12 @@ export default function TracesPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          {compareIds.length === 2 && (
+            <Link href={`/compare?a=${compareIds[0]}&b=${compareIds[1]}`}
+                  className="text-sm px-3 py-1.5 rounded-md bg-[#6366F1] text-white">
+              对比选中项 (2)
+            </Link>
+          )}
           <div className="flex rounded-md border border-[#E5E7EB] overflow-hidden">
             {ORIGINS.map((o) => (
               <button
@@ -67,7 +82,7 @@ export default function TracesPage() {
         ) : loading ? (
           <div className="p-8 text-sm text-gray-400">加载中…</div>
         ) : (
-          <TraceTable traces={traces} />
+          <TraceTable traces={traces} compareIds={compareIds} onToggleCompare={toggleCompare} />
         )}
       </div>
     </main>

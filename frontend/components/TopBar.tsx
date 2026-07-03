@@ -13,6 +13,7 @@ export function TopBar() {
         </Link>
         <nav className="flex items-center gap-4 text-sm text-gray-600">
           <Link href="/traces" className="hover:text-[#6366F1]">Traces</Link>
+          <Link href="/settings" className="hover:text-[#6366F1]">Settings</Link>
         </nav>
       </div>
       <select
