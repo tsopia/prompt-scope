@@ -14,6 +14,8 @@ from routers import query as query_router
 async def lifespan(app: FastAPI):
     os.makedirs("db", exist_ok=True)
     Base.metadata.create_all(bind=engine)
+    from db_migrate import ensure_columns
+    ensure_columns()
     yield
 
 
