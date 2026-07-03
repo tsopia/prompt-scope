@@ -48,14 +48,16 @@ def _resolve_target(db: Session, source: Trace, target_observation_id: str):
     return target
 
 
-def _initial_messages(entry, override_prompt: str | None) -> list[dict]:
+def _initial_messages(entry, override_prompt: str | None,
+                      truncate: bool = True) -> list[dict]:
     msgs = [dict(m) for m in (entry.messages or [])]
-    cut = len(msgs)
-    for i, m in enumerate(msgs):
-        if m.get("role") in ("assistant", "tool"):
-            cut = i
-            break
-    msgs = msgs[:cut]
+    if truncate:
+        cut = len(msgs)
+        for i, m in enumerate(msgs):
+            if m.get("role") in ("assistant", "tool"):
+                cut = i
+                break
+        msgs = msgs[:cut]
     if override_prompt is not None:
         for m in msgs:
             if m.get("role") == "system":
@@ -104,6 +106,7 @@ def _persist_result(db, run, source, result_trace_id, observations,
         input=source.input,
         output=final_content,
         metadata=metadata,
+        prompt_version_id=run.override_prompt_version_id,
         started_at=started_at,
         ended_at=utcnow(),
     )
@@ -126,7 +129,8 @@ def execute_replay(db: Session, run: ReplayRun, client=None) -> ReplayRun:
         raise HTTPException(status_code=400, detail="无法确定回放模型")
     provider = resolve_provider(db, model)
 
-    messages = _initial_messages(entry, _resolve_prompt_override(db, run))
+    messages = _initial_messages(entry, _resolve_prompt_override(db, run),
+                                 truncate=not run.target_observation_id)
     model_params = {**(entry.model_params or {}),
                     **(run.override_model_params or {})}
     tools = _normalize_tools(entry.tool_definitions)
