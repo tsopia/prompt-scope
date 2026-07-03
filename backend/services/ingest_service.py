@@ -1,4 +1,5 @@
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from models.entities import ModelPricing, Observation, Trace
@@ -63,7 +64,7 @@ def _recompute_aggregates(db: Session, trace: Trace) -> None:
     trace.total_cost = sum(costs) if costs else None
 
 
-def ingest(db: Session, project_id: str, payload: IngestRequest) -> Trace:
+def ingest(db: Session, project_id: str, payload: IngestRequest, _retry: bool = True) -> Trace:
     data = payload.trace
     trace = db.get(Trace, data.id)
     if trace is not None and trace.project_id != project_id:
@@ -88,5 +89,16 @@ def ingest(db: Session, project_id: str, payload: IngestRequest) -> Trace:
 
     db.flush()
     _recompute_aggregates(db, trace)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Two concurrent requests for the same new trace/observation id can both
+        # pass the db.get()-returns-None check above and then race on INSERT;
+        # the loser hits a unique-constraint violation. Roll back and retry
+        # once so the retry's db.get() sees the winner's row and upserts onto
+        # it instead of failing the request outright.
+        db.rollback()
+        if not _retry:
+            raise
+        return ingest(db, project_id, payload, _retry=False)
     return trace
