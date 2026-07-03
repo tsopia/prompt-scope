@@ -243,6 +243,8 @@ Phase 3 在对比与评分之上增加了「对源 trace 换模型/改参数/改
 - **`MAX_REPLAY_STEPS = 15`**：LLM ↔ mock 工具往返上限，超过后记 `max_steps_exceeded` 偏离并将 run 标记为 `failed`（但已产出的 observation 仍会落库，见下）。
 - **同步执行**：`POST /api/replays` 在请求内完成整个回放循环再返回，没有后台任务/轮询机制；耗时等于本次回放里所有 LLM 调用的真实耗时总和。
 - 录制之外的调用不会中断回放，只如实记录偏离；provider 调用本身失败（网络错误、鉴权失败等）会中断循环，run 标记为 `failed` 并写入真实错误信息到 `error`，之前已产生的 observation（partial trace）仍会落库保留。
+- **同步执行**：回放请求超过约 5 分钟可能被前端代理断开（后端会继续执行完成，结果仍会出现在历史回放列表中；可稍后刷新查看）。
+- **形态限制**：MVP 仅支持"单轮输入 + 单入口 agent loop"形态的 trace；多轮对话或多阶段 pipeline trace 的回放行为未定义（Phase 4 计划支持单点回放）。
 
 ## 项目结构
 
