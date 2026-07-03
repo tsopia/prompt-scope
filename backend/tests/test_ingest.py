@@ -94,6 +94,9 @@ def test_llm_observation_requires_messages_and_model(client, api_key):
                        headers={"Authorization": f"Bearer {raw}"})
     assert resp.status_code == 422
     assert "messages" in resp.text
+    locs = [tuple(e["loc"]) for e in resp.json()["detail"]]
+    assert any(loc[-1] == "messages" for loc in locs)
+    assert any(loc[-1] == "model" for loc in locs)
 
 
 def test_tool_observation_requires_input_and_result(client, api_key):
@@ -103,6 +106,8 @@ def test_tool_observation_requires_input_and_result(client, api_key):
     resp = client.post("/api/ingest", json=bad,
                        headers={"Authorization": f"Bearer {raw}"})
     assert resp.status_code == 422
+    locs = [tuple(e["loc"]) for e in resp.json()["detail"]]
+    assert any(loc[-1] == "tool_input" for loc in locs)
 
 
 def test_unknown_model_cost_is_null(client, db_session, api_key):

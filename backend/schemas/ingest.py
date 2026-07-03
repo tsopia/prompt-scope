@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, ValidationError
+from pydantic_core import InitErrorDetails
 
 
 class TraceIn(BaseModel):
@@ -44,16 +45,47 @@ class ObservationIn(BaseModel):
 
     @model_validator(mode="after")
     def check_type_required_fields(self) -> "ObservationIn":
+        errors = []
         if self.type == "llm":
             if self.messages is None:
-                raise ValueError("llm observation requires messages")
+                errors.append(
+                    InitErrorDetails(
+                        type="value_error",
+                        loc=("messages",),
+                        input=self.messages,
+                        ctx={"error": "llm observation requires messages"}
+                    )
+                )
             if not self.model:
-                raise ValueError("llm observation requires model")
+                errors.append(
+                    InitErrorDetails(
+                        type="value_error",
+                        loc=("model",),
+                        input=self.model,
+                        ctx={"error": "llm observation requires model"}
+                    )
+                )
         if self.type == "tool":
             if self.tool_input is None:
-                raise ValueError("tool observation requires tool_input")
+                errors.append(
+                    InitErrorDetails(
+                        type="value_error",
+                        loc=("tool_input",),
+                        input=self.tool_input,
+                        ctx={"error": "tool observation requires tool_input"}
+                    )
+                )
             if self.tool_output is None and self.error is None:
-                raise ValueError("tool observation requires tool_output or error")
+                errors.append(
+                    InitErrorDetails(
+                        type="value_error",
+                        loc=("tool_output",),
+                        input=self.tool_output,
+                        ctx={"error": "tool observation requires tool_output or error"}
+                    )
+                )
+        if errors:
+            raise ValidationError.from_exception_data(self.__class__.__name__, errors)
         return self
 
 
