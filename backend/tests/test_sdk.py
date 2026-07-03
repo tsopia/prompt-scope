@@ -64,3 +64,12 @@ def test_sdk_raises_on_http_error():
     with pytest.raises(PromptScopeError, match="boom"):
         with client.trace("run"):
             pass
+
+
+def test_sdk_original_exception_survives_flush_failure(capsys):
+    client = PromptScopeClient("http://x", "ps-key",
+                               transport=capture_transport([], status=500))
+    with pytest.raises(ValueError, match="agent crashed"):
+        with client.trace("run"):
+            raise ValueError("agent crashed")
+    assert "上报失败" in capsys.readouterr().err

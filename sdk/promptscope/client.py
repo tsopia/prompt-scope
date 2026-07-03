@@ -11,6 +11,7 @@ Usage:
 """
 from __future__ import annotations
 
+import sys
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -117,7 +118,15 @@ class TraceContext:
         if exc_type is not None:
             self.trace["status"] = "error"
         self.trace["ended_at"] = _now_iso()
-        self._client.flush(self)
+        if exc_type is None:
+            # Normal exit: flush errors propagate normally
+            self._client.flush(self)
+        else:
+            # Exception during agent code: preserve original exception
+            try:
+                self._client.flush(self)
+            except Exception as e:
+                print(f"promptscope: 上报失败（原始异常保留）: {e}", file=sys.stderr)
         # returning None (falsy) re-raises any exception
 
 
