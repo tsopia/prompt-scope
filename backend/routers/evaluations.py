@@ -26,6 +26,7 @@ def evaluate(payload: EvaluateRequest, db: Session = Depends(get_db)):
             results.append(JudgeRunResult(
                 judge_model=judge_model, status="error", error=str(e.detail)))
         except Exception as e:  # noqa: BLE001 — 单个 judge 的意外错误不应中断批次
+            db.rollback()  # 避免 session 进入 pending-rollback 拖垮同批后续 judge
             results.append(JudgeRunResult(
                 judge_model=judge_model, status="error",
                 error=f"unexpected error: {e}"))
