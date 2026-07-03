@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from db import Base, engine
 import models.entities  # noqa: F401  确保建表元数据注册
+from routers import ingest as ingest_router
 
 
 @asynccontextmanager
@@ -24,6 +25,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(ingest_router.router, prefix="/api")
 
 
 @app.get("/api/health")
