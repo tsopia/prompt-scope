@@ -9,6 +9,7 @@ import models.entities  # noqa: F401  确保建表元数据注册
 from routers import ingest as ingest_router
 from routers import query as query_router
 from routers import config as config_router
+from routers import evaluations as evaluations_router
 
 
 @asynccontextmanager
@@ -34,6 +35,7 @@ app.add_middleware(
 app.include_router(ingest_router.router, prefix="/api")
 app.include_router(query_router.router, prefix="/api")
 app.include_router(config_router.router, prefix="/api")
+app.include_router(evaluations_router.router, prefix="/api")
 
 
 @app.get("/api/health")
