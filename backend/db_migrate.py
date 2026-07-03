@@ -16,6 +16,10 @@ def ensure_columns(bind=None) -> None:
             for col in table.columns:
                 if col.name in existing:
                     continue
+                if not col.nullable and col.server_default is None and col.default is None:
+                    raise RuntimeError(
+                        f"ensure_columns 只支持可空或带默认值的新列: "
+                        f"{table.name}.{col.name} 是 NOT NULL 且无默认值，需要手写迁移")
                 col_type = col.type.compile(bind.dialect)
                 conn.execute(text(
                     f'ALTER TABLE {table.name} ADD COLUMN {col.name} {col_type}'))

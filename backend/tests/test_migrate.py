@@ -28,3 +28,23 @@ def test_ensure_columns_noop_on_current_schema():
     ensure_columns(bind=engine)  # 不应抛错
     cols = {c["name"] for c in inspect(engine).get_columns("evaluations")}
     assert "score_b" in cols
+
+
+def test_ensure_columns_rejects_not_null_column_without_default():
+    import pytest
+    from sqlalchemy import Column, Integer, MetaData, Table, create_engine, text
+    from sqlalchemy.pool import StaticPool
+    from unittest.mock import patch
+
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
+                           poolclass=StaticPool)
+    meta = MetaData()
+    Table("t1", meta, Column("id", Integer, primary_key=True),
+          Column("required_new", Integer, nullable=False))
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE t1 (id INTEGER PRIMARY KEY)"))
+
+    import db_migrate
+    with patch.object(db_migrate.Base, "metadata", meta):
+        with pytest.raises(RuntimeError, match="NOT NULL"):
+            db_migrate.ensure_columns(bind=engine)
