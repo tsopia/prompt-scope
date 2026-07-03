@@ -77,6 +77,8 @@ def main() -> None:
 
     resp = httpx.post(f"{BASE_URL}/api/ingest", json=payload,
                       headers={"Authorization": f"Bearer {API_KEY}"}, timeout=10)
+    if resp.status_code >= 400:
+        print(f"error {resp.status_code}: {resp.text}")
     resp.raise_for_status()
     print(f"reported trace {trace_id}: {resp.json()}")
     print(f"view it at {BASE_URL.replace('8000', '3000')}/traces/{trace_id}")
