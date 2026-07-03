@@ -14,6 +14,9 @@ def create_replay(payload: ReplayRequest, db: Session = Depends(get_db)):
     source = db.get(Trace, payload.source_trace_id)
     if source is None:
         raise HTTPException(status_code=404, detail="source trace not found")
+    if source.origin != "live":
+        raise HTTPException(status_code=400,
+                            detail="replay 产出的 trace 不能再次回放（请回放其源 trace）")
     run = ReplayRun(
         project_id=source.project_id,
         source_trace_id=payload.source_trace_id,
@@ -25,7 +28,20 @@ def create_replay(payload: ReplayRequest, db: Session = Depends(get_db)):
     )
     db.add(run)
     db.commit()
-    return replay_service.execute_replay(db, run)
+    try:
+        return replay_service.execute_replay(db, run)
+    except HTTPException as e:
+        db.rollback()
+        run.status = "failed"
+        run.error = str(e.detail)
+        db.commit()
+        raise
+    except Exception as e:
+        db.rollback()
+        run.status = "failed"
+        run.error = f"unexpected error: {e}"
+        db.commit()
+        raise HTTPException(status_code=500, detail=run.error) from e
 
 
 @router.get("/replays/{replay_id}", response_model=ReplayRunOut)

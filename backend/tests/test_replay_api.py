@@ -60,3 +60,23 @@ def test_get_replays_by_source(client, db_session, seeded):
     rid = resp.json()[0]["id"]
     assert client.get(f"/api/replays/{rid}").json()["id"] == rid
     assert client.get("/api/replays/nope").status_code == 404
+
+
+def test_post_replay_validation_failure_marks_run_failed(client, db_session, seeded):
+    # 源 trace 没有 llm observation → execute_replay 400；run 不得停留在 pending
+    resp = client.post("/api/replays", json={
+        "source_trace_id": "src-1", "override_model": "whatever"})
+    assert resp.status_code in (400, 404)
+    runs = db_session.query(ReplayRun).all()
+    assert len(runs) == 1
+    assert runs[0].status == "failed"
+    assert runs[0].error
+
+
+def test_post_replay_rejects_replay_origin_source(client, db_session, seeded):
+    db_session.add(Trace(id="replay-src", project_id=seeded.id,
+                         name="r", origin="replay"))
+    db_session.commit()
+    resp = client.post("/api/replays", json={"source_trace_id": "replay-src"})
+    assert resp.status_code == 400
+    assert "replay" in resp.json()["detail"]
