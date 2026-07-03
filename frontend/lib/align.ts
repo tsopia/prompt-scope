@@ -13,9 +13,18 @@ export function flattenTree(nodes: ObservationNode[]): ObservationNode[] {
 
 const keyOf = (n: ObservationNode) => `${n.type}:${n.name}`;
 
+function stableStringify(v: unknown): string {
+  if (v === null || typeof v !== "object") return JSON.stringify(v);
+  if (Array.isArray(v)) return `[${v.map(stableStringify).join(",")}]`;
+  const entries = Object.entries(v as Record<string, unknown>)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([k, val]) => `${JSON.stringify(k)}:${stableStringify(val)}`);
+  return `{${entries.join(",")}}`;
+}
+
 function toolParamsDiffer(l: ObservationNode, r: ObservationNode): boolean {
   if (l.type !== "tool") return false;
-  return JSON.stringify(l.tool_input ?? null) !== JSON.stringify(r.tool_input ?? null);
+  return stableStringify(l.tool_input ?? null) !== stableStringify(r.tool_input ?? null);
 }
 
 export function alignTraces(

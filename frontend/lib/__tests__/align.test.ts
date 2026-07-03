@@ -56,4 +56,10 @@ describe("alignTraces", () => {
     const b = [node({ type: "tool", name: "search", tool_input: { q: "x" } })];
     expect(alignTraces(a, b)[0].paramDiff).toBe(false);
   });
+
+  it("no param diff when tool_input keys are reordered", () => {
+    const a = [node({ type: "tool", name: "search", tool_input: { a: 1, b: 2 } })];
+    const b = [node({ type: "tool", name: "search", tool_input: { b: 2, a: 1 } })];
+    expect(alignTraces(a, b)[0].paramDiff).toBe(false);
+  });
 });
