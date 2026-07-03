@@ -81,6 +81,7 @@ docker-compose up -d   # postgres (host port 5433) + backend + frontend
 - `Evaluation.score` is always the subject/A-side score; `Evaluation.score_b` is the compare/B-side score and is `null` for single-trace evaluations (no `compare_trace_id`). `verdict` is `pass`/`fail` for single-trace, `replaceable`/`not_replaceable` for pairwise.
 - Model pricing lives in the `model_pricings` table, not hardcoded. Only pricing rows with a non-null `provider_id` are usable as judge models (see `GET /api/judge-models`).
 - `ModelProvider.api_key` is write-only from the API's perspective: `ProviderOut` exposes `api_key_set: bool` only, never the raw key; `PUT /api/providers/{id}` leaves the stored key untouched when the request omits `api_key`.
+- Query/config/evaluations APIs are deliberately unauthenticated (team-internal, network-boundary protected; CORS restricted to the frontend origin). Only ingestion requires an API key. Evaluations/replay endpoints spend real provider money — a lightweight shared-secret gate is planned alongside Phase 3 replay.
 
 ## Working Conventions
 

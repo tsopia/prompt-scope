@@ -81,6 +81,8 @@ docker-compose up -d
 docker-compose exec backend python -m scripts.create_project demo
 ```
 
+**安全注意**：本平台面向内网部署，除 ingestion 外的接口（查询、配置、评分/回放）均无鉴权，依赖网络边界隔离；评分与回放会实际调用模型 API、消耗模型配额，请勿暴露到公网。
+
 ## Ingestion API
 
 ### 认证
