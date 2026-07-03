@@ -3,6 +3,18 @@ import { useEffect, useState } from "react";
 import { api, Evaluation, JudgeModel, JudgeRunResult } from "@/lib/api";
 import { formatCost } from "@/lib/format";
 
+// evaluations 已按 created_at 倒序返回；同一 (judge_model, context_mode) 组合
+// 只保留最新一条（force 重评后旧记录不会被覆盖，只会追加新记录）。
+function dedupeLatestByJudgeContext(evaluations: Evaluation[]): Evaluation[] {
+  const seen = new Set<string>();
+  return evaluations.filter((ev) => {
+    const key = `${ev.judge_model}::${ev.context_mode}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function ScoreBar({ label, score }: { label: string; score: number | null }) {
   return (
     <div className="flex items-center gap-2 text-sm">
@@ -134,7 +146,7 @@ export function JudgePanel({ subjectId, compareId }: { subjectId: string; compar
         <p key={model} className="text-sm text-red-600 mb-2">{model}: {err}</p>
       ))}
       <div className="grid gap-3 md:grid-cols-2">
-        {evaluations.map((ev) => (
+        {dedupeLatestByJudgeContext(evaluations).map((ev) => (
           <EvalCard key={ev.id} ev={ev} onRerun={rerun} rerunning={rerunningModel === ev.judge_model} />
         ))}
       </div>

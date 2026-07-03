@@ -103,7 +103,7 @@ def run_judge(db: Session, subject_trace_id: str, judge_model: str,
             Evaluation.compare_trace_id == compare_trace_id,
             Evaluation.judge_model == judge_model,
             Evaluation.context_mode == context_mode,
-        ).first()
+        ).order_by(Evaluation.created_at.desc()).first()
         if cached is not None:
             return cached
 
