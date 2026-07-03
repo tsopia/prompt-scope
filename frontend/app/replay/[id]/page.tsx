@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { api, Divergence, JudgeModel, ObservationNode, ReplayRun, TraceDetail } from "@/lib/api";
+import { api, Divergence, JudgeModel, ObservationNode, PromptDetail, PromptSummary, ReplayRun, TraceDetail } from "@/lib/api";
 import { formatCost, formatLatency } from "@/lib/format";
 
 function flatten(nodes: ObservationNode[]): ObservationNode[] {
@@ -126,6 +126,11 @@ export default function ReplayPage() {
   const [temperature, setTemperature] = useState("");
   const [prompt, setPrompt] = useState("");
   const [promptEdited, setPromptEdited] = useState(false);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+
+  const [libraryPrompts, setLibraryPrompts] = useState<PromptSummary[]>([]);
+  const [selectedPromptId, setSelectedPromptId] = useState("");
+  const [libraryDetail, setLibraryDetail] = useState<PromptDetail | null>(null);
 
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
@@ -142,17 +147,42 @@ export default function ReplayPage() {
     api.getJudgeModels().then(setJudgeModels).catch(() => setJudgeModels([]));
   }, [id]);
 
+  useEffect(() => {
+    if (!trace) return;
+    api.getPrompts(trace.project_id).then(setLibraryPrompts).catch(() => setLibraryPrompts([]));
+  }, [trace]);
+
   const summary = useMemo(() => (trace ? modelSummary(trace) : ""), [trace]);
+
+  const selectLibraryPrompt = (promptId: string) => {
+    setSelectedPromptId(promptId);
+    setLibraryDetail(null);
+    setSelectedVersionId(null);
+    if (!promptId) return;
+    api.getPrompt(promptId).then(setLibraryDetail).catch(() => setLibraryDetail(null));
+  };
+
+  const selectLibraryVersion = (versionId: string) => {
+    setSelectedVersionId(versionId || null);
+    if (!versionId || !libraryDetail) return;
+    const v = libraryDetail.versions.find((x) => x.id === versionId);
+    if (v) {
+      setPrompt(v.content);
+      setPromptEdited(false);
+    }
+  };
 
   const runReplay = async () => {
     setRunning(true);
     setRunError(null);
     try {
+      const useVersion = selectedVersionId && !promptEdited;
       const run = await api.createReplay({
         source_trace_id: id,
         override_model: model || undefined,
         override_model_params: temperature !== "" ? { temperature: parseFloat(temperature) } : undefined,
-        override_prompt_text: promptEdited ? prompt : undefined,
+        override_prompt_version_id: useVersion ? selectedVersionId : undefined,
+        override_prompt_text: !useVersion && promptEdited ? prompt : undefined,
       });
       setLastRun(run);
       setReplays(await api.getReplays(id));
@@ -205,6 +235,31 @@ export default function ReplayPage() {
           <input type="number" step="0.1" className="border border-[#E5E7EB] rounded-md px-2 py-1.5 text-sm w-32"
                  value={temperature} onChange={(e) => setTemperature(e.target.value)}
                  placeholder="不覆盖" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">从 Prompt 库选择</label>
+          <div className="flex gap-2">
+            <select className="border border-[#E5E7EB] rounded-md px-2 py-1.5 text-sm flex-1"
+                    value={selectedPromptId}
+                    onChange={(e) => selectLibraryPrompt(e.target.value)}>
+              <option value="">（不使用 Prompt 库）</option>
+              {libraryPrompts.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <select className="border border-[#E5E7EB] rounded-md px-2 py-1.5 text-sm flex-1"
+                    value={selectedVersionId ?? ""}
+                    disabled={!libraryDetail}
+                    onChange={(e) => selectLibraryVersion(e.target.value)}>
+              <option value="">选择版本</option>
+              {libraryDetail?.versions
+                .slice()
+                .sort((a, b) => b.version - a.version)
+                .map((v) => (
+                  <option key={v.id} value={v.id}>v{v.version}</option>
+                ))}
+            </select>
+          </div>
         </div>
         <div>
           <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">System Prompt</label>
