@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 
 from db import get_db
 from models.entities import Evaluation
-from schemas.evaluations import (EvaluateRequest, EvaluateResponse,
-                                 EvaluationOut, JudgeRunResult)
+from schemas.evaluations import (BatchEvaluateItem, BatchEvaluateRequest,
+                                 BatchEvaluateResponse, EvaluateRequest,
+                                 EvaluateResponse, EvaluationOut, JudgeRunResult)
 import services.judge_service as judge_service
 
 router = APIRouter(tags=["evaluations"])
@@ -31,6 +32,31 @@ def evaluate(payload: EvaluateRequest, db: Session = Depends(get_db)):
                 judge_model=judge_model, status="error",
                 error=f"unexpected error: {e}"))
     return EvaluateResponse(results=results)
+
+
+@router.post("/evaluations/batch", response_model=BatchEvaluateResponse)
+def batch_evaluate(payload: BatchEvaluateRequest, db: Session = Depends(get_db)):
+    results = []
+    for subject_trace_id in payload.subject_trace_ids:
+        for judge_model in payload.judge_models:
+            try:
+                ev = judge_service.run_judge(
+                    db, subject_trace_id, judge_model,
+                    compare_trace_id=None,
+                    context_mode=payload.context_mode, force=payload.force)
+                results.append(BatchEvaluateItem(
+                    subject_trace_id=subject_trace_id, judge_model=judge_model,
+                    status="ok", evaluation=EvaluationOut.model_validate(ev)))
+            except HTTPException as e:
+                results.append(BatchEvaluateItem(
+                    subject_trace_id=subject_trace_id, judge_model=judge_model,
+                    status="error", error=str(e.detail)))
+            except Exception as e:  # noqa: BLE001 — 单个组合的意外错误不应中断批次
+                db.rollback()
+                results.append(BatchEvaluateItem(
+                    subject_trace_id=subject_trace_id, judge_model=judge_model,
+                    status="error", error=f"unexpected error: {e}"))
+    return BatchEvaluateResponse(results=results)
 
 
 @router.get("/evaluations", response_model=list[EvaluationOut])
