@@ -1,41 +1,41 @@
-version: '3.8'
-
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: promptscope
+      POSTGRES_PASSWORD: promptscope
+      POSTGRES_DB: promptscope
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U promptscope"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: promptscope-backend
+    build: ./backend
     ports:
       - "8000:8000"
     environment:
-      - LANGFUSE_HOST=${LANGFUSE_HOST:-https://cloud.langfuse.com}
-      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
-      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
-      - DATABASE_URL=sqlite:///./db/promptscope.db
-    volumes:
-      - backend-db:/app/db
+      DATABASE_URL: postgresql+psycopg://promptscope:promptscope@postgres:5432/promptscope
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
-    container_name: promptscope-frontend
+      args:
+        API_PROXY_HOST: http://backend:8000
     ports:
       - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8000
     depends_on:
       - backend
     restart: unless-stopped
 
 volumes:
-  backend-db:
+  pgdata:

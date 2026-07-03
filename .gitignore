@@ -1,0 +1,23 @@
+# dependencies & build output
+node_modules/
+frontend/.next/
+frontend/out/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# runtime data
+backend/db/*.db
+*.sqlite
+
+# env & local config
+.env
+.env.local
+
+# scratch
+.superpowers/
+.remember/
+.DS_Store
