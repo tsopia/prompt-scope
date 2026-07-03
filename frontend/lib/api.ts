@@ -224,6 +224,7 @@ export const api = {
     send<{ results: JudgeRunResult[] }>("POST", "/api/evaluations", body),
   createReplay: (body: {
     source_trace_id: string;
+    target_observation_id?: string;
     override_model?: string;
     override_model_params?: Record<string, unknown>;
     override_prompt_text?: string;

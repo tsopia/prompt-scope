@@ -15,7 +15,13 @@ function ScoreBar({ label, score }: { label: string; score: number | null }) {
   );
 }
 
-function EvalCard({ ev }: { ev: Evaluation }) {
+function EvalCard({
+  ev, onRerun, rerunning,
+}: {
+  ev: Evaluation;
+  onRerun: (judgeModel: string) => void;
+  rerunning: boolean;
+}) {
   const positive = ev.verdict === "replaceable" || ev.verdict === "pass";
   return (
     <div className="border border-[#E5E7EB] rounded-lg p-4">
@@ -27,6 +33,10 @@ function EvalCard({ ev }: { ev: Evaluation }) {
         <span className="ml-auto text-xs text-gray-400">
           {formatCost(ev.cost)} · {new Date(ev.created_at).toLocaleString("zh-CN")}
         </span>
+        <button onClick={() => onRerun(ev.judge_model)} disabled={rerunning}
+                className="text-xs px-2 py-0.5 rounded-md border border-[#E5E7EB] text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+          重新评分
+        </button>
       </div>
       <div className="space-y-1 mb-2">
         <ScoreBar label="A" score={ev.score} />
@@ -43,6 +53,7 @@ export function JudgePanel({ subjectId, compareId }: { subjectId: string; compar
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [running, setRunning] = useState(false);
+  const [rerunningModel, setRerunningModel] = useState<string | null>(null);
 
   useEffect(() => {
     api.getJudgeModels().then(setJudgeModels).catch(() => setJudgeModels([]));
@@ -72,6 +83,29 @@ export function JudgePanel({ subjectId, compareId }: { subjectId: string; compar
     }
   };
 
+  const rerun = async (judgeModel: string) => {
+    setRerunningModel(judgeModel);
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next[judgeModel];
+      return next;
+    });
+    try {
+      const { results } = await api.evaluate({
+        subject_trace_id: subjectId, compare_trace_id: compareId, judge_models: [judgeModel], force: true,
+      });
+      const r = results[0];
+      if (r?.status === "error" && r.error) {
+        setErrors((prev) => ({ ...prev, [judgeModel]: r.error as string }));
+      }
+      setEvaluations(await api.getEvaluations(subjectId, compareId));
+    } catch (e) {
+      setErrors((prev) => ({ ...prev, [judgeModel]: String(e) }));
+    } finally {
+      setRerunningModel(null);
+    }
+  };
+
   return (
     <section className="mt-6">
       <h3 className="text-sm font-semibold mb-3">LLM Judge 评分</h3>
@@ -80,7 +114,7 @@ export function JudgePanel({ subjectId, compareId }: { subjectId: string; compar
           没有可用的 judge 模型——先到 Settings 配置 provider 并在定价表中关联模型。
         </p>
       ) : (
-        <div className="flex flex-wrap items-center gap-3 mb-4">
+        <div className="flex flex-wrap items-center gap-3 mb-2">
           {judgeModels.map((m) => (
             <label key={m.model} className="flex items-center gap-1.5 text-sm">
               <input type="checkbox" checked={selected.includes(m.model)}
@@ -94,12 +128,15 @@ export function JudgePanel({ subjectId, compareId }: { subjectId: string; compar
           </button>
         </div>
       )}
+      <p className="text-xs text-gray-400 mb-4">相同组合默认返回缓存结果；重新评分会追加新记录。</p>
       {errors._global && <p className="text-sm text-red-600 mb-2">{errors._global}</p>}
       {Object.entries(errors).filter(([k]) => k !== "_global").map(([model, err]) => (
         <p key={model} className="text-sm text-red-600 mb-2">{model}: {err}</p>
       ))}
       <div className="grid gap-3 md:grid-cols-2">
-        {evaluations.map((ev) => <EvalCard key={ev.id} ev={ev} />)}
+        {evaluations.map((ev) => (
+          <EvalCard key={ev.id} ev={ev} onRerun={rerun} rerunning={rerunningModel === ev.judge_model} />
+        ))}
       </div>
     </section>
   );
