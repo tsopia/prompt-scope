@@ -89,7 +89,6 @@ def test_trace_detail_exposes_metadata(client, db_session):
 
 
 def test_traces_hidden_from_non_member(user_client, db_session):
-    from models.entities import Project, Trace, ProjectMember
     # a project the logged-in user is NOT a member of
     other = Project(name="other-grp")
     db_session.add(other)

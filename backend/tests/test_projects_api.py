@@ -68,3 +68,8 @@ def test_non_owner_cannot_touch_keys(client, project):
     client.post("/api/auth/register", json={
         "email": "intruder@x.com", "password": "pw123456", "display_name": "I"})
     assert client.post(f"/api/projects/{project['id']}/keys").status_code == 403
+
+
+def test_create_key_missing_project_404_and_delete_unknown_key_404(client):
+    assert client.post("/api/projects/nope/keys").status_code == 404
+    assert client.delete("/api/keys/nope").status_code == 404
