@@ -24,7 +24,7 @@ PromptScope Frontend (Next.js)
 
 ## 技术栈
 
-- **前端**：Next.js 14 + TypeScript + TailwindCSS
+- **前端**：Next.js 14 + TypeScript + TailwindCSS + shadcn/ui（`components/ui/`）+ next-themes
 - **后端**：FastAPI + SQLAlchemy，本地开发默认 SQLite，团队部署用 Postgres
 - **部署**：Docker Compose（Postgres 16 + backend + frontend）
 
@@ -32,7 +32,7 @@ PromptScope Frontend (Next.js)
 
 ### 本地开发
 
-**1. 启动后端并创建项目拿 API Key：**
+**1. 启动后端：**
 
 ```bash
 cd backend
@@ -40,16 +40,6 @@ python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
-```
-
-另开一个终端，为项目签发 API Key（本地默认使用 SQLite，无需额外配置）：
-
-```bash
-cd backend
-python -m scripts.create_project demo
-# 输出:
-# project: demo (<project_id>)
-# api key (save it now, shown only once): ps-xxxxxxxx...
 ```
 
 **2. 启动前端：**
@@ -60,7 +50,17 @@ npm install
 npm run dev
 ```
 
-**3. 跑示例脚本上报一次带工具调用的 Agent 运行：**
+**3. 建项目、拿 API Key**：浏览器打开 `http://localhost:3000`（自动跳转 `/traces`），首次使用无需任何 CLI 操作——打开左侧侧边栏底部进入 **Settings → 项目与密钥** 标签页：「新建项目」建一个项目并自动切换为当前项目，「新建 API Key」弹窗展示完整 key（**仅此一次可见**，关闭前请立即复制保存）。旧的命令行方式仍然保留，适合脚本化/CI 场景：
+
+```bash
+cd backend
+python -m scripts.create_project demo
+# 输出:
+# project: demo (<project_id>)
+# api key (save it now, shown only once): ps-xxxxxxxx...
+```
+
+**4. 跑示例脚本上报一次带工具调用的 Agent 运行：**
 
 ```bash
 export PROMPTSCOPE_URL=http://localhost:8000
@@ -68,7 +68,7 @@ export PROMPTSCOPE_API_KEY=ps-xxxxxxxx...   # 上一步拿到的 key
 python examples/report_agent_run.py
 ```
 
-**4. 浏览器打开** `http://localhost:3000/traces` **查看链路**，点进具体 trace 可看调用链树（LLM 调用 / 工具调用 / 每步耗时）。
+**5. 回到 `/traces` 页面查看链路**，侧边栏顶部的项目切换器选中对应项目后即可看到新上报的 trace；点进具体 trace 可看分组调用链树（LLM 调用 / 工具调用，角色着色的消息列表 / 每步耗时）。
 
 ### Docker 部署
 
@@ -83,6 +83,44 @@ docker-compose exec backend python -m scripts.create_project demo
 ```
 
 **安全注意**：本平台面向内网部署，除 ingestion 外的接口（查询、配置、评分/回放）均无鉴权，依赖网络边界隔离；评分与回放会实际调用模型 API、消耗模型配额，请勿暴露到公网。
+
+## 前端界面
+
+Phase 5 对前端做了整体视觉与交互重设计：`components/ui/` 引入 shadcn/ui 作为基础组件库，配合 `next-themes` 支持双主题。
+
+### 主题
+
+- 亮色 / 暗色 / 跟随系统三种模式（`components/theme-toggle.tsx`），切换入口在**左侧侧边栏底部**（`components/layout/AppSidebar.tsx`），默认主题为暗色（`app/layout.tsx` 里 `ThemeProvider` 的 `defaultTheme="dark"`）。
+- 主题选择持久化在 `localStorage`（`next-themes` 默认行为，键名 `theme`），刷新或重新打开浏览器后保持上次选择；`html` 标签通过 `class` 属性切换（`attribute="class"`），配合 `app/globals.css` 里 `:root` / `.dark` 两套 CSS 变量生效。
+- 全站零硬编码色值：所有颜色通过 `app/globals.css` 定义的 Tailwind 语义 token 表达（`success`/`warning`/`destructive`/`replay`/`live` 等状态色见 `components/StatusBadge.tsx`，规则详见 `CLAUDE.md`），因此每个页面都能在两套主题下正确换色，不需要针对组件单独适配。
+
+### 侧边栏导航
+
+左侧固定侧边栏（`components/layout/AppSidebar.tsx`，可折叠为图标态，折叠状态记忆在 `localStorage`）：
+- 顶部为项目切换器（下拉框，绑定 `ProjectContext`，切换后全站页面按新的 `currentProject` 重新拉取数据）
+- 中部导航：**Traces / Compare / Prompts / Settings** 四个入口，当前路由高亮
+- 底部为主题切换器 + 版本号 + 折叠按钮
+
+不再是旧版的顶部 TopBar 布局。
+
+### 页面动线更新
+
+- **`/traces` 列表**：勾选两条 trace 后，底部弹出悬浮的**对比托盘**（`components/CompareTray.tsx`），展示已选 trace 的标签（可单独移除），凑满 2 条后「开始对比」按钮可点击，直接跳转 `/compare?a=<id>&b=<id>`；未配置任何 trace 数据时展示 `OnboardingCard`（三步接入引导：Settings 建 Key → SDK 接入代码示例 → 刷新查看）。
+- **`/replay/{id}` 回放成功自动进对比**：点击「运行回放 ▶」后，若本次回放 `status === "success"` 且产出了 `result_trace_id`，页面会自动 `router.push` 跳转到 `/compare?a=<源 trace>&b=<回放结果 trace>`（并有 toast 提示"回放完成，正在打开对比…"），不再需要手动点「与源 trace 对比」；失败或未产生结果 trace 时，结果展示在右侧的历史回放时间线里（含错误信息与 divergence 列表，可展开/收起）。
+- **`/prompts` 行级 diff**：勾选两个版本卡片后，页面顶部出现 `v{old} → v{new}` 的差异卡片，使用 `lib/linediff.ts` 做**逐行 diff**（`+`/`-`/空格前缀，新增行绿色高亮、删除行红色高亮），而非旧版的纯文本并排展示；每个版本卡片还支持「用此版本回放…」直接从 prompt 库发起某个版本的回放。
+- **`/settings` 三个 tab**：「项目与密钥」「模型 Provider」「定价」（`components/ui/tabs.tsx`）。**「项目与密钥」标签页新增了项目与 API Key 的完整管理 UI**：左侧项目列表 + 「新建项目」弹窗，右侧显示当前项目的 Key 列表（前缀、创建时间、状态）+ 「新建 API Key」（弹窗仅展示一次完整 key，关闭后不可再查看）+ 「吊销」（二次确认弹窗，吊销后立即失效不可恢复）。首次使用起不再必须走 CLI 建项目/建 Key，但 `backend/scripts/create_project.py` 脚本原样保留，适合脚本化场景。
+
+### E2E 测试
+
+```bash
+cd frontend
+npm run e2e
+```
+
+`playwright.config.ts` 会自起一套完全独立的前后端进程，不依赖你本地已经在跑的 `dev`/`uvicorn`：后端用临时 `backend/db/e2e.db`（`journey` 用例组运行前先 `rm -f`，保证每次全新库）跑在 `:8100`，前端跑在 `:3100`（`API_PROXY_HOST` 指向 `:8100`）。共两组用例，`theme` 依赖 `journey` 先跑完：
+
+- **`e2e/journey.spec.ts`**：串联全链路——从 UI 建项目/建 Key，通过 `execFileSync` 调 `e2e/scripts/ingest_e2e.py`（**真实走 `sdk/promptscope` Python SDK**，而非 mock 数据）上报几条真实 trace，再依次驱动 traces 列表筛选/搜索、trace 详情、对比托盘选择进对比、配置假 provider 后跑 Judge（预期真实报错，不伪造结果）、发起回放（假 provider 必然失败，验证失败态展示）、Prompt 建版本/fork/勾选 diff、主题切换与刷新持久化。
+- **`e2e/theme.spec.ts`**：依赖 `journey.spec.ts` 跑完后留下的数据（`e2e-proj` 项目、trace、prompt），对 traces / 详情 / compare / replay / prompts / settings 六个页面分别在浅色和深色主题下各截一张全页截图，产物写入 `frontend/e2e-screenshots/`（如 `traces-light.png`、`compare-dark.png`，共 12 张，`.gitignore` 已排除该目录），用于人工视觉核对两套主题下的页面观感。
 
 ## Ingestion API
 
@@ -337,15 +375,19 @@ promptscope/
 │   ├── models/entities.py
 │   ├── schemas/          # ingest.py / query.py / config.py / evaluations.py / replay.py / prompts.py
 │   ├── services/         # auth / ingest_service / llm_client / judge_service / providers / replay_service
-│   ├── routers/          # ingest.py / query.py / config.py / evaluations.py / replay.py / prompts.py
+│   ├── routers/          # ingest.py / query.py / config.py / evaluations.py / replay.py / prompts.py / projects.py
 │   └── scripts/create_project.py
 ├── frontend/
-│   ├── app/traces/       # trace 列表与详情页（含"单点回放此步"入口）
+│   ├── app/traces/       # trace 列表与详情页（对比托盘、"单点回放此步"入口）
 │   ├── app/compare/      # 双链路对齐对比工作台
-│   ├── app/replay/[id]/  # 回放配置与结果页（支持整链路回放与单点回放）
-│   ├── app/prompts/      # Prompt 版本管理页
-│   ├── app/settings/     # provider / 定价配置页
-│   └── lib/align.ts      # LCS trace 对齐算法
+│   ├── app/replay/[id]/  # 回放配置与结果页（支持整链路回放、单点回放、成功后自动跳对比）
+│   ├── app/prompts/      # Prompt 版本管理页（含行级 diff）
+│   ├── app/settings/     # 项目与密钥 / provider / 定价三个 tab
+│   ├── components/ui/    # shadcn/ui 基础组件
+│   ├── components/layout/AppSidebar.tsx  # 侧边栏导航 + 主题切换
+│   ├── lib/align.ts      # LCS trace 对齐算法
+│   ├── lib/linediff.ts   # LCS 行级 diff（prompt 版本对比）
+│   └── e2e/              # Playwright 端到端测试（journey + theme 截图）
 ├── sdk/promptscope/       # Python SDK：trace context manager + llm/tool 上报
 ├── examples/report_agent_run.py   # 基于 SDK 的上报示例
 └── docker-compose.yml
