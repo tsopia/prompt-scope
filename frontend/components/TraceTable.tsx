@@ -1,72 +1,119 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { TraceSummary } from "@/lib/api";
-import { formatCost, formatLatency, formatTokens } from "@/lib/format";
+import { formatCost, formatCostFull, formatLatency, formatTokens } from "@/lib/format";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { StatusBadge } from "@/components/StatusBadge";
+import { MetricText } from "@/components/MetricText";
 
-export function TraceTable({ traces, compareIds, onToggleCompare }: {
-  traces: TraceSummary[]; compareIds: string[]; onToggleCompare: (id: string) => void;
+function ModelBadges({ modelSummary }: { modelSummary: string }) {
+  if (!modelSummary) return <span className="text-muted-foreground">—</span>;
+  const models = modelSummary.split(",").map((m) => m.trim()).filter(Boolean);
+  return (
+    <div className="flex flex-wrap gap-1">
+      {models.map((m, i) => (
+        <Badge key={`${m}-${i}`} variant="secondary" className="font-normal">
+          {m}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
+const COLUMN_COUNT = 9;
+
+export function TraceTable({
+  traces,
+  compareIds,
+  onToggleCompare,
+  loading,
+}: {
+  traces: TraceSummary[];
+  compareIds: string[];
+  onToggleCompare: (id: string) => void;
+  loading?: boolean;
 }) {
   const router = useRouter();
 
-  if (traces.length === 0) {
-    return (
-      <div className="p-12 text-center text-sm text-gray-400">
-        暂无 trace 数据 — 用 examples/report_agent_run.py 上报一条试试
-      </div>
-    );
-  }
-
   return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-left text-xs text-gray-400 uppercase tracking-wider border-b border-[#E5E7EB]">
-          <th className="px-2 py-2"></th>
-          <th className="px-4 py-2">名称</th>
-          <th className="px-4 py-2">来源</th>
-          <th className="px-4 py-2">模型</th>
-          <th className="px-4 py-2">步数</th>
-          <th className="px-4 py-2">Tokens (in/out)</th>
-          <th className="px-4 py-2">成本</th>
-          <th className="px-4 py-2">延迟</th>
-          <th className="px-4 py-2">时间</th>
-        </tr>
-      </thead>
-      <tbody>
-        {traces.map((t) => (
-          <tr
-            key={t.id}
-            onClick={() => router.push(`/traces/${t.id}`)}
-            className="border-b border-[#F3F4F6] hover:bg-[#F5F6FF] cursor-pointer"
-          >
-            <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
-              <input type="checkbox" checked={compareIds.includes(t.id)}
-                     onChange={() => onToggleCompare(t.id)} />
-            </td>
-            <td className="px-4 py-3 font-medium">{t.name || t.id.slice(0, 8)}</td>
-            <td className="px-4 py-3">
-              <span
-                className={`text-xs px-2 py-0.5 rounded-full ${
-                  t.origin === "replay"
-                    ? "bg-purple-100 text-purple-700"
-                    : "bg-blue-100 text-blue-700"
-                }`}
-              >
-                {t.origin}
-              </span>
-            </td>
-            <td className="px-4 py-3 text-gray-600">{t.model_summary || "—"}</td>
-            <td className="px-4 py-3">{t.observation_count}</td>
-            <td className="px-4 py-3 text-gray-600">
-              {formatTokens(t.total_input_tokens)} / {formatTokens(t.total_output_tokens)}
-            </td>
-            <td className="px-4 py-3 font-mono">{formatCost(t.total_cost)}</td>
-            <td className="px-4 py-3">{formatLatency(t.latency_ms)}</td>
-            <td className="px-4 py-3 text-gray-400 text-xs">
-              {new Date(t.created_at).toLocaleString("zh-CN")}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-10"></TableHead>
+          <TableHead>名称</TableHead>
+          <TableHead>来源</TableHead>
+          <TableHead>模型</TableHead>
+          <TableHead className="text-right">步数</TableHead>
+          <TableHead className="text-right">Tokens (in/out)</TableHead>
+          <TableHead className="text-right">成本</TableHead>
+          <TableHead className="text-right">延迟</TableHead>
+          <TableHead>时间</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {loading
+          ? Array.from({ length: 6 }).map((_, i) => (
+              <TableRow key={`skeleton-${i}`}>
+                {Array.from({ length: COLUMN_COUNT }).map((_, j) => (
+                  <TableCell key={j}>
+                    <Skeleton className="h-4 w-full" />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          : traces.map((t) => {
+              const selected = compareIds.includes(t.id);
+              return (
+                <TableRow
+                  key={t.id}
+                  onClick={() => router.push(`/traces/${t.id}`)}
+                  className={`cursor-pointer ${selected ? "bg-accent/50" : ""}`}
+                >
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={selected}
+                      onCheckedChange={() => onToggleCompare(t.id)}
+                      aria-label={`选中 ${t.name || t.id.slice(0, 8)}`}
+                    />
+                  </TableCell>
+                  <TableCell className="font-medium">{t.name || t.id.slice(0, 8)}</TableCell>
+                  <TableCell>
+                    <StatusBadge kind={t.origin === "replay" ? "replay" : "live"} />
+                  </TableCell>
+                  <TableCell>
+                    <ModelBadges modelSummary={t.model_summary} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <MetricText value={String(t.observation_count)} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <MetricText
+                      value={`${formatTokens(t.total_input_tokens)} / ${formatTokens(t.total_output_tokens)}`}
+                    />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <MetricText value={formatCost(t.total_cost)} title={formatCostFull(t.total_cost)} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <MetricText value={formatLatency(t.latency_ms)} />
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {new Date(t.created_at).toLocaleString("zh-CN")}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+      </TableBody>
+    </Table>
   );
 }

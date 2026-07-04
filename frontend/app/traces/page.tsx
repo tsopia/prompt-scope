@@ -1,9 +1,17 @@
 "use client";
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { AlertCircle, SearchX } from "lucide-react";
+import { toast } from "sonner";
 import { api, TraceSummary } from "@/lib/api";
 import { useProject } from "@/contexts/ProjectContext";
+import { useDebounce } from "@/lib/hooks";
 import { TraceTable } from "@/components/TraceTable";
+import { CompareTray } from "@/components/CompareTray";
+import { OnboardingCard } from "@/components/OnboardingCard";
+import { EmptyState } from "@/components/EmptyState";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
 
 const ORIGINS = [
   { value: "", label: "全部" },
@@ -17,6 +25,7 @@ export default function TracesPage() {
   const [total, setTotal] = useState(0);
   const [origin, setOrigin] = useState("");
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [compareIds, setCompareIds] = useState<string[]>([]);
@@ -28,63 +37,93 @@ export default function TracesPage() {
       return [...prev, id];
     });
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!currentProject) return;
     setLoading(true);
     setError(null);
     api
-      .getTraces({ projectId: currentProject.id, origin: origin || undefined, search: search || undefined })
+      .getTraces({
+        projectId: currentProject.id,
+        origin: origin || undefined,
+        search: debouncedSearch || undefined,
+      })
       .then((r) => {
         setTraces(r.items);
         setTotal(r.total);
       })
-      .catch((e) => setError(String(e)))
+      .catch((e) => {
+        setError(String(e));
+        toast.error("加载 trace 列表失败");
+      })
       .finally(() => setLoading(false));
-  }, [currentProject, origin, search]);
+  }, [currentProject, origin, debouncedSearch]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const compareSelected = traces.filter((t) => compareIds.includes(t.id));
+  const showTray = compareIds.length > 0;
+  const showOnboarding = !loading && !error && traces.length === 0 && !debouncedSearch;
+  const showNoMatch = !loading && !error && traces.length === 0 && !!debouncedSearch;
 
   return (
-    <main className="max-w-6xl mx-auto p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-base font-semibold">
-          Traces <span className="text-gray-400 font-normal">({total})</span>
-        </h2>
-        <div className="flex items-center gap-2">
-          <input
-            className="text-sm border border-[#E5E7EB] rounded-md px-3 py-1.5 w-56"
-            placeholder="按名称搜索…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          {compareIds.length === 2 && (
-            <Link href={`/compare?a=${compareIds[0]}&b=${compareIds[1]}`}
-                  className="text-sm px-3 py-1.5 rounded-md bg-[#6366F1] text-white">
-              对比选中项 (2)
-            </Link>
-          )}
-          <div className="flex rounded-md border border-[#E5E7EB] overflow-hidden">
-            {ORIGINS.map((o) => (
-              <button
-                key={o.value}
-                onClick={() => setOrigin(o.value)}
-                className={`text-xs px-3 py-1.5 ${
-                  origin === o.value ? "bg-[#6366F1] text-white" : "bg-white text-gray-600"
-                }`}
-              >
-                {o.label}
-              </button>
-            ))}
+    <div className={showTray ? "pb-24" : undefined}>
+      <PageHeader crumbs={[{ label: "Traces" }]} />
+      <main className="mx-auto max-w-6xl space-y-4 p-6">
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-sm text-muted-foreground">共 {total} 条</p>
+          <div className="flex items-center gap-2">
+            <Input
+              className="w-56"
+              placeholder="按名称搜索…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <div className="flex rounded-md border border-input overflow-hidden">
+              {ORIGINS.map((o) => (
+                <button
+                  key={o.value}
+                  onClick={() => setOrigin(o.value)}
+                  className={`px-3 py-1.5 text-xs ${
+                    origin === o.value
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-background text-muted-foreground hover:bg-accent"
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
-      <div className="bg-white rounded-lg border border-[#E5E7EB] overflow-x-auto">
+
         {error ? (
-          <div className="p-8 text-sm text-red-500">加载失败：{error}</div>
-        ) : loading ? (
-          <div className="p-8 text-sm text-gray-400">加载中…</div>
+          <EmptyState
+            icon={AlertCircle}
+            title="加载失败"
+            description={error}
+          />
+        ) : showOnboarding ? (
+          <OnboardingCard projectName={currentProject?.name} onRefresh={load} />
+        ) : showNoMatch ? (
+          <EmptyState icon={SearchX} title="没有匹配的 trace" description="换个关键词试试" />
         ) : (
-          <TraceTable traces={traces} compareIds={compareIds} onToggleCompare={toggleCompare} />
+          <Card className="overflow-x-auto">
+            <TraceTable
+              traces={traces}
+              compareIds={compareIds}
+              onToggleCompare={toggleCompare}
+              loading={loading}
+            />
+          </Card>
         )}
-      </div>
-    </main>
+      </main>
+      <CompareTray
+        selected={compareSelected}
+        onRemove={toggleCompare}
+        onClear={() => setCompareIds([])}
+      />
+    </div>
   );
 }

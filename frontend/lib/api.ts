@@ -188,6 +188,19 @@ export interface VersionTrace {
   created_at: string;
 }
 
+export interface ApiKeyInfo {
+  id: string;
+  prefix: string;
+  created_at: string;
+  revoked_at: string | null;
+}
+
+export interface ApiKeyCreated {
+  id: string;
+  prefix: string;
+  key: string;
+}
+
 export const api = {
   getProjects: () => get<Project[]>("/api/projects"),
   getTraces: (params: {
@@ -241,4 +254,12 @@ export const api = {
     send<PromptVersionInfo>("POST", `/api/prompts/${id}/versions`, { content }),
   getVersionTraces: (versionId: string) =>
     get<VersionTrace[]>(`/api/prompt-versions/${versionId}/traces`),
+  createProject: (body: { name: string }) =>
+    send<Project & { created_at: string }>("POST", "/api/projects", body),
+  getProjectKeys: (projectId: string) =>
+    get<ApiKeyInfo[]>(`/api/projects/${projectId}/keys`),
+  createProjectKey: (projectId: string) =>
+    send<ApiKeyCreated>("POST", `/api/projects/${projectId}/keys`),
+  revokeKey: (keyId: string) =>
+    send<{ revoked: boolean }>("DELETE", `/api/keys/${keyId}`),
 };
