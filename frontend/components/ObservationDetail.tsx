@@ -2,6 +2,8 @@
 import { ObservationNode } from "@/lib/api";
 import { formatCost, formatLatency, formatTokens } from "@/lib/format";
 import { CodeBlock } from "@/components/CodeBlock";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 function jsonText(value: unknown): string {
@@ -35,6 +37,7 @@ function MessageBubble({ message }: { message: Record<string, unknown> }) {
 }
 
 export function ObservationDetail({ node }: { node: ObservationNode }) {
+  const isMocked = node.metadata?.mocked === true;
   return (
     <div className="p-4">
       <div className="mb-4 flex items-center gap-3 text-sm">
@@ -43,6 +46,28 @@ export function ObservationDetail({ node }: { node: ObservationNode }) {
           {node.type}
         </span>
         {node.model && <span className="text-xs text-muted-foreground">{node.model}</span>}
+        {isMocked && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge
+                variant="outline"
+                className="cursor-default bg-warning/15 text-warning border-warning/30"
+              >
+                mocked
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              <CodeBlock
+                code={
+                  node.metadata?.recorded_input !== undefined
+                    ? jsonText(node.metadata.recorded_input)
+                    : "无录制入参"
+                }
+                language="json"
+              />
+            </TooltipContent>
+          </Tooltip>
+        )}
         <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
           <span className="font-mono tabular-nums">
             {formatTokens(node.input_tokens)} / {formatTokens(node.output_tokens)} tokens

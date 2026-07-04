@@ -61,6 +61,11 @@ export default function TraceDetailPage() {
                 <Link href={`/replay/${trace.id}?target=${selected.id}`}>单点回放此步 ▶</Link>
               </Button>
             )}
+            {trace.origin === "replay" && typeof trace.metadata?.source_trace_id === "string" && (
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/traces/${trace.metadata.source_trace_id}`}>源 trace</Link>
+              </Button>
+            )}
           </>
         }
       />

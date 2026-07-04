@@ -71,3 +71,23 @@ def test_trace_detail_tree(client, seeded):
 
 def test_trace_detail_404(client, seeded):
     assert client.get("/api/traces/nope").status_code == 404
+
+
+def test_trace_detail_exposes_metadata(client, db_session):
+    p = Project(name="demo2")
+    db_session.add(p)
+    db_session.flush()
+    t = Trace(id="tr-meta", project_id=p.id, name="run-meta", origin="replay",
+               meta={"source_trace_id": "x"})
+    db_session.add_all([
+        t,
+        Observation(id="ob-meta", trace_id="tr-meta", type="tool", name="search",
+                    tool_input={}, tool_output={}, seq=0, meta={"mocked": True}),
+    ])
+    db_session.commit()
+
+    resp = client.get("/api/traces/tr-meta")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["metadata"]["source_trace_id"] == "x"
+    assert body["observations"][0]["metadata"]["mocked"] is True

@@ -47,6 +47,7 @@ export interface ObservationNode {
   cost: number | null;
   tool_input: unknown;
   tool_output: unknown;
+  metadata: Record<string, unknown> | null;
   children: ObservationNode[];
 }
 
@@ -65,6 +66,7 @@ export interface TraceDetail {
   total_output_tokens: number;
   total_cost: number | null;
   created_at: string;
+  metadata: Record<string, unknown> | null;
   observations: ObservationNode[];
 }
 

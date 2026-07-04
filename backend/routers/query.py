@@ -70,6 +70,7 @@ def get_trace(trace_id: str, db: Session = Depends(get_db)):
             "id", "project_id", "name", "origin", "status", "input", "output",
             "started_at", "ended_at", "latency_ms", "total_input_tokens",
             "total_output_tokens", "total_cost", "created_at")},
+        "metadata": t.meta,
         "observations": build_tree(list(t.observations)),
     })
     return detail
