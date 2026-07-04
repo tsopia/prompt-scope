@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
+import { E2E_USER_EMAIL, E2E_USER_PASSWORD, login } from "./scripts/auth";
 
 const SCREENSHOT_DIR = path.join(__dirname, "..", "e2e-screenshots");
 
@@ -20,7 +21,10 @@ test.beforeAll(() => {
 });
 
 test("theme screenshots: two themes x six pages", async ({ page }) => {
-  await page.goto("/traces");
+  // This test runs in its own browser context (a fresh session per Playwright
+  // test), so it must log back in as the same user journey.spec.ts registered
+  // to retain membership visibility on the project/traces/prompts it created.
+  await login(page, E2E_USER_EMAIL, E2E_USER_PASSWORD);
 
   // Resolve the e2e-proj project id and real ids created by journey.spec.ts.
   const projects: Array<{ id: string; name: string }> = await fetchJson(page, "/api/projects");
