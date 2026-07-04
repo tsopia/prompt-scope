@@ -20,6 +20,8 @@ class Project(Base):
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=gen_id)
     name: Mapped[str] = mapped_column(String(255), unique=True)
+    owner_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     api_keys: Mapped[list["ApiKey"]] = relationship(back_populates="project")
@@ -191,3 +193,38 @@ class ModelPricing(Base):
     output_price_per_1k: Mapped[float] = mapped_column(Float)
     provider_id: Mapped[str | None] = mapped_column(
         ForeignKey("model_providers.id"), nullable=True)
+
+
+class User(Base):
+    __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("auth_source", "external_id"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=gen_id)
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(255), default="")
+    password_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    auth_source: Mapped[str] = mapped_column(String(16), default="local")  # local | oidc | ldap
+    external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Session(Base):
+    __tablename__ = "sessions"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=gen_id)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ProjectMember(Base):
+    __tablename__ = "project_members"
+    __table_args__ = (UniqueConstraint("project_id", "user_id"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=gen_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    role: Mapped[str] = mapped_column(String(16), default="member")  # owner | member
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
