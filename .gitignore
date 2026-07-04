@@ -27,3 +27,6 @@ backend/db/*.db
 frontend/playwright-report/
 frontend/test-results/
 frontend/e2e-screenshots/
+
+# local claude config
+.claude/
