@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProjectOut(BaseModel):
@@ -31,7 +31,7 @@ class TraceListOut(BaseModel):
 
 
 class ObservationNode(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
     id: str
     parent_id: str | None
     type: str
@@ -53,6 +53,7 @@ class ObservationNode(BaseModel):
     cost: float | None
     tool_input: Any
     tool_output: Any
+    metadata: dict | None = Field(default=None, validation_alias="meta")
     children: list["ObservationNode"] = []
 
 
@@ -72,4 +73,5 @@ class TraceDetail(BaseModel):
     total_output_tokens: int
     total_cost: float | None
     created_at: datetime
+    metadata: dict | None = None
     observations: list[ObservationNode]

@@ -47,6 +47,7 @@ export interface ObservationNode {
   cost: number | null;
   tool_input: unknown;
   tool_output: unknown;
+  metadata: Record<string, unknown> | null;
   children: ObservationNode[];
 }
 
@@ -65,6 +66,7 @@ export interface TraceDetail {
   total_output_tokens: number;
   total_cost: number | null;
   created_at: string;
+  metadata: Record<string, unknown> | null;
   observations: ObservationNode[];
 }
 
@@ -188,6 +190,19 @@ export interface VersionTrace {
   created_at: string;
 }
 
+export interface ApiKeyInfo {
+  id: string;
+  prefix: string;
+  created_at: string;
+  revoked_at: string | null;
+}
+
+export interface ApiKeyCreated {
+  id: string;
+  prefix: string;
+  key: string;
+}
+
 export const api = {
   getProjects: () => get<Project[]>("/api/projects"),
   getTraces: (params: {
@@ -209,10 +224,14 @@ export const api = {
   getProviders: () => get<Provider[]>("/api/providers"),
   createProvider: (body: { name: string; base_url: string; api_key: string; provider_type: string }) =>
     send<Provider>("POST", "/api/providers", body),
+  updateProvider: (id: string, body: { name: string; base_url: string; api_key?: string; provider_type: string }) =>
+    send<Provider>("PUT", `/api/providers/${id}`, body),
   deleteProvider: (id: string) => send<{ deleted: boolean }>("DELETE", `/api/providers/${id}`),
   getPricing: () => get<Pricing[]>("/api/pricing"),
   createPricing: (body: { model: string; input_price_per_1k: number; output_price_per_1k: number; provider_id?: string | null }) =>
     send<Pricing>("POST", "/api/pricing", body),
+  updatePricing: (id: string, body: { model: string; input_price_per_1k: number; output_price_per_1k: number; provider_id?: string | null }) =>
+    send<Pricing>("PUT", `/api/pricing/${id}`, body),
   deletePricing: (id: string) => send<{ deleted: boolean }>("DELETE", `/api/pricing/${id}`),
   getJudgeModels: () => get<JudgeModel[]>("/api/judge-models"),
   getEvaluations: (subjectId: string, compareId?: string) => {
@@ -241,4 +260,12 @@ export const api = {
     send<PromptVersionInfo>("POST", `/api/prompts/${id}/versions`, { content }),
   getVersionTraces: (versionId: string) =>
     get<VersionTrace[]>(`/api/prompt-versions/${versionId}/traces`),
+  createProject: (body: { name: string }) =>
+    send<Project & { created_at: string }>("POST", "/api/projects", body),
+  getProjectKeys: (projectId: string) =>
+    get<ApiKeyInfo[]>(`/api/projects/${projectId}/keys`),
+  createProjectKey: (projectId: string) =>
+    send<ApiKeyCreated>("POST", `/api/projects/${projectId}/keys`),
+  revokeKey: (keyId: string) =>
+    send<{ revoked: boolean }>("DELETE", `/api/keys/${keyId}`),
 };

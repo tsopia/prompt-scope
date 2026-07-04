@@ -1,6 +1,13 @@
 export function formatCost(v: number | null | undefined): string {
   if (v === null || v === undefined) return "—";
-  return `$${v.toFixed(6).replace(/0+$/, "").replace(/\.$/, ".0")}`;
+  if (v === 0) return "$0";
+  if (v > 0 && v < 1e-6) return "<$0.000001";
+  return `$${Number(v.toPrecision(4))}`;
+}
+
+export function formatCostFull(v: number | null | undefined): string {
+  if (v === null || v === undefined) return "—";
+  return `$${v.toString()}`;
 }
 
 export function formatLatency(ms: number | null | undefined): string {

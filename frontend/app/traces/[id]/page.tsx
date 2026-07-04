@@ -3,9 +3,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api, ObservationNode, TraceDetail } from "@/lib/api";
-import { formatCost, formatLatency, formatTokens } from "@/lib/format";
+import { formatCost, formatCostFull, formatLatency, formatTokens } from "@/lib/format";
 import { TraceTree } from "@/components/TraceTree";
 import { ObservationDetail } from "@/components/ObservationDetail";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { StatusBadge } from "@/components/StatusBadge";
+import { MetricText } from "@/components/MetricText";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Card } from "@/components/ui/card";
 
 function flatten(nodes: ObservationNode[]): ObservationNode[] {
   return nodes.flatMap((n) => [n, ...flatten(n.children)]);
@@ -31,61 +37,69 @@ export default function TraceDetailPage() {
     return flatten(trace.observations).find((n) => n.id === selectedId) ?? null;
   }, [trace, selectedId]);
 
-  if (error) return <main className="p-8 text-sm text-red-500">加载失败：{error}</main>;
-  if (!trace) return <main className="p-8 text-sm text-gray-400">加载中…</main>;
+  if (error) return <main className="p-8 text-sm text-destructive">加载失败：{error}</main>;
+  if (!trace) return <main className="p-8 text-sm text-muted-foreground">加载中…</main>;
+
+  const traceName = trace.name || trace.id.slice(0, 8);
 
   return (
-    <main className="max-w-6xl mx-auto p-6">
-      <div className="mb-4">
-        <Link href="/traces" className="text-xs text-[#6366F1]">← 返回列表</Link>
-        <div className="flex items-center gap-3 mt-2">
-          <h2 className="text-base font-semibold">{trace.name || trace.id.slice(0, 8)}</h2>
-          <span className={`text-xs px-2 py-0.5 rounded-full ${
-            trace.origin === "replay" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
-          }`}>{trace.origin}</span>
-          {trace.status === "error" && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">error</span>
-          )}
-          <Link href={`/compare?a=${trace.id}`}
-                className="text-xs px-3 py-1 rounded-md border border-[#6366F1] text-[#6366F1] hover:bg-[#EEF0FF]">
-            加入对比
-          </Link>
-          {trace.origin === "live" && (
-            <Link href={`/replay/${trace.id}`}
-                  className="text-xs px-3 py-1 rounded-md border border-[#6366F1] text-[#6366F1] hover:bg-[#EEF0FF]">
-              回放 ▶
-            </Link>
-          )}
-          <span className="ml-auto text-xs text-gray-500 font-mono">
-            {formatTokens(trace.total_input_tokens)} / {formatTokens(trace.total_output_tokens)} tokens
-            · {formatCost(trace.total_cost)} · {formatLatency(trace.latency_ms)}
-          </span>
-        </div>
-      </div>
+    <div>
+      <PageHeader
+        crumbs={[{ label: "Traces", href: "/traces" }, { label: traceName }]}
+        actions={
+          <>
+            {trace.origin === "live" && (
+              <Button asChild size="sm">
+                <Link href={`/replay/${trace.id}`}>回放 ▶</Link>
+              </Button>
+            )}
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/compare?a=${trace.id}`}>加入对比</Link>
+            </Button>
+            {trace.origin === "live" && selected?.type === "llm" && (
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/replay/${trace.id}?target=${selected.id}`}>单点回放此步 ▶</Link>
+              </Button>
+            )}
+            {trace.origin === "replay" && typeof trace.metadata?.source_trace_id === "string" && (
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/traces/${trace.metadata.source_trace_id}`}>源 trace</Link>
+              </Button>
+            )}
+          </>
+        }
+      />
 
-      <div className="grid grid-cols-[minmax(280px,2fr)_3fr] gap-4">
-        <div className="bg-white rounded-lg border border-[#E5E7EB] overflow-y-auto max-h-[70vh]">
-          <div className="px-3 py-2 border-b border-[#F3F4F6]">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">调用链路</p>
+      <main className="mx-auto max-w-6xl space-y-4 p-6">
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <StatusBadge kind={trace.origin === "replay" ? "replay" : "live"} />
+          {trace.status === "error" && <StatusBadge kind="error" />}
+          <Separator orientation="vertical" className="h-4" />
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">
+            <MetricText
+              value={`${formatTokens(trace.total_input_tokens)} / ${formatTokens(trace.total_output_tokens)} tokens`}
+            />
+            <MetricText value={formatCost(trace.total_cost)} title={formatCostFull(trace.total_cost)} />
+            <MetricText value={formatLatency(trace.latency_ms)} />
           </div>
-          <TraceTree nodes={trace.observations} selectedId={selectedId} onSelect={setSelectedId} />
         </div>
-        <div className="bg-white rounded-lg border border-[#E5E7EB] overflow-y-auto max-h-[70vh]">
-          {trace.origin === "live" && selected?.type === "llm" && (
-            <div className="px-3 py-2 border-b border-[#F3F4F6] flex justify-end">
-              <Link href={`/replay/${trace.id}?target=${selected.id}`}
-                    className="text-xs px-3 py-1 rounded-md border border-[#6366F1] text-[#6366F1] hover:bg-[#EEF0FF]">
-                单点回放此步 ▶
-              </Link>
+
+        <div className="grid grid-cols-[minmax(280px,2fr)_3fr] gap-4">
+          <Card className="max-h-[70vh] overflow-y-auto">
+            <div className="border-b px-3 py-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">调用链路</p>
             </div>
-          )}
-          {selected ? (
-            <ObservationDetail node={selected} />
-          ) : (
-            <div className="p-8 text-sm text-gray-400">点击左侧节点查看详情</div>
-          )}
+            <TraceTree nodes={trace.observations} selectedId={selectedId} onSelect={setSelectedId} />
+          </Card>
+          <Card className="max-h-[70vh] overflow-y-auto">
+            {selected ? (
+              <ObservationDetail node={selected} />
+            ) : (
+              <div className="p-8 text-sm text-muted-foreground">点击左侧节点查看详情</div>
+            )}
+          </Card>
         </div>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }

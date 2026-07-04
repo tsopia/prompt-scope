@@ -8,7 +8,7 @@ const node = (over: Partial<ObservationNode>): ObservationNode => ({
   ended_at: null, latency_ms: null, model: null, model_params: null,
   messages: null, tool_definitions: null, tool_calls: null, completion: null,
   input_tokens: null, output_tokens: null, cost: null, tool_input: null,
-  tool_output: null, children: [], ...over,
+  tool_output: null, metadata: null, children: [], ...over,
 });
 
 describe("flattenTree", () => {
