@@ -22,4 +22,10 @@ describe("StatusBadge", () => {
     render(<StatusBadge kind="error" />);
     expect(screen.getByText("error").className).toContain("text-destructive");
   });
+
+  it("renders custom label overriding kind text", () => {
+    render(<StatusBadge kind="warning" label="borderline" />);
+    expect(screen.getByText("borderline")).toBeDefined();
+    expect(screen.queryByText("warning")).toBeNull();
+  });
 });

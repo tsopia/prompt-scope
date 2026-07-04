@@ -29,14 +29,16 @@ const KIND_CLASSES: Record<StatusBadgeKind, string> = {
 
 export function StatusBadge({
   kind,
+  label,
   className,
 }: {
   kind: StatusBadgeKind;
+  label?: string;
   className?: string;
 }) {
   return (
     <Badge variant="outline" className={cn(KIND_CLASSES[kind], className)}>
-      {kind}
+      {label ?? kind}
     </Badge>
   );
 }

@@ -53,7 +53,7 @@ function EvalCard({
     <Card>
       <CardContent className="space-y-3 p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge kind={verdictKind(ev.verdict)} />
+          <StatusBadge kind={verdictKind(ev.verdict)} label={ev.verdict ?? undefined} />
           <span className="text-sm font-medium">{ev.judge_model}</span>
           <Button
             variant="ghost"
