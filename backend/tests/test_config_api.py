@@ -159,3 +159,45 @@ def test_provider_and_pricing_isolated_per_project(db_session, client, project):
     assert client.get(f"/api/pricing?project_id={other.id}").json() == []
     assert client.get(f"/api/providers?project_id={project.id}").json()[0]["name"] == "a-provider"
     assert client.get(f"/api/pricing?project_id={project.id}").json()[0]["model"] == "a-model"
+
+
+def test_pricing_rejects_cross_project_provider_id(db_session, client, project):
+    # Create provider P in project A
+    pid_a = client.post("/api/providers", json={
+        "project_id": project.id,
+        "name": "provider-a", "base_url": "https://api.example.com",
+        "api_key": "key-a", "provider_type": "openai"}).json()["id"]
+
+    # Create project B and make client a member
+    project_b = Project(name="project-b")
+    db_session.add(project_b)
+    db_session.flush()
+    db_session.add(ProjectMember(project_id=project_b.id, user_id=client.user_id,
+                                 role="owner"))
+    db_session.commit()
+
+    # Try to create pricing in project B with provider_id from project A -> 400
+    resp = client.post("/api/pricing", json={
+        "project_id": project_b.id,
+        "model": "gpt-4o",
+        "input_price_per_1k": 0.005,
+        "output_price_per_1k": 0.015,
+        "provider_id": pid_a})
+    assert resp.status_code == 400
+    assert "provider_id 不属于该 project" in resp.json()["detail"]
+
+    # Try to update existing pricing in project B with cross-project provider_id -> 400
+    price_id_b = client.post("/api/pricing", json={
+        "project_id": project_b.id,
+        "model": "gpt-4o",
+        "input_price_per_1k": 0.001,
+        "output_price_per_1k": 0.002}).json()["id"]
+
+    resp = client.put(f"/api/pricing/{price_id_b}", json={
+        "project_id": project_b.id,
+        "model": "gpt-4o",
+        "input_price_per_1k": 0.005,
+        "output_price_per_1k": 0.015,
+        "provider_id": pid_a})
+    assert resp.status_code == 400
+    assert "provider_id 不属于该 project" in resp.json()["detail"]

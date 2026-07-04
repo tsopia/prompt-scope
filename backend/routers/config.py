@@ -102,6 +102,10 @@ def create_pricing(payload: PricingIn, db: Session = Depends(get_db),
             ModelPricing.project_id == payload.project_id,
             ModelPricing.model == payload.model).first():
         raise HTTPException(status_code=409, detail="model pricing already exists")
+    if payload.provider_id is not None:
+        prov = db.get(ModelProvider, payload.provider_id)
+        if prov is None or prov.project_id != payload.project_id:
+            raise HTTPException(status_code=400, detail="provider_id 不属于该 project")
     r = ModelPricing(project_id=payload.project_id, model=payload.model,
                      input_price_per_1k=payload.input_price_per_1k,
                      output_price_per_1k=payload.output_price_per_1k,
@@ -123,6 +127,10 @@ def update_pricing(pricing_id: str, payload: PricingIn,
             ModelPricing.project_id == r.project_id,
             ModelPricing.model == payload.model).first():
         raise HTTPException(status_code=409, detail="model pricing already exists")
+    if payload.provider_id is not None:
+        prov = db.get(ModelProvider, payload.provider_id)
+        if prov is None or prov.project_id != r.project_id:
+            raise HTTPException(status_code=400, detail="provider_id 不属于该 project")
     r.model = payload.model
     r.input_price_per_1k = payload.input_price_per_1k
     r.output_price_per_1k = payload.output_price_per_1k
