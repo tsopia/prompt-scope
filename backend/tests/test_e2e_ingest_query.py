@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from db import get_db
-from models.entities import ApiKey, ModelPricing, Project
+from models.entities import ApiKey, ModelPricing, Project, ProjectMember
 from services.auth import generate_api_key
 
 
@@ -54,6 +54,12 @@ def test_full_agent_run_roundtrip(client, db_session):
     resp = client.post("/api/ingest", json=payload,
                        headers={"Authorization": f"Bearer {raw}"})
     assert resp.status_code == 200
+
+    reg = client.post("/api/auth/register", json={
+        "email": "owner@x.com", "password": "pw123456", "display_name": "Owner"})
+    user_id = reg.json()["id"]
+    db_session.add(ProjectMember(project_id=p.id, user_id=user_id, role="owner"))
+    db_session.commit()
 
     detail = client.get(f"/api/traces/{trace_id}").json()
     assert detail["total_input_tokens"] == 320

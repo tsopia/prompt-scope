@@ -1,25 +1,19 @@
 import pytest
-from fastapi.testclient import TestClient
 
-from db import get_db
-from models.entities import Observation, Project, Trace
+from models.entities import Observation, Project, ProjectMember, Trace
 
 
 @pytest.fixture()
-def client(db_session):
-    from main import app
-
-    app.dependency_overrides[get_db] = lambda: db_session
-    with TestClient(app) as c:
-        yield c
-    app.dependency_overrides.clear()
+def client(user_client):
+    return user_client
 
 
 @pytest.fixture()
-def seeded(db_session):
+def seeded(db_session, client):
     p = Project(name="demo")
     db_session.add(p)
     db_session.flush()
+    db_session.add(ProjectMember(project_id=p.id, user_id=client.user_id, role="owner"))
     t1 = Trace(id="tr-1", project_id=p.id, name="run-a", origin="live",
                total_cost=0.01, latency_ms=1200)
     t2 = Trace(id="tr-2", project_id=p.id, name="run-b", origin="replay")
@@ -77,6 +71,7 @@ def test_trace_detail_exposes_metadata(client, db_session):
     p = Project(name="demo2")
     db_session.add(p)
     db_session.flush()
+    db_session.add(ProjectMember(project_id=p.id, user_id=client.user_id, role="owner"))
     t = Trace(id="tr-meta", project_id=p.id, name="run-meta", origin="replay",
                meta={"source_trace_id": "x"})
     db_session.add_all([
@@ -91,3 +86,16 @@ def test_trace_detail_exposes_metadata(client, db_session):
     body = resp.json()
     assert body["metadata"]["source_trace_id"] == "x"
     assert body["observations"][0]["metadata"]["mocked"] is True
+
+
+def test_traces_hidden_from_non_member(user_client, db_session):
+    from models.entities import Project, Trace, ProjectMember
+    # a project the logged-in user is NOT a member of
+    other = Project(name="other-grp")
+    db_session.add(other)
+    db_session.flush()
+    db_session.add(Trace(id="secret", project_id=other.id, name="secret"))
+    db_session.commit()
+    assert user_client.get("/api/traces/secret").status_code == 403
+    r = user_client.get(f"/api/traces?project_id={other.id}")
+    assert r.status_code == 403
