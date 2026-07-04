@@ -29,7 +29,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     const list = await api.getProjects();
     setProjects(list);
     setCurrent((prev) => {
-      if (prev && list.some((p) => p.id === prev.id)) return prev;
+      if (prev) {
+        const updated = list.find((p) => p.id === prev.id);
+        if (updated) return updated;
+      }
       const savedId = localStorage.getItem("promptscope.projectId");
       return list.find((p) => p.id === savedId) ?? list[0] ?? null;
     });

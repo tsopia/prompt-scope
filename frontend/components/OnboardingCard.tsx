@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CodeBlock } from "@/components/CodeBlock";
 
-const SDK_SNIPPET = `# pip install -e sdk/  （或将 sdk/ 加入 sys.path）
+const SDK_SNIPPET = `# 将仓库的 sdk/ 目录加入 PYTHONPATH 或复制到你的项目中
 from promptscope import PromptScopeClient
 
 client = PromptScopeClient("http://localhost:8000", "<你的 API Key>")

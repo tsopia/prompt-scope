@@ -53,12 +53,20 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   await expect(page.getByText(/共 2 条/)).toBeVisible();
   await expect(page.locator("table tbody tr")).toHaveCount(2);
 
-  // origin filter: everything here is "live" so filtering to live keeps 2, still text-matched
-  await page.getByRole("button", { name: "Live" }).click();
-  await expect(page.locator("table tbody tr")).toHaveCount(2);
-  await page.getByRole("button", { name: "全部" }).click();
+  // origin filter: every fixture trace is "live" (this journey never produces a
+  // replay-origin trace — the replay in Step 7 fails on the first LLM call, so
+  // result_trace_id stays null and no origin=replay trace is ever created).
+  // Filtering to "Live" would be a no-op (still 2 rows); filtering to "回放"
+  // (replay) is the assertion with actual discriminating power: it must show
+  // zero rows plus the empty state.
   await page.getByPlaceholder("按名称搜索…").fill("");
+  await page.getByRole("button", { name: "回放" }).click();
+  await expect(page.locator("table tbody tr")).toHaveCount(0);
+  await expect(page.getByText("还没有任何 trace 数据")).toBeVisible();
+
+  await page.getByRole("button", { name: "全部" }).click();
   await expect(page.getByText(/共 3 条/)).toBeVisible();
+  await expect(page.locator("table tbody tr")).toHaveCount(3);
 
   // ---- Step 4: trace detail — click a node, assert detail changes ----
   const weatherRow = page.locator("table tbody tr", { hasText: "e2e-weather-agent" }).first();
