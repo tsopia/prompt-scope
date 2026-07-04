@@ -19,6 +19,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+const MESSAGE_PREVIEW_COUNT = 2;
+
 const ROLE_CLASSES: Record<string, string> = {
   system: "bg-muted border-border",
   user: "bg-live/10 border-live/20",
@@ -36,11 +38,21 @@ function MessageBubble({ message }: { message: Record<string, unknown> }) {
   );
 }
 
-export function ObservationDetail({ node }: { node: ObservationNode }) {
+export function ObservationDetail({
+  node,
+  compact = false,
+}: {
+  node: ObservationNode;
+  compact?: boolean;
+}) {
   const isMocked = node.metadata?.mocked === true;
+  const messages = node.messages;
+  const visibleMessages = compact && messages ? messages.slice(0, MESSAGE_PREVIEW_COUNT) : messages;
+  const hiddenCount = compact && messages ? messages.length - MESSAGE_PREVIEW_COUNT : 0;
+
   return (
-    <div className="p-4">
-      <div className="mb-4 flex items-center gap-3 text-sm">
+    <div className={compact ? "p-2" : "p-4"}>
+      <div className={cn("flex items-center gap-3 text-sm", compact ? "mb-2" : "mb-4")}>
         <span className="font-medium">{node.name || node.id.slice(0, 8)}</span>
         <span className="rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
           {node.type}
@@ -92,13 +104,16 @@ export function ObservationDetail({ node }: { node: ObservationNode }) {
               <CodeBlock code={jsonText(node.model_params)} language="json" />
             </Section>
           )}
-          {node.messages && (
+          {visibleMessages && (
             <Section title="Messages">
               <div className="space-y-2">
-                {node.messages.map((m, i) => (
+                {visibleMessages.map((m, i) => (
                   <MessageBubble key={i} message={m as Record<string, unknown>} />
                 ))}
               </div>
+              {hiddenCount > 0 && (
+                <p className="mt-1 text-xs text-muted-foreground">…共 {messages!.length} 条</p>
+              )}
             </Section>
           )}
           {node.tool_calls && node.tool_calls.length > 0 && (

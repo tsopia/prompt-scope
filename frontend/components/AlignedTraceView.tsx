@@ -1,65 +1,137 @@
 "use client";
+import { useState } from "react";
+import { ChevronRight } from "lucide-react";
 import { AlignedRow } from "@/lib/align";
 import { ObservationNode } from "@/lib/api";
 import { formatCost, formatLatency } from "@/lib/format";
+import { MetricText } from "@/components/MetricText";
+import { CodeBlock } from "@/components/CodeBlock";
+import { ObservationDetail } from "@/components/ObservationDetail";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
-const TYPE_STYLES: Record<string, string> = {
-  llm: "bg-purple-100 text-purple-700",
-  tool: "bg-emerald-100 text-emerald-700",
-  span: "bg-gray-100 text-gray-600",
+const TYPE_CLASSES: Record<string, string> = {
+  llm: "bg-replay/15 text-replay border-replay/30",
+  tool: "bg-success/15 text-success border-success/30",
+  span: "bg-muted text-muted-foreground border-border",
 };
+
+function jsonText(value: unknown): string {
+  return typeof value === "string" ? value : JSON.stringify(value, null, 2);
+}
 
 function Cell({ node, missing, missingLabel }: {
   node: ObservationNode | null; missing?: boolean; missingLabel?: string;
 }) {
   if (!node) {
     return (
-      <div className={`flex-1 px-3 py-2 text-xs italic ${
-        missing ? "text-gray-300 bg-gray-50" : "text-gray-300"}`}>
+      <div className={cn("flex-1 px-3 py-2 text-xs italic text-muted-foreground", missing && "bg-muted/50")}>
         {missingLabel ?? "—"}
       </div>
     );
   }
   return (
-    <div className="flex-1 px-3 py-2 flex items-center gap-2 text-sm min-w-0">
-      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${TYPE_STYLES[node.type]}`}>
+    <div className="flex flex-1 min-w-0 items-center gap-2 px-3 py-2 text-sm">
+      <span className={cn("shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium", TYPE_CLASSES[node.type])}>
         {node.type}
       </span>
-      <span className="font-medium truncate">{node.name || node.id.slice(0, 8)}</span>
-      {node.model && <span className="text-xs text-gray-400 shrink-0">{node.model}</span>}
-      <span className="ml-auto text-xs text-gray-400 font-mono shrink-0">
-        {node.cost !== null ? formatCost(node.cost) : ""} {formatLatency(node.latency_ms)}
+      <span className="truncate font-medium">{node.name || node.id.slice(0, 8)}</span>
+      {node.model && <span className="shrink-0 text-xs text-muted-foreground">{node.model}</span>}
+      <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+        <MetricText value={`${node.cost !== null ? formatCost(node.cost) : ""} ${formatLatency(node.latency_ms)}`} />
       </span>
     </div>
   );
 }
 
-export function AlignedTraceView({ rows }: { rows: AlignedRow[] }) {
-  return (
-    <div className="bg-white rounded-lg border border-[#E5E7EB] divide-y divide-[#F3F4F6]">
-      {rows.map((row, i) => (
-        <div key={i} className={`flex items-stretch ${
-          row.status === "only_left" ? "bg-red-50/50" :
-          row.status === "only_right" ? "bg-green-50/50" : ""}`}>
-          <Cell node={row.left} missing={row.status === "only_right"}
-                missingLabel="－ 此步仅存在于右侧" />
-          <div className="w-16 shrink-0 flex items-center justify-center text-xs">
-            {row.status === "matched" && row.paramDiff && (
-              <span className="text-amber-600" title="工具入参与另一侧不一致">⚠ 参数</span>
-            )}
-            {row.status === "matched" && !row.paramDiff && (
-              <span className="text-gray-300">=</span>
-            )}
-            {row.status === "only_left" && <span className="text-red-400">－</span>}
-            {row.status === "only_right" && <span className="text-green-500">＋</span>}
+function MidBadge({ row }: { row: AlignedRow }) {
+  if (row.status === "matched" && row.paramDiff) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="cursor-default text-warning">⚠</span>
+        </TooltipTrigger>
+        <TooltipContent className="p-2">
+          <div className="flex gap-2">
+            <div className="w-56">
+              <p className="mb-1 text-[10px] font-semibold uppercase text-muted-foreground">A 侧入参</p>
+              <CodeBlock code={jsonText(row.left?.tool_input)} language="json" />
+            </div>
+            <div className="w-56">
+              <p className="mb-1 text-[10px] font-semibold uppercase text-muted-foreground">B 侧入参</p>
+              <CodeBlock code={jsonText(row.right?.tool_input)} language="json" />
+            </div>
           </div>
-          <Cell node={row.right} missing={row.status === "only_left"}
-                missingLabel="－ 此步仅存在于左侧" />
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+  if (row.status === "matched") return <span className="text-muted-foreground">=</span>;
+  if (row.status === "only_left") return <span className="text-destructive">－</span>;
+  return <span className="text-success">＋</span>;
+}
+
+function Row({ row }: { row: AlignedRow }) {
+  const [expanded, setExpanded] = useState(false);
+  const canExpand = !!row.left || !!row.right;
+
+  return (
+    <div>
+      <div
+        onClick={() => canExpand && setExpanded((e) => !e)}
+        className={cn(
+          "flex items-stretch",
+          canExpand && "cursor-pointer hover:bg-accent/50",
+          row.status === "only_left" && "bg-destructive/5",
+          row.status === "only_right" && "bg-success/5"
+        )}
+      >
+        <div className="flex w-6 shrink-0 items-center justify-center text-muted-foreground">
+          {canExpand && (
+            <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-90")} />
+          )}
         </div>
-      ))}
-      {rows.length === 0 && (
-        <div className="p-6 text-sm text-gray-400 text-center">两条 trace 都没有 observation</div>
+        <Cell node={row.left} missing={row.status === "only_right"} missingLabel="此步仅存在于右侧" />
+        <div className="flex w-16 shrink-0 items-center justify-center text-xs">
+          <MidBadge row={row} />
+        </div>
+        <Cell node={row.right} missing={row.status === "only_left"} missingLabel="此步仅存在于左侧" />
+      </div>
+      {expanded && (
+        <div className="flex items-stretch border-t bg-muted/20">
+          <div className="w-6 shrink-0" />
+          <div className="flex-1 min-w-0 border-r">
+            {row.left ? (
+              <ObservationDetail node={row.left} compact />
+            ) : (
+              <p className="p-3 text-xs italic text-muted-foreground">此步仅存在于右侧</p>
+            )}
+          </div>
+          <div className="w-16 shrink-0" />
+          <div className="flex-1 min-w-0">
+            {row.right ? (
+              <ObservationDetail node={row.right} compact />
+            ) : (
+              <p className="p-3 text-xs italic text-muted-foreground">此步仅存在于左侧</p>
+            )}
+          </div>
+        </div>
       )}
+    </div>
+  );
+}
+
+export function AlignedTraceView({ rows }: { rows: AlignedRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <div className="p-6 text-center text-sm text-muted-foreground">两条 trace 都没有 observation</div>
+    );
+  }
+  return (
+    <div className="divide-y">
+      {rows.map((row, i) => (
+        <Row key={i} row={row} />
+      ))}
     </div>
   );
 }
