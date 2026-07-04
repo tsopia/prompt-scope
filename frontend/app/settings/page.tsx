@@ -487,14 +487,23 @@ function ProviderRow({
   );
 }
 
-function ProvidersTab({ providers, reload }: { providers: Provider[]; reload: () => void }) {
+function ProvidersTab({
+  providers,
+  reload,
+  currentProject,
+}: {
+  providers: Provider[];
+  reload: () => void;
+  currentProject: Project | null;
+}) {
   const [form, setForm] = useState({ name: "", base_url: "", api_key: "", provider_type: "openai" });
   const [creating, setCreating] = useState(false);
 
   const addProvider = async () => {
+    if (!currentProject) return;
     setCreating(true);
     try {
-      await api.createProvider(form);
+      await api.createProvider({ ...form, project_id: currentProject.id });
       setForm({ name: "", base_url: "", api_key: "", provider_type: "openai" });
       toast.success("Provider 已创建");
       reload();
@@ -504,6 +513,8 @@ function ProvidersTab({ providers, reload }: { providers: Provider[]; reload: ()
       setCreating(false);
     }
   };
+
+  if (!currentProject) return <p className="text-sm text-muted-foreground">请先选择一个项目。</p>;
 
   return (
     <Card>
@@ -745,15 +756,18 @@ function PricingTab({
   pricing,
   providers,
   reload,
+  currentProject,
 }: {
   pricing: Pricing[];
   providers: Provider[];
   reload: () => void;
+  currentProject: Project | null;
 }) {
   const [form, setForm] = useState({ model: "", input: "", output: "", provider_id: "" });
   const [creating, setCreating] = useState(false);
 
   const addPricing = async () => {
+    if (!currentProject) return;
     const inp = parseFloat(form.input);
     const outp = parseFloat(form.output);
     if (!Number.isFinite(inp) || !Number.isFinite(outp)) {
@@ -767,6 +781,7 @@ function PricingTab({
         input_price_per_1k: inp,
         output_price_per_1k: outp,
         provider_id: form.provider_id || null,
+        project_id: currentProject.id,
       });
       setForm({ model: "", input: "", output: "", provider_id: "" });
       toast.success("定价已创建");
@@ -777,6 +792,8 @@ function PricingTab({
       setCreating(false);
     }
   };
+
+  if (!currentProject) return <p className="text-sm text-muted-foreground">请先选择一个项目。</p>;
 
   return (
     <Card>
@@ -938,13 +955,18 @@ export default function SettingsPage() {
   const [pricing, setPricing] = useState<Pricing[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const reload = () => {
+  const reload = useCallback(() => {
     setError(null);
-    api.getProviders().then(setProviders).catch((e) => setError(String(e)));
-    api.getPricing().then(setPricing).catch((e) => setError(String(e)));
-  };
+    if (!currentProject) {
+      setProviders([]);
+      setPricing([]);
+      return;
+    }
+    api.getProviders(currentProject.id).then(setProviders).catch((e) => setError(String(e)));
+    api.getPricing(currentProject.id).then(setPricing).catch((e) => setError(String(e)));
+  }, [currentProject]);
 
-  useEffect(reload, []);
+  useEffect(reload, [reload]);
 
   return (
     <div>
@@ -971,11 +993,11 @@ export default function SettingsPage() {
           </TabsContent>
 
           <TabsContent value="providers">
-            <ProvidersTab providers={providers} reload={reload} />
+            <ProvidersTab providers={providers} reload={reload} currentProject={currentProject} />
           </TabsContent>
 
           <TabsContent value="pricing">
-            <PricingTab pricing={pricing} providers={providers} reload={reload} />
+            <PricingTab pricing={pricing} providers={providers} reload={reload} currentProject={currentProject} />
           </TabsContent>
 
           <TabsContent value="members">

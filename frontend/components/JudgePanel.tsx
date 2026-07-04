@@ -80,7 +80,15 @@ function EvalCard({
   );
 }
 
-export function JudgePanel({ subjectId, compareId }: { subjectId: string; compareId: string }) {
+export function JudgePanel({
+  subjectId,
+  compareId,
+  projectId,
+}: {
+  subjectId: string;
+  compareId: string;
+  projectId: string;
+}) {
   const [judgeModels, setJudgeModels] = useState<JudgeModel[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
@@ -90,9 +98,9 @@ export function JudgePanel({ subjectId, compareId }: { subjectId: string; compar
   const [rerunningModel, setRerunningModel] = useState<string | null>(null);
 
   useEffect(() => {
-    api.getJudgeModels().then(setJudgeModels).catch(() => setJudgeModels([]));
+    api.getJudgeModels(projectId).then(setJudgeModels).catch(() => setJudgeModels([]));
     api.getEvaluations(subjectId, compareId).then(setEvaluations).catch(() => {});
-  }, [subjectId, compareId]);
+  }, [subjectId, compareId, projectId]);
 
   const toggle = (m: string) =>
     setSelected((prev) => prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]);

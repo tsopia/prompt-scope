@@ -109,6 +109,7 @@ export interface Provider {
   provider_type: "openai" | "anthropic";
   api_key_set: boolean;
   created_at: string;
+  project_id: string | null;
 }
 
 export interface Pricing {
@@ -117,6 +118,7 @@ export interface Pricing {
   input_price_per_1k: number;
   output_price_per_1k: number;
   provider_id: string | null;
+  project_id: string | null;
 }
 
 export interface JudgeModel {
@@ -249,19 +251,22 @@ export const api = {
     return get<TraceListResult>(`/api/traces?${q.toString()}`);
   },
   getTrace: (id: string) => get<TraceDetail>(`/api/traces/${id}`),
-  getProviders: () => get<Provider[]>("/api/providers"),
-  createProvider: (body: { name: string; base_url: string; api_key: string; provider_type: string }) =>
+  getProviders: (projectId: string) =>
+    get<Provider[]>(`/api/providers?project_id=${encodeURIComponent(projectId)}`),
+  createProvider: (body: { name: string; base_url: string; api_key: string; provider_type: string; project_id: string }) =>
     send<Provider>("POST", "/api/providers", body),
   updateProvider: (id: string, body: { name: string; base_url: string; api_key?: string; provider_type: string }) =>
     send<Provider>("PUT", `/api/providers/${id}`, body),
   deleteProvider: (id: string) => send<{ deleted: boolean }>("DELETE", `/api/providers/${id}`),
-  getPricing: () => get<Pricing[]>("/api/pricing"),
-  createPricing: (body: { model: string; input_price_per_1k: number; output_price_per_1k: number; provider_id?: string | null }) =>
+  getPricing: (projectId: string) =>
+    get<Pricing[]>(`/api/pricing?project_id=${encodeURIComponent(projectId)}`),
+  createPricing: (body: { model: string; input_price_per_1k: number; output_price_per_1k: number; provider_id?: string | null; project_id: string }) =>
     send<Pricing>("POST", "/api/pricing", body),
   updatePricing: (id: string, body: { model: string; input_price_per_1k: number; output_price_per_1k: number; provider_id?: string | null }) =>
     send<Pricing>("PUT", `/api/pricing/${id}`, body),
   deletePricing: (id: string) => send<{ deleted: boolean }>("DELETE", `/api/pricing/${id}`),
-  getJudgeModels: () => get<JudgeModel[]>("/api/judge-models"),
+  getJudgeModels: (projectId: string) =>
+    get<JudgeModel[]>(`/api/judge-models?project_id=${encodeURIComponent(projectId)}`),
   getEvaluations: (subjectId: string, compareId?: string) => {
     const q = new URLSearchParams({ subject_trace_id: subjectId });
     if (compareId) q.set("compare_trace_id", compareId);

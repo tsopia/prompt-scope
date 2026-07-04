@@ -266,7 +266,7 @@ function CompareContent() {
     </div>
   );
 
-  const judgeColumn = <JudgePanel subjectId={a.id} compareId={b.id} />;
+  const judgeColumn = <JudgePanel subjectId={a.id} compareId={b.id} projectId={a.project_id} />;
 
   return (
     <div className="p-6">

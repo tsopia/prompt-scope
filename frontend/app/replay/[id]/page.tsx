@@ -205,10 +205,10 @@ function ReplayContent() {
         setTrace(t);
         const target = targetId ? flatten(t.observations).find((o) => o.id === targetId) ?? null : null;
         setPrompt(findSystemPrompt(target ?? flatten(t.observations).find((o) => o.type === "llm")));
+        api.getJudgeModels(t.project_id).then(setJudgeModels).catch(() => setJudgeModels([]));
       })
       .catch((e) => setLoadError(String(e)));
     api.getReplays(id).then(setReplays).catch(() => {});
-    api.getJudgeModels().then(setJudgeModels).catch(() => setJudgeModels([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
