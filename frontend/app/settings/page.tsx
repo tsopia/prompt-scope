@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Inbox, KeyRound } from "lucide-react";
-import { api, ApiKeyInfo, Pricing, Project, Provider } from "@/lib/api";
+import { api, ApiKeyInfo, Member, Pricing, Project, Provider } from "@/lib/api";
 import { useProject } from "@/contexts/ProjectContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { CodeBlock } from "@/components/CodeBlock";
@@ -849,6 +850,86 @@ function PricingTab({
   );
 }
 
+// ---------- 成员 ----------
+
+function MembersTab() {
+  const { currentProject } = useProject();
+  const { user } = useAuth();
+  const [members, setMembers] = useState<Member[]>([]);
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    if (!currentProject) return;
+    api.getMembers(currentProject.id).then(setMembers).catch(() => setMembers([]));
+  }, [currentProject]);
+  useEffect(() => { load(); }, [load]);
+
+  const myRole = members.find((m) => m.user_id === user?.id)?.role;
+  const isOwner = myRole === "owner";
+
+  const add = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentProject) return;
+    setError(null);
+    try {
+      setMembers(await api.addMember(currentProject.id, email));
+      setEmail("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "添加失败");
+    }
+  };
+
+  const remove = async (userId: string) => {
+    if (!currentProject) return;
+    try {
+      await api.removeMember(currentProject.id, userId);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "移除失败");
+    }
+  };
+
+  if (!currentProject) return <p className="text-sm text-muted-foreground">请先选择一个项目。</p>;
+
+  return (
+    <div className="space-y-4">
+      {isOwner && (
+        <form onSubmit={add} className="flex gap-2">
+          <Input placeholder="邀请已注册用户的邮箱" value={email} type="email" required
+                 onChange={(e) => setEmail(e.target.value)} className="max-w-xs" />
+          <Button type="submit">添加成员</Button>
+        </form>
+      )}
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-muted-foreground">
+            <th className="py-1">邮箱</th><th>显示名</th><th>角色</th>{isOwner && <th></th>}
+          </tr>
+        </thead>
+        <tbody>
+          {members.map((m) => (
+            <tr key={m.user_id} className="border-t border-border">
+              <td className="py-1">{m.email}</td>
+              <td>{m.display_name}</td>
+              <td>{m.role === "owner" ? "所有者" : "成员"}</td>
+              {isOwner && (
+                <td className="text-right">
+                  {m.user_id !== user?.id && (
+                    <button className="text-destructive hover:underline"
+                            onClick={() => remove(m.user_id)}>移除</button>
+                  )}
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ---------- 页面 ----------
 
 export default function SettingsPage() {
@@ -877,6 +958,7 @@ export default function SettingsPage() {
             <TabsTrigger value="projects">项目与密钥</TabsTrigger>
             <TabsTrigger value="providers">模型 Provider</TabsTrigger>
             <TabsTrigger value="pricing">定价</TabsTrigger>
+            <TabsTrigger value="members">成员</TabsTrigger>
           </TabsList>
 
           <TabsContent value="projects">
@@ -894,6 +976,10 @@ export default function SettingsPage() {
 
           <TabsContent value="pricing">
             <PricingTab pricing={pricing} providers={providers} reload={reload} />
+          </TabsContent>
+
+          <TabsContent value="members">
+            <MembersTab />
           </TabsContent>
         </Tabs>
       </main>

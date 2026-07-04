@@ -1,24 +1,19 @@
 import pytest
-from fastapi.testclient import TestClient
 
-from db import get_db
-from models.entities import Observation, Project, Trace
+from models.entities import Observation, Project, ProjectMember, Prompt, PromptVersion, Trace
 
 
 @pytest.fixture()
-def client(db_session):
-    from main import app
-
-    app.dependency_overrides[get_db] = lambda: db_session
-    with TestClient(app) as c:
-        yield c
-    app.dependency_overrides.clear()
+def client(user_client):
+    return user_client
 
 
 @pytest.fixture()
-def project(db_session):
+def project(db_session, client):
     p = Project(name="demo")
     db_session.add(p)
+    db_session.flush()
+    db_session.add(ProjectMember(project_id=p.id, user_id=client.user_id, role="owner"))
     db_session.commit()
     return p
 
@@ -64,3 +59,24 @@ def test_version_traces_lookup(client, db_session, project):
     ids = {t["id"] for t in
            client.get(f"/api/prompt-versions/{vid}/traces").json()}
     assert ids == {"t1", "t2"}
+
+
+def test_prompts_hidden_from_non_member(client, db_session):
+    # a project the logged-in user is NOT a member of
+    other = Project(name="other-grp")
+    db_session.add(other)
+    db_session.flush()
+    p = Prompt(project_id=other.id, name="secret-prompt")
+    db_session.add(p)
+    db_session.flush()
+    v = PromptVersion(prompt_id=p.id, version=1, content="secret")
+    db_session.add(v)
+    db_session.commit()
+
+    assert client.get(f"/api/prompts?project_id={other.id}").status_code == 403
+    assert client.get(f"/api/prompts/{p.id}").status_code == 403
+    assert client.post(f"/api/prompts/{p.id}/versions",
+                       json={"content": "hijack"}).status_code == 403
+    assert client.get(f"/api/prompt-versions/{v.id}/traces").status_code == 403
+    assert client.post("/api/prompts", json={
+        "project_id": other.id, "name": "x", "content": "y"}).status_code == 403

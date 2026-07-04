@@ -23,3 +23,21 @@ def db_session():
     session = TestSession()
     yield session
     session.close()
+
+
+@pytest.fixture()
+def user_client(db_session):
+    """A TestClient with a registered + logged-in user (cookie set).
+    Exposes the created user id on client.user_id for convenience."""
+    from fastapi.testclient import TestClient
+    from db import get_db
+    from main import app
+
+    app.dependency_overrides[get_db] = lambda: db_session
+    with TestClient(app) as c:
+        resp = c.post("/api/auth/register", json={
+            "email": "owner@x.com", "password": "pw123456",
+            "display_name": "Owner"})
+        c.user_id = resp.json()["id"]
+        yield c
+    app.dependency_overrides.clear()

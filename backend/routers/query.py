@@ -1,16 +1,24 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session, selectinload
 
 from db import get_db
-from models.entities import Observation, Project, Trace
-from schemas.query import ObservationNode, ProjectOut, TraceDetail, TraceListOut, TraceSummary
+from models.entities import Observation, Project, Trace, User
+from schemas.query import (ObservationNode, ProjectOut, TraceDetail,
+                           TraceListOut, TraceSummary)
+from services.authz import (assert_member, assert_trace_access,
+                            get_current_user, member_project_ids)
 
 router = APIRouter(tags=["query"])
 
 
 @router.get("/projects", response_model=list[ProjectOut])
-def list_projects(db: Session = Depends(get_db)):
-    return db.query(Project).order_by(Project.created_at).all()
+def list_projects(db: Session = Depends(get_db),
+                  user: User = Depends(get_current_user)):
+    ids = member_project_ids(db, user)
+    if not ids:
+        return []
+    return (db.query(Project).filter(Project.id.in_(ids))
+            .order_by(Project.created_at).all())
 
 
 @router.get("/traces", response_model=TraceListOut)
@@ -21,10 +29,15 @@ def list_traces(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    q = db.query(Trace)
     if project_id:
-        q = q.filter(Trace.project_id == project_id)
+        assert_member(db, user, project_id)
+        allowed = [project_id]
+    else:
+        allowed = member_project_ids(db, user)
+    q = db.query(Trace).filter(Trace.project_id.in_(allowed)) if allowed \
+        else db.query(Trace).filter(False)
     if origin:
         q = q.filter(Trace.origin == origin)
     if search:
@@ -32,7 +45,6 @@ def list_traces(
     total = q.count()
     rows = (q.options(selectinload(Trace.observations))
             .order_by(Trace.created_at.desc()).offset(offset).limit(limit).all())
-
     items = []
     for t in rows:
         obs = t.observations
@@ -61,11 +73,10 @@ def build_tree(observations: list[Observation]) -> list[ObservationNode]:
 
 
 @router.get("/traces/{trace_id}", response_model=TraceDetail)
-def get_trace(trace_id: str, db: Session = Depends(get_db)):
-    t = db.get(Trace, trace_id)
-    if t is None:
-        raise HTTPException(status_code=404, detail="trace not found")
-    detail = TraceDetail.model_validate({
+def get_trace(trace_id: str, db: Session = Depends(get_db),
+              user: User = Depends(get_current_user)):
+    t = assert_trace_access(db, user, trace_id)
+    return TraceDetail.model_validate({
         **{c: getattr(t, c) for c in (
             "id", "project_id", "name", "origin", "status", "input", "output",
             "started_at", "ended_at", "latency_ms", "total_input_tokens",
@@ -73,4 +84,3 @@ def get_trace(trace_id: str, db: Session = Depends(get_db)):
         "metadata": t.meta,
         "observations": build_tree(list(t.observations)),
     })
-    return detail

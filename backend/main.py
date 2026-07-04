@@ -13,6 +13,8 @@ from routers import evaluations as evaluations_router
 from routers import replay as replay_router
 from routers import prompts as prompts_router
 from routers import projects as projects_router
+from routers import auth as auth_router
+from routers import members as members_router
 
 
 @asynccontextmanager
@@ -42,6 +44,8 @@ app.include_router(evaluations_router.router, prefix="/api")
 app.include_router(replay_router.router, prefix="/api")
 app.include_router(prompts_router.router, prefix="/api")
 app.include_router(projects_router.router, prefix="/api")
+app.include_router(auth_router.router, prefix="/api")
+app.include_router(members_router.router, prefix="/api")
 
 
 @app.get("/api/health")

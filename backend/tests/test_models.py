@@ -65,3 +65,27 @@ def test_prompt_versions_and_pricing(db_session):
     db_session.commit()
     assert v.prompt.name == "qa-bot"
     assert price.input_price_per_1k == 0.005
+
+
+def test_user_session_member_models(db_session):
+    from datetime import timedelta
+    from models.entities import (
+        User, Session as UserSession, ProjectMember, Project, utcnow)
+
+    u = User(email="a@x.com", display_name="A", password_hash="h",
+             auth_source="local")
+    db_session.add(u)
+    db_session.flush()
+    assert u.id and u.is_active is True and u.external_id is None
+
+    p = Project(name="grp", owner_id=u.id)
+    db_session.add(p)
+    db_session.flush()
+    assert p.owner_id == u.id
+
+    m = ProjectMember(project_id=p.id, user_id=u.id, role="owner")
+    s = UserSession(token_hash="th", user_id=u.id,
+                    expires_at=utcnow() + timedelta(days=30))
+    db_session.add_all([m, s])
+    db_session.commit()
+    assert m.role == "owner" and s.user_id == u.id

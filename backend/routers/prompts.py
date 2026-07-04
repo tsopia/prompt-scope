@@ -2,18 +2,24 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from db import get_db
-from models.entities import Observation, Prompt, PromptVersion, Trace
+from models.entities import Observation, Prompt, PromptVersion, Trace, User
 from schemas.prompts import (PromptCreate, PromptDetail, PromptSummary,
                              VersionCreate, VersionOut, VersionTraceOut)
+from services.authz import assert_member, get_current_user, member_project_ids
 
 router = APIRouter(tags=["prompts"])
 
 
 @router.get("/prompts", response_model=list[PromptSummary])
-def list_prompts(project_id: str | None = None, db: Session = Depends(get_db)):
-    q = db.query(Prompt)
+def list_prompts(project_id: str | None = None, db: Session = Depends(get_db),
+                 user: User = Depends(get_current_user)):
     if project_id:
-        q = q.filter(Prompt.project_id == project_id)
+        assert_member(db, user, project_id)
+        allowed = [project_id]
+    else:
+        allowed = member_project_ids(db, user)
+    q = db.query(Prompt).filter(Prompt.project_id.in_(allowed)) if allowed \
+        else db.query(Prompt).filter(False)
     out = []
     for p in q.order_by(Prompt.created_at.desc()).all():
         # Explicitly fetch versions to ensure they're fresh
@@ -27,7 +33,9 @@ def list_prompts(project_id: str | None = None, db: Session = Depends(get_db)):
 
 
 @router.post("/prompts", response_model=PromptDetail)
-def create_prompt(payload: PromptCreate, db: Session = Depends(get_db)):
+def create_prompt(payload: PromptCreate, db: Session = Depends(get_db),
+                  user: User = Depends(get_current_user)):
+    assert_member(db, user, payload.project_id)
     exists = db.query(Prompt).filter(
         Prompt.project_id == payload.project_id,
         Prompt.name == payload.name).first()
@@ -51,19 +59,23 @@ def _detail(db: Session, p: Prompt) -> PromptDetail:
 
 
 @router.get("/prompts/{prompt_id}", response_model=PromptDetail)
-def get_prompt(prompt_id: str, db: Session = Depends(get_db)):
+def get_prompt(prompt_id: str, db: Session = Depends(get_db),
+               user: User = Depends(get_current_user)):
     p = db.get(Prompt, prompt_id)
     if p is None:
         raise HTTPException(status_code=404, detail="prompt not found")
+    assert_member(db, user, p.project_id)
     return _detail(db, p)
 
 
 @router.post("/prompts/{prompt_id}/versions", response_model=VersionOut)
 def add_version(prompt_id: str, payload: VersionCreate,
-                db: Session = Depends(get_db)):
+                db: Session = Depends(get_db),
+                user: User = Depends(get_current_user)):
     p = db.get(Prompt, prompt_id)
     if p is None:
         raise HTTPException(status_code=404, detail="prompt not found")
+    assert_member(db, user, p.project_id)
     next_version = (max((v.version for v in p.versions), default=0) + 1)
     v = PromptVersion(prompt_id=p.id, version=next_version,
                       content=payload.content)
@@ -74,7 +86,15 @@ def add_version(prompt_id: str, payload: VersionCreate,
 
 @router.get("/prompt-versions/{version_id}/traces",
             response_model=list[VersionTraceOut])
-def version_traces(version_id: str, db: Session = Depends(get_db)):
+def version_traces(version_id: str, db: Session = Depends(get_db),
+                   user: User = Depends(get_current_user)):
+    v = db.get(PromptVersion, version_id)
+    if v is None:
+        raise HTTPException(status_code=404, detail="prompt version not found")
+    p = db.get(Prompt, v.prompt_id)
+    if p is None:
+        raise HTTPException(status_code=404, detail="prompt not found")
+    assert_member(db, user, p.project_id)
     direct = db.query(Trace).filter(Trace.prompt_version_id == version_id)
     via_obs = (db.query(Trace).join(Observation,
                                     Observation.trace_id == Trace.id)

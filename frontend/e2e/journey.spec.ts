@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { BACKEND_URL, PYTHON_BIN } from "../playwright.config";
+import { E2E_USER_EMAIL, E2E_USER_PASSWORD, registerAndLogin } from "./scripts/auth";
 
 const PROJECT_NAME = "e2e-proj";
 const INGEST_SCRIPT = path.join(__dirname, "scripts", "ingest_e2e.py");
@@ -13,7 +14,12 @@ let apiKey = "";
 test("full journey: project -> ingest -> traces -> compare -> judge -> replay -> prompts -> theme", async ({
   page,
 }) => {
+  // ---- Step 0: register + log in (backend is auth-gated end to end) ----
+  await registerAndLogin(page, E2E_USER_EMAIL, E2E_USER_PASSWORD);
+
   // ---- Step 1: create project + API key from /settings ----
+  // Created by the now-logged-in user, so project_members gets an "owner"
+  // row for them and every subsequent membership-gated read below succeeds.
   await page.goto("/settings");
   await page.getByRole("tab", { name: "项目与密钥" }).click();
   await page.getByRole("button", { name: "新建项目" }).click();

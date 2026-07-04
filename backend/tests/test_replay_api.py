@@ -1,26 +1,20 @@
 import pytest
-from fastapi.testclient import TestClient
 
-from db import get_db
-from models.entities import Project, ReplayRun, Trace, utcnow
+from models.entities import Project, ProjectMember, ReplayRun, Trace, utcnow
 import services.replay_service as replay_service
 
 
 @pytest.fixture()
-def client(db_session):
-    from main import app
-
-    app.dependency_overrides[get_db] = lambda: db_session
-    with TestClient(app) as c:
-        yield c
-    app.dependency_overrides.clear()
+def client(user_client):
+    return user_client
 
 
 @pytest.fixture()
-def seeded(db_session):
+def seeded(db_session, client):
     p = Project(name="demo")
     db_session.add(p)
     db_session.flush()
+    db_session.add(ProjectMember(project_id=p.id, user_id=client.user_id, role="owner"))
     db_session.add(Trace(id="src-1", project_id=p.id, name="run"))
     db_session.commit()
     return p
@@ -80,3 +74,21 @@ def test_post_replay_rejects_replay_origin_source(client, db_session, seeded):
     resp = client.post("/api/replays", json={"source_trace_id": "replay-src"})
     assert resp.status_code == 400
     assert "replay" in resp.json()["detail"]
+
+
+def test_replay_hidden_from_non_member(client, db_session):
+    # a project the logged-in user is NOT a member of
+    other = Project(name="other-grp")
+    db_session.add(other)
+    db_session.flush()
+    db_session.add(Trace(id="other-src", project_id=other.id, name="run"))
+    run = ReplayRun(project_id=other.id, source_trace_id="other-src",
+                    status="success", divergences=[])
+    db_session.add(run)
+    db_session.commit()
+
+    assert client.post("/api/replays",
+                       json={"source_trace_id": "other-src"}).status_code == 403
+    assert client.get(
+        f"/api/replays?source_trace_id=other-src").status_code == 403
+    assert client.get(f"/api/replays/{run.id}").status_code == 403
