@@ -20,3 +20,9 @@ def test_backfill_owner_assigns_ownerless_projects(db_session):
         Project.owner_id == u.id).count() == 2
     assert db_session.query(ProjectMember).filter(
         ProjectMember.role == "owner").count() == 2
+
+
+def test_backfill_owner_missing_user_raises(db_session):
+    import pytest
+    with pytest.raises(ValueError):
+        backfill_owner(db_session, "ghost@x.com")

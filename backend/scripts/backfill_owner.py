@@ -10,7 +10,7 @@ from models.entities import Project, ProjectMember, User
 def backfill_owner(db: Session, email: str) -> int:
     user = db.query(User).filter(User.email == email.strip().lower()).first()
     if user is None:
-        raise SystemExit(f"no user with email {email}; create it first")
+        raise ValueError(f"no user with email {email}; create it first")
     projects = db.query(Project).filter(Project.owner_id.is_(None)).all()
     for p in projects:
         p.owner_id = user.id
@@ -30,8 +30,13 @@ def main() -> None:
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        n = backfill_owner(db, sys.argv[1])
-        print(f"assigned {n} ownerless project(s) to {sys.argv[1]}")
+        try:
+            n = backfill_owner(db, sys.argv[1])
+        except ValueError as e:
+            print(e)
+            sys.exit(1)
+        else:
+            print(f"assigned {n} ownerless project(s) to {sys.argv[1]}")
     finally:
         db.close()
 
