@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { ProjectProvider } from "@/contexts/ProjectContext";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AuthGate } from "@/components/layout/AuthGate";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -20,14 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <TooltipProvider>
             <AuthProvider>
-              <AuthGate>
-                <ProjectProvider>
-                  <div className="flex h-screen bg-background">
-                    <AppSidebar />
-                    <main className="flex-1 overflow-y-auto">{children}</main>
-                  </div>
-                </ProjectProvider>
-              </AuthGate>
+              <AuthGate>{children}</AuthGate>
             </AuthProvider>
             <Toaster richColors />
           </TooltipProvider>
