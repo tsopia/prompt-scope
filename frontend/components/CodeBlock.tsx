@@ -18,10 +18,14 @@ export function CodeBlock({
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(code);
-    setCopied(true);
-    toast.success("已复制");
-    setTimeout(() => setCopied(false), 1500);
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      toast.success("已复制");
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("复制失败，请手动选择复制");
+    }
   };
 
   return (
