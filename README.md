@@ -82,7 +82,38 @@ docker-compose up -d
 docker-compose exec backend python -m scripts.create_project demo
 ```
 
-**安全注意**：本平台面向内网部署，除 ingestion 外的接口（查询、配置、评分/回放）均无鉴权，依赖网络边界隔离；评分与回放会实际调用模型 API、消耗模型配额，请勿暴露到公网。
+**安全注意**：查询、配置、Prompt、评分、回放等接口现在要求登录 + 项目成员身份（见下「认证与用户体系」一节）；ingestion 接口不变，仍使用 API Key 鉴权。评分与回放会实际调用模型 API、消耗模型配额，请勿暴露到公网。
+
+## 认证与用户体系
+
+Phase 6 引入本地账号密码 + 项目成员体系：
+
+- **登录方式**：本地邮箱+密码账号，登录页在前端 `/login`。查询、配置、Prompt、评分（evaluations）、回放（replay）等接口均要求登录态（session cookie）且当前用户是目标项目的成员；未登录或非成员访问返回 401/403。**Ingestion 接口不受影响**，仍然只用 `Authorization: Bearer <API Key>` 鉴权，与 Phase 1-5 完全一致。
+- **是否开放自助注册**由环境变量 `AUTH_ALLOW_REGISTRATION` 控制（默认 `true`），关闭后 `/login` 页不再提供注册入口，`POST /api/auth/register` 返回 `403`，新账号只能由管理员用下面的 CLI 脚本创建。
+
+### 首次启动引导（bootstrap）
+
+全新部署第一次跑起来时数据库里还没有任何用户，也没有人是已有项目的 owner，需要用命令行脚本建第一个账号并接管历史项目：
+
+```bash
+cd backend
+source .venv/bin/activate
+python -m scripts.create_user you@example.com <password> "Your Name"
+python -m scripts.backfill_owner you@example.com
+```
+
+- `create_user`：创建一个本地密码账号（邮箱已存在则直接复用，不会报错），`display_name` 参数可省略（省略时用邮箱代替）。
+- `backfill_owner`：把所有**无 owner** 的历史项目（Phase 6 上线前创建的项目）批量指派给该邮箱对应的用户，指派后该用户以 `owner` 角色出现在这些项目的成员列表里——不跑这一步的话，老项目在新的权限模型下任何人都看不到。
+
+跑完这两步后，用刚创建的邮箱+密码在浏览器打开 `http://localhost:3000/login` 登录即可。
+
+### 项目成员管理
+
+登录后，项目的 owner 可以在 **Settings → 成员** 标签页邀请其他已注册用户加入当前项目（按邮箱添加，普通 `member` 角色）、查看成员列表、移除成员；系统不允许移除一个项目的最后一个 owner。非 owner 成员只能查看，不能管理成员。
+
+### SSO（规划中）
+
+OIDC / LDAP 等企业单点登录是规划中的可插拔扩展，尚未实现——后端已经预留了 `AuthProvider` 接口（`backend/services/auth_providers.py`），未来的 SSO Provider 只需实现同样的 `authenticate()` 签名并接入即可，无需改动登录/会话的其余部分。
 
 ## 前端界面
 
