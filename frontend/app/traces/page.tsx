@@ -64,8 +64,8 @@ export default function TracesPage() {
 
   const compareSelected = traces.filter((t) => compareIds.includes(t.id));
   const showTray = compareIds.length > 0;
-  const showOnboarding = !loading && !error && traces.length === 0 && !debouncedSearch;
-  const showNoMatch = !loading && !error && traces.length === 0 && !!debouncedSearch;
+  const showOnboarding = !loading && !error && traces.length === 0 && !debouncedSearch && !origin;
+  const showNoMatch = !loading && !error && traces.length === 0 && (!!debouncedSearch || !!origin);
 
   return (
     <div className={showTray ? "pb-24" : undefined}>
@@ -107,7 +107,11 @@ export default function TracesPage() {
         ) : showOnboarding ? (
           <OnboardingCard projectName={currentProject?.name} onRefresh={load} />
         ) : showNoMatch ? (
-          <EmptyState icon={SearchX} title="没有匹配的 trace" description="换个关键词试试" />
+          origin ? (
+            <EmptyState icon={SearchX} title="没有匹配的 trace" description="该来源下暂无 trace" />
+          ) : (
+            <EmptyState icon={SearchX} title="没有匹配的 trace" description="换个关键词试试" />
+          )
         ) : (
           <Card className="overflow-x-auto">
             <TraceTable
