@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ProjectProvider } from "@/contexts/ProjectContext";
-import { TopBar } from "@/components/TopBar";
+import { AppSidebar } from "@/components/layout/AppSidebar";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -16,8 +16,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="h-screen flex flex-col">
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <ProjectProvider>
-            <TopBar />
-            <div className="flex-1 overflow-y-auto">{children}</div>
+            <div className="flex h-screen bg-background">
+              <AppSidebar />
+              <main className="flex-1 overflow-y-auto">{children}</main>
+            </div>
           </ProjectProvider>
           <Toaster richColors />
         </ThemeProvider>
