@@ -9,6 +9,7 @@ import {
   FileText,
   GitCompare,
   List,
+  LogOut,
   Monitor,
   Moon,
   Settings,
@@ -18,6 +19,7 @@ import {
 import { useTheme } from "next-themes";
 
 import { useProject } from "@/contexts/ProjectContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
@@ -88,6 +90,7 @@ function CollapsedThemeToggle() {
 export function AppSidebar() {
   const pathname = usePathname();
   const { projects, currentProject, setCurrentProject } = useProject();
+  const { user, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
@@ -199,22 +202,22 @@ export function AppSidebar() {
             <div className="px-1 text-xs text-muted-foreground">v0.5.0</div>
           )}
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div
-                className={cn(
-                  "flex h-8 items-center gap-2 rounded-md px-1 text-muted-foreground",
-                  collapsed && "justify-center px-0"
-                )}
-              >
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted">
-                  <User className="h-3.5 w-3.5" />
-                </span>
-                {!collapsed && <span className="text-xs">账户</span>}
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="right">登录功能规划中</TooltipContent>
-          </Tooltip>
+          <div className={cn("flex h-8 items-center gap-2 rounded-md px-1", collapsed && "justify-center px-0")}>
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted">
+              <User className="h-3.5 w-3.5" />
+            </span>
+            {!collapsed && (
+              <span className="flex-1 truncate text-xs text-muted-foreground" title={user?.email}>
+                {user?.email ?? ""}
+              </span>
+            )}
+            {!collapsed && (
+              <button type="button" onClick={() => logout()} title="退出登录"
+                      className="text-muted-foreground hover:text-foreground">
+                <LogOut className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
 
           <button
             type="button"
