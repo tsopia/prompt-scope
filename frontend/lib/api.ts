@@ -224,10 +224,14 @@ export const api = {
   getProviders: () => get<Provider[]>("/api/providers"),
   createProvider: (body: { name: string; base_url: string; api_key: string; provider_type: string }) =>
     send<Provider>("POST", "/api/providers", body),
+  updateProvider: (id: string, body: { name: string; base_url: string; api_key?: string; provider_type: string }) =>
+    send<Provider>("PUT", `/api/providers/${id}`, body),
   deleteProvider: (id: string) => send<{ deleted: boolean }>("DELETE", `/api/providers/${id}`),
   getPricing: () => get<Pricing[]>("/api/pricing"),
   createPricing: (body: { model: string; input_price_per_1k: number; output_price_per_1k: number; provider_id?: string | null }) =>
     send<Pricing>("POST", "/api/pricing", body),
+  updatePricing: (id: string, body: { model: string; input_price_per_1k: number; output_price_per_1k: number; provider_id?: string | null }) =>
+    send<Pricing>("PUT", `/api/pricing/${id}`, body),
   deletePricing: (id: string) => send<{ deleted: boolean }>("DELETE", `/api/pricing/${id}`),
   getJudgeModels: () => get<JudgeModel[]>("/api/judge-models"),
   getEvaluations: (subjectId: string, compareId?: string) => {
