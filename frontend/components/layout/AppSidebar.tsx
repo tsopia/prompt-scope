@@ -9,9 +9,13 @@ import {
   FileText,
   GitCompare,
   List,
+  Monitor,
+  Moon,
   Settings,
+  Sun,
   User,
 } from "lucide-react";
+import { useTheme } from "next-themes";
 
 import { useProject } from "@/contexts/ProjectContext";
 import { cn } from "@/lib/utils";
@@ -38,6 +42,48 @@ const NAV_ITEMS = [
   { href: "/prompts", label: "Prompts", icon: FileText },
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const;
+
+const THEME_ORDER = ["light", "dark", "system"] as const;
+const THEME_ICONS = { light: Sun, dark: Moon, system: Monitor } as const;
+
+function CollapsedThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return <div className="h-8 w-8" />;
+  }
+
+  const current = THEME_ORDER.includes(theme as (typeof THEME_ORDER)[number])
+    ? (theme as (typeof THEME_ORDER)[number])
+    : "system";
+  const Icon = THEME_ICONS[current];
+
+  const cycleTheme = () => {
+    const next = THEME_ORDER[(THEME_ORDER.indexOf(current) + 1) % THEME_ORDER.length];
+    setTheme(next);
+  };
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={cycleTheme}
+          aria-label="主题"
+          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <Icon className="h-4 w-4" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right">主题</TooltipContent>
+    </Tooltip>
+  );
+}
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -146,7 +192,7 @@ export function AppSidebar() {
         {/* Bottom section */}
         <div className="space-y-2 border-t border-border p-2">
           <div className={cn("flex items-center", collapsed ? "justify-center" : "justify-between")}>
-            <ThemeToggle />
+            {collapsed ? <CollapsedThemeToggle /> : <ThemeToggle />}
           </div>
 
           {!collapsed && (
