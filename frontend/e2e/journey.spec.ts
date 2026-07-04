@@ -58,11 +58,13 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   // result_trace_id stays null and no origin=replay trace is ever created).
   // Filtering to "Live" would be a no-op (still 2 rows); filtering to "回放"
   // (replay) is the assertion with actual discriminating power: it must show
-  // zero rows plus the empty state.
+  // zero rows plus the origin-specific empty state (not the project-level
+  // onboarding card, since the project does have data — just none matching
+  // this filter).
   await page.getByPlaceholder("按名称搜索…").fill("");
   await page.getByRole("button", { name: "回放" }).click();
   await expect(page.locator("table tbody tr")).toHaveCount(0);
-  await expect(page.getByText("还没有任何 trace 数据")).toBeVisible();
+  await expect(page.getByText("该来源下暂无 trace")).toBeVisible();
 
   await page.getByRole("button", { name: "全部" }).click();
   await expect(page.getByText(/共 3 条/)).toBeVisible();
@@ -88,7 +90,9 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   await page.getByRole("link", { name: "开始对比" }).click();
   await expect(page).toHaveURL(/\/compare\?a=.+&b=.+/);
 
-  // four metric cards (rendered twice — desktop grid + mobile tabs duplicate)
+  // four metric cards (single mount now — compare page renders either the desktop
+  // grid or the mobile tabs, never both; .first() kept defensively but no longer
+  // strictly required at the Desktop Chrome viewport this suite runs at)
   await expect(page.getByText("总成本").first()).toBeVisible();
   await expect(page.getByText("总延迟").first()).toBeVisible();
   await expect(page.getByText("Tokens (in)").first()).toBeVisible();
@@ -144,10 +148,16 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   await overrideModelSelect.selectOption({ label: "gpt-4o (e2e-fake-provider)" });
   await page.getByRole("button", { name: "运行回放 ▶" }).click();
 
-  // Either a toast.error appears, or the history timeline shows a failed entry.
-  const failedToast = page.getByText(/回放失败|error|fail/i).first();
-  const failedHistoryBadge = page.locator("text=failed").first();
-  await expect(failedToast.or(failedHistoryBadge)).toBeVisible({ timeout: 30_000 });
+  // The fake provider has a bogus base URL, so the run must land in the history
+  // timeline as a failed entry: runStatusKind("failed") -> "error", rendered by
+  // StatusBadge as the literal text "error" (StatusBadge defaults its label to
+  // the `kind` string when no explicit `label` is passed — see
+  // components/StatusBadge.tsx). The run is auto-expanded (defaultExpanded when
+  // r.id === latestRunId, set by runReplay() on failure) so the real error text
+  // from run.error must also be visible, never a fabricated success.
+  const historyCard = page.locator("text=历史回放").locator("..").locator("..");
+  await expect(historyCard.getByText("error", { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(historyCard.getByText("Error", { exact: true })).toBeVisible();
 
   // ---- Step 8: prompts — create prompt, fork to v2, diff ----
   await page.goto("/prompts");
