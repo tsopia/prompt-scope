@@ -1,28 +1,23 @@
 import pytest
 from fastapi import HTTPException
-from fastapi.testclient import TestClient
 
-from db import get_db
-from models.entities import Evaluation, ModelPricing, ModelProvider, Project, Trace, utcnow
+from models.entities import (Evaluation, ModelPricing, ModelProvider, Project,
+                             ProjectMember, Trace, utcnow)
 import services.judge_service as judge_service
 import services.replay_service as replay_service
 
 
 @pytest.fixture()
-def client(db_session):
-    from main import app
-
-    app.dependency_overrides[get_db] = lambda: db_session
-    with TestClient(app) as c:
-        yield c
-    app.dependency_overrides.clear()
+def client(user_client):
+    return user_client
 
 
 @pytest.fixture()
-def seeded(db_session):
+def seeded(db_session, client):
     p = Project(name="demo")
     db_session.add(p)
     db_session.flush()
+    db_session.add(ProjectMember(project_id=p.id, user_id=client.user_id, role="owner"))
     provider = ModelProvider(name="oai", base_url="https://api.test.com/v1",
                              api_key="sk-x", provider_type="openai")
     db_session.add(provider)

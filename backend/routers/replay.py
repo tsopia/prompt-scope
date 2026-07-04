@@ -2,15 +2,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from db import get_db
-from models.entities import ReplayRun, Trace
+from models.entities import ReplayRun, Trace, User
 from schemas.replay import (BatchReplayItem, BatchReplayRequest,
                             BatchReplayResponse, ReplayRequest, ReplayRunOut)
+from services.authz import assert_member, get_current_user
 import services.replay_service as replay_service
 
 router = APIRouter(tags=["replay"])
 
 
-def _run_one(db: Session, source_trace_id: str,
+def _run_one(db: Session, user: User, source_trace_id: str,
             override_model: str | None,
             override_model_params: dict | None,
             override_prompt_text: str | None,
@@ -19,6 +20,7 @@ def _run_one(db: Session, source_trace_id: str,
     source = db.get(Trace, source_trace_id)
     if source is None:
         raise HTTPException(status_code=404, detail="source trace not found")
+    assert_member(db, user, source.project_id)
     if source.origin != "live":
         raise HTTPException(status_code=400,
                             detail="replay 产出的 trace 不能再次回放（请回放其源 trace）")
@@ -51,9 +53,10 @@ def _run_one(db: Session, source_trace_id: str,
 
 
 @router.post("/replays", response_model=ReplayRunOut)
-def create_replay(payload: ReplayRequest, db: Session = Depends(get_db)):
+def create_replay(payload: ReplayRequest, db: Session = Depends(get_db),
+                  user: User = Depends(get_current_user)):
     return _run_one(
-        db, payload.source_trace_id,
+        db, user, payload.source_trace_id,
         override_model=payload.override_model,
         override_model_params=payload.override_model_params,
         override_prompt_text=payload.override_prompt_text,
@@ -63,12 +66,13 @@ def create_replay(payload: ReplayRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/replays/batch", response_model=BatchReplayResponse)
-def batch_replay(payload: BatchReplayRequest, db: Session = Depends(get_db)):
+def batch_replay(payload: BatchReplayRequest, db: Session = Depends(get_db),
+                 user: User = Depends(get_current_user)):
     results = []
     for source_trace_id in payload.source_trace_ids:
         try:
             run = _run_one(
-                db, source_trace_id,
+                db, user, source_trace_id,
                 override_model=payload.override_model,
                 override_model_params=payload.override_model_params,
                 override_prompt_text=payload.override_prompt_text,
@@ -90,15 +94,22 @@ def batch_replay(payload: BatchReplayRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/replays/{replay_id}", response_model=ReplayRunOut)
-def get_replay(replay_id: str, db: Session = Depends(get_db)):
+def get_replay(replay_id: str, db: Session = Depends(get_db),
+               user: User = Depends(get_current_user)):
     run = db.get(ReplayRun, replay_id)
     if run is None:
         raise HTTPException(status_code=404, detail="replay run not found")
+    assert_member(db, user, run.project_id)
     return run
 
 
 @router.get("/replays", response_model=list[ReplayRunOut])
-def list_replays(source_trace_id: str, db: Session = Depends(get_db)):
+def list_replays(source_trace_id: str, db: Session = Depends(get_db),
+                 user: User = Depends(get_current_user)):
+    source = db.get(Trace, source_trace_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="source trace not found")
+    assert_member(db, user, source.project_id)
     return (db.query(ReplayRun)
             .filter(ReplayRun.source_trace_id == source_trace_id)
             .order_by(ReplayRun.created_at.desc()).all())

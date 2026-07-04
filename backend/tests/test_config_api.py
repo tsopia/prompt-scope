@@ -1,17 +1,9 @@
 import pytest
-from fastapi.testclient import TestClient
-
-from db import get_db
 
 
 @pytest.fixture()
-def client(db_session):
-    from main import app
-
-    app.dependency_overrides[get_db] = lambda: db_session
-    with TestClient(app) as c:
-        yield c
-    app.dependency_overrides.clear()
+def client(user_client):
+    return user_client
 
 
 def test_provider_crud_and_key_masking(client):

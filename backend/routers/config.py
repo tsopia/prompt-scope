@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from db import get_db
-from models.entities import ModelPricing, ModelProvider
+from models.entities import ModelPricing, ModelProvider, User
 from schemas.config import JudgeModelOut, PricingIn, PricingOut, ProviderIn, ProviderOut
+from services.authz import get_current_user
 
 router = APIRouter(tags=["config"])
 
@@ -22,13 +23,15 @@ def _pricing_out(r: ModelPricing) -> PricingOut:
 
 
 @router.get("/providers", response_model=list[ProviderOut])
-def list_providers(db: Session = Depends(get_db)):
+def list_providers(db: Session = Depends(get_db),
+                   user: User = Depends(get_current_user)):
     return [_provider_out(p) for p in
             db.query(ModelProvider).order_by(ModelProvider.created_at).all()]
 
 
 @router.post("/providers", response_model=ProviderOut)
-def create_provider(payload: ProviderIn, db: Session = Depends(get_db)):
+def create_provider(payload: ProviderIn, db: Session = Depends(get_db),
+                    user: User = Depends(get_current_user)):
     if db.query(ModelProvider).filter(ModelProvider.name == payload.name).first():
         raise HTTPException(status_code=409, detail="provider name already exists")
     p = ModelProvider(name=payload.name, base_url=payload.base_url,
@@ -41,7 +44,8 @@ def create_provider(payload: ProviderIn, db: Session = Depends(get_db)):
 
 @router.put("/providers/{provider_id}", response_model=ProviderOut)
 def update_provider(provider_id: str, payload: ProviderIn,
-                    db: Session = Depends(get_db)):
+                    db: Session = Depends(get_db),
+                    user: User = Depends(get_current_user)):
     p = db.get(ModelProvider, provider_id)
     if p is None:
         raise HTTPException(status_code=404, detail="provider not found")
@@ -58,7 +62,8 @@ def update_provider(provider_id: str, payload: ProviderIn,
 
 
 @router.delete("/providers/{provider_id}")
-def delete_provider(provider_id: str, db: Session = Depends(get_db)):
+def delete_provider(provider_id: str, db: Session = Depends(get_db),
+                    user: User = Depends(get_current_user)):
     p = db.get(ModelProvider, provider_id)
     if p is None:
         raise HTTPException(status_code=404, detail="provider not found")
@@ -71,13 +76,15 @@ def delete_provider(provider_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/pricing", response_model=list[PricingOut])
-def list_pricing(db: Session = Depends(get_db)):
+def list_pricing(db: Session = Depends(get_db),
+                 user: User = Depends(get_current_user)):
     return [_pricing_out(r) for r in
             db.query(ModelPricing).order_by(ModelPricing.model).all()]
 
 
 @router.post("/pricing", response_model=PricingOut)
-def create_pricing(payload: PricingIn, db: Session = Depends(get_db)):
+def create_pricing(payload: PricingIn, db: Session = Depends(get_db),
+                   user: User = Depends(get_current_user)):
     if db.query(ModelPricing).filter(ModelPricing.model == payload.model).first():
         raise HTTPException(status_code=409, detail="model pricing already exists")
     r = ModelPricing(model=payload.model,
@@ -91,7 +98,8 @@ def create_pricing(payload: PricingIn, db: Session = Depends(get_db)):
 
 @router.put("/pricing/{pricing_id}", response_model=PricingOut)
 def update_pricing(pricing_id: str, payload: PricingIn,
-                   db: Session = Depends(get_db)):
+                   db: Session = Depends(get_db),
+                   user: User = Depends(get_current_user)):
     r = db.get(ModelPricing, pricing_id)
     if r is None:
         raise HTTPException(status_code=404, detail="pricing not found")
@@ -107,7 +115,8 @@ def update_pricing(pricing_id: str, payload: PricingIn,
 
 
 @router.delete("/pricing/{pricing_id}")
-def delete_pricing(pricing_id: str, db: Session = Depends(get_db)):
+def delete_pricing(pricing_id: str, db: Session = Depends(get_db),
+                   user: User = Depends(get_current_user)):
     r = db.get(ModelPricing, pricing_id)
     if r is None:
         raise HTTPException(status_code=404, detail="pricing not found")
@@ -117,7 +126,8 @@ def delete_pricing(pricing_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/judge-models", response_model=list[JudgeModelOut])
-def list_judge_models(db: Session = Depends(get_db)):
+def list_judge_models(db: Session = Depends(get_db),
+                      user: User = Depends(get_current_user)):
     rows = (db.query(ModelPricing, ModelProvider)
             .join(ModelProvider, ModelPricing.provider_id == ModelProvider.id)
             .order_by(ModelPricing.model).all())
