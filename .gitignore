@@ -21,3 +21,8 @@ backend/db/*.db
 .superpowers/
 .remember/
 .DS_Store
+
+# playwright e2e
+frontend/playwright-report/
+frontend/test-results/
+frontend/e2e-screenshots/
