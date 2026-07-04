@@ -55,11 +55,12 @@ def test_prompt_versions_and_pricing(db_session):
     db_session.add(pr)
     db_session.flush()
     v = PromptVersion(prompt_id=pr.id, version=1, content="You are a bot.")
-    provider = ModelProvider(name="openai", base_url="https://api.openai.com/v1",
+    provider = ModelProvider(project_id=p.id, name="openai",
+                             base_url="https://api.openai.com/v1",
                              api_key="sk-x", provider_type="openai")
     db_session.add_all([v, provider])
     db_session.flush()
-    price = ModelPricing(model="gpt-4o", input_price_per_1k=0.005,
+    price = ModelPricing(project_id=p.id, model="gpt-4o", input_price_per_1k=0.005,
                          output_price_per_1k=0.015, provider_id=provider.id)
     db_session.add(price)
     db_session.commit()

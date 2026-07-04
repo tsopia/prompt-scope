@@ -107,7 +107,7 @@ def run_judge(db: Session, subject_trace_id: str, judge_model: str,
         if cached is not None:
             return cached
 
-    provider = resolve_provider(db, judge_model)
+    provider = resolve_provider(db, judge_model, subject.project_id)
     trace_context = (_trace_context(subject, compare)
                      if context_mode == "with_trace" else "")
     if compare is not None:
@@ -150,7 +150,7 @@ def run_judge(db: Session, subject_trace_id: str, judge_model: str,
         context_mode=context_mode, score=score, score_b=score_b,
         verdict=verdict, reasoning=str(parsed.get("reasoning", "")),
         cost=compute_cost(db, judge_model, result["input_tokens"],
-                          result["output_tokens"]))
+                          result["output_tokens"], subject.project_id))
     db.add(evaluation)
     db.commit()
     return evaluation

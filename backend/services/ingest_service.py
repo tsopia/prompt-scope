@@ -7,10 +7,12 @@ from schemas.ingest import IngestRequest, ObservationIn
 
 
 def compute_cost(db: Session, model: str | None,
-                 input_tokens: int | None, output_tokens: int | None) -> float | None:
+                 input_tokens: int | None, output_tokens: int | None,
+                 project_id: str | None) -> float | None:
     if not model or input_tokens is None or output_tokens is None:
         return None
-    pricing = db.query(ModelPricing).filter(ModelPricing.model == model).first()
+    pricing = db.query(ModelPricing).filter(
+        ModelPricing.project_id == project_id, ModelPricing.model == model).first()
     if pricing is None:
         return None
     return (input_tokens / 1000 * pricing.input_price_per_1k
@@ -23,7 +25,8 @@ def _latency_ms(start, end) -> int | None:
     return int((end - start).total_seconds() * 1000)
 
 
-def _apply_observation(db: Session, trace_id: str, data: ObservationIn) -> None:
+def _apply_observation(db: Session, trace_id: str, project_id: str,
+                       data: ObservationIn) -> None:
     ob = db.get(Observation, data.id)
     if ob is not None and ob.trace_id != trace_id:
         raise HTTPException(status_code=409,
@@ -53,7 +56,8 @@ def _apply_observation(db: Session, trace_id: str, data: ObservationIn) -> None:
     ob.tool_input = data.tool_input
     ob.tool_output = data.tool_output
     if data.type == "llm":
-        ob.cost = compute_cost(db, data.model, data.input_tokens, data.output_tokens)
+        ob.cost = compute_cost(db, data.model, data.input_tokens, data.output_tokens,
+                               project_id)
 
 
 def _recompute_aggregates(db: Session, trace: Trace) -> None:
@@ -85,7 +89,7 @@ def ingest(db: Session, project_id: str, payload: IngestRequest, _retry: bool = 
     trace.prompt_version_id = data.prompt_version_id
 
     for ob_data in payload.observations:
-        _apply_observation(db, trace.id, ob_data)
+        _apply_observation(db, trace.id, project_id, ob_data)
 
     db.flush()
     _recompute_aggregates(db, trace)

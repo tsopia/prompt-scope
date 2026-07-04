@@ -127,7 +127,7 @@ def execute_replay(db: Session, run: ReplayRun, client=None) -> ReplayRun:
     model = run.override_model or entry.model
     if not model:
         raise HTTPException(status_code=400, detail="无法确定回放模型")
-    provider = resolve_provider(db, model)
+    provider = resolve_provider(db, model, source.project_id)
 
     messages = _initial_messages(entry, _resolve_prompt_override(db, run),
                                  truncate=not run.target_observation_id)

@@ -174,9 +174,12 @@ class Evaluation(Base):
 
 class ModelProvider(Base):
     __tablename__ = "model_providers"
+    __table_args__ = (UniqueConstraint("project_id", "name"),)
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=gen_id)
-    name: Mapped[str] = mapped_column(String(128), unique=True)
+    project_id: Mapped[str | None] = mapped_column(
+        ForeignKey("projects.id"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(128))
     base_url: Mapped[str] = mapped_column(String(512))
     api_key: Mapped[str] = mapped_column(String(512))  # 内部平台，明文存储
     provider_type: Mapped[str] = mapped_column(String(16), default="openai")
@@ -186,9 +189,12 @@ class ModelProvider(Base):
 
 class ModelPricing(Base):
     __tablename__ = "model_pricings"
+    __table_args__ = (UniqueConstraint("project_id", "model"),)
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=gen_id)
-    model: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    project_id: Mapped[str | None] = mapped_column(
+        ForeignKey("projects.id"), nullable=True, index=True)
+    model: Mapped[str] = mapped_column(String(128), index=True)
     input_price_per_1k: Mapped[float] = mapped_column(Float)
     output_price_per_1k: Mapped[float] = mapped_column(Float)
     provider_id: Mapped[str | None] = mapped_column(

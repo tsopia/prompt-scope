@@ -23,7 +23,8 @@ def api_key(db_session):
     db_session.flush()
     raw, key_hash, prefix = generate_api_key()
     db_session.add(ApiKey(project_id=p.id, key_hash=key_hash, prefix=prefix))
-    db_session.add(ModelPricing(model="gpt-4o", input_price_per_1k=0.005,
+    db_session.add(ModelPricing(project_id=p.id, model="gpt-4o",
+                                input_price_per_1k=0.005,
                                 output_price_per_1k=0.015))
     db_session.commit()
     return raw, p

@@ -4,37 +4,43 @@ from sqlalchemy.orm import Session
 from db import get_db
 from models.entities import ModelPricing, ModelProvider, User
 from schemas.config import JudgeModelOut, PricingIn, PricingOut, ProviderIn, ProviderOut
-from services.authz import get_current_user
+from services.authz import assert_member, get_current_user
 
 router = APIRouter(tags=["config"])
 
 
 def _provider_out(p: ModelProvider) -> ProviderOut:
-    return ProviderOut(id=p.id, name=p.name, base_url=p.base_url,
-                       provider_type=p.provider_type,
+    return ProviderOut(id=p.id, project_id=p.project_id, name=p.name,
+                       base_url=p.base_url, provider_type=p.provider_type,
                        api_key_set=bool(p.api_key), created_at=p.created_at)
 
 
 def _pricing_out(r: ModelPricing) -> PricingOut:
-    return PricingOut(id=r.id, model=r.model,
+    return PricingOut(id=r.id, project_id=r.project_id, model=r.model,
                       input_price_per_1k=r.input_price_per_1k,
                       output_price_per_1k=r.output_price_per_1k,
                       provider_id=r.provider_id)
 
 
 @router.get("/providers", response_model=list[ProviderOut])
-def list_providers(db: Session = Depends(get_db),
+def list_providers(project_id: str, db: Session = Depends(get_db),
                    user: User = Depends(get_current_user)):
+    assert_member(db, user, project_id)
     return [_provider_out(p) for p in
-            db.query(ModelProvider).order_by(ModelProvider.created_at).all()]
+            db.query(ModelProvider).filter(ModelProvider.project_id == project_id)
+            .order_by(ModelProvider.created_at).all()]
 
 
 @router.post("/providers", response_model=ProviderOut)
 def create_provider(payload: ProviderIn, db: Session = Depends(get_db),
                     user: User = Depends(get_current_user)):
-    if db.query(ModelProvider).filter(ModelProvider.name == payload.name).first():
+    assert_member(db, user, payload.project_id)
+    if db.query(ModelProvider).filter(
+            ModelProvider.project_id == payload.project_id,
+            ModelProvider.name == payload.name).first():
         raise HTTPException(status_code=409, detail="provider name already exists")
-    p = ModelProvider(name=payload.name, base_url=payload.base_url,
+    p = ModelProvider(project_id=payload.project_id, name=payload.name,
+                      base_url=payload.base_url,
                       api_key=payload.api_key or "",
                       provider_type=payload.provider_type)
     db.add(p)
@@ -49,7 +55,9 @@ def update_provider(provider_id: str, payload: ProviderIn,
     p = db.get(ModelProvider, provider_id)
     if p is None:
         raise HTTPException(status_code=404, detail="provider not found")
+    assert_member(db, user, p.project_id)
     if payload.name != p.name and db.query(ModelProvider).filter(
+            ModelProvider.project_id == p.project_id,
             ModelProvider.name == payload.name).first():
         raise HTTPException(status_code=409, detail="provider name already exists")
     p.name = payload.name
@@ -67,8 +75,10 @@ def delete_provider(provider_id: str, db: Session = Depends(get_db),
     p = db.get(ModelProvider, provider_id)
     if p is None:
         raise HTTPException(status_code=404, detail="provider not found")
+    assert_member(db, user, p.project_id)
     for pricing in db.query(ModelPricing).filter(
-            ModelPricing.provider_id == provider_id).all():
+            ModelPricing.provider_id == provider_id,
+            ModelPricing.project_id == p.project_id).all():
         pricing.provider_id = None
     db.delete(p)
     db.commit()
@@ -76,18 +86,23 @@ def delete_provider(provider_id: str, db: Session = Depends(get_db),
 
 
 @router.get("/pricing", response_model=list[PricingOut])
-def list_pricing(db: Session = Depends(get_db),
+def list_pricing(project_id: str, db: Session = Depends(get_db),
                  user: User = Depends(get_current_user)):
+    assert_member(db, user, project_id)
     return [_pricing_out(r) for r in
-            db.query(ModelPricing).order_by(ModelPricing.model).all()]
+            db.query(ModelPricing).filter(ModelPricing.project_id == project_id)
+            .order_by(ModelPricing.model).all()]
 
 
 @router.post("/pricing", response_model=PricingOut)
 def create_pricing(payload: PricingIn, db: Session = Depends(get_db),
                    user: User = Depends(get_current_user)):
-    if db.query(ModelPricing).filter(ModelPricing.model == payload.model).first():
+    assert_member(db, user, payload.project_id)
+    if db.query(ModelPricing).filter(
+            ModelPricing.project_id == payload.project_id,
+            ModelPricing.model == payload.model).first():
         raise HTTPException(status_code=409, detail="model pricing already exists")
-    r = ModelPricing(model=payload.model,
+    r = ModelPricing(project_id=payload.project_id, model=payload.model,
                      input_price_per_1k=payload.input_price_per_1k,
                      output_price_per_1k=payload.output_price_per_1k,
                      provider_id=payload.provider_id)
@@ -103,7 +118,9 @@ def update_pricing(pricing_id: str, payload: PricingIn,
     r = db.get(ModelPricing, pricing_id)
     if r is None:
         raise HTTPException(status_code=404, detail="pricing not found")
+    assert_member(db, user, r.project_id)
     if payload.model != r.model and db.query(ModelPricing).filter(
+            ModelPricing.project_id == r.project_id,
             ModelPricing.model == payload.model).first():
         raise HTTPException(status_code=409, detail="model pricing already exists")
     r.model = payload.model
@@ -120,16 +137,19 @@ def delete_pricing(pricing_id: str, db: Session = Depends(get_db),
     r = db.get(ModelPricing, pricing_id)
     if r is None:
         raise HTTPException(status_code=404, detail="pricing not found")
+    assert_member(db, user, r.project_id)
     db.delete(r)
     db.commit()
     return {"deleted": True}
 
 
 @router.get("/judge-models", response_model=list[JudgeModelOut])
-def list_judge_models(db: Session = Depends(get_db),
+def list_judge_models(project_id: str, db: Session = Depends(get_db),
                       user: User = Depends(get_current_user)):
+    assert_member(db, user, project_id)
     rows = (db.query(ModelPricing, ModelProvider)
             .join(ModelProvider, ModelPricing.provider_id == ModelProvider.id)
+            .filter(ModelPricing.project_id == project_id)
             .order_by(ModelPricing.model).all())
     return [JudgeModelOut(model=pricing.model, provider_name=provider.name)
             for pricing, provider in rows]

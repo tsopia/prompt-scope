@@ -18,11 +18,13 @@ def seeded(db_session, client):
     db_session.add(p)
     db_session.flush()
     db_session.add(ProjectMember(project_id=p.id, user_id=client.user_id, role="owner"))
-    provider = ModelProvider(name="oai", base_url="https://api.test.com/v1",
+    provider = ModelProvider(project_id=p.id, name="oai",
+                             base_url="https://api.test.com/v1",
                              api_key="sk-x", provider_type="openai")
     db_session.add(provider)
     db_session.flush()
-    db_session.add(ModelPricing(model="judge-model", input_price_per_1k=0.001,
+    db_session.add(ModelPricing(project_id=p.id, model="judge-model",
+                                input_price_per_1k=0.001,
                                 output_price_per_1k=0.002,
                                 provider_id=provider.id))
     db_session.add_all([

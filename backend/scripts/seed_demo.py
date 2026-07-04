@@ -29,11 +29,13 @@ def get_or_create_project(db, name: str) -> Project:
     return p
 
 
-def seed_providers_and_pricing(db):
-    if db.query(ModelProvider).count() == 0:
-        oai = ModelProvider(name="openai-demo", base_url="https://api.openai.com/v1",
+def seed_providers_and_pricing(db, project):
+    if db.query(ModelProvider).filter(ModelProvider.project_id == project.id).count() == 0:
+        oai = ModelProvider(project_id=project.id, name="openai-demo",
+                            base_url="https://api.openai.com/v1",
                             api_key="sk-demo-not-real", provider_type="openai")
-        ds = ModelProvider(name="deepseek-demo", base_url="https://api.deepseek.com/v1",
+        ds = ModelProvider(project_id=project.id, name="deepseek-demo",
+                           base_url="https://api.deepseek.com/v1",
                            api_key="sk-demo-not-real", provider_type="openai")
         db.add_all([oai, ds])
         db.flush()
@@ -44,7 +46,8 @@ def seed_providers_and_pricing(db):
             ("claude-3-5-sonnet", 0.003, 0.015, None),
         ]
         for model, inp, outp, pid in pricing:
-            db.add(ModelPricing(model=model, input_price_per_1k=inp,
+            db.add(ModelPricing(project_id=project.id, model=model,
+                                input_price_per_1k=inp,
                                 output_price_per_1k=outp, provider_id=pid))
         db.commit()
         print("providers + pricing seeded (key 为假值，judge/回放会如实报错——用于查看错误态样式)")
@@ -329,7 +332,7 @@ def main():
     db = SessionLocal()
     try:
         project = get_or_create_project(db, "demo")
-        seed_providers_and_pricing(db)
+        seed_providers_and_pricing(db, project)
         v1 = seed_prompts(db, project)
         seed_traces(db, project, v1)
         seed_replay(db, project)
