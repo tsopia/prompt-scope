@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useProject } from "@/contexts/ProjectContext";
+import { useIsDesktop } from "@/lib/hooks";
 
 const RECENT_KEY = "promptscope.recentCompares";
 const RECENT_LIMIT = 5;
@@ -62,11 +63,12 @@ function formatRelativeTime(ts: number): string {
 function pct(a: number | null, b: number | null): string {
   if (a === null || b === null || a === 0) return "—";
   const d = ((b - a) / a) * 100;
+  if (d === 0) return "±0%";
   return `${d > 0 ? "↑" : "↓"} ${Math.abs(d).toFixed(0)}%`;
 }
 
 function deltaClass(delta: string, neutral: boolean): string {
-  if (neutral) return "text-muted-foreground";
+  if (neutral || delta.startsWith("±")) return "text-muted-foreground";
   if (delta.startsWith("↓")) return "text-success";
   if (delta.startsWith("↑")) return "text-destructive";
   return "text-muted-foreground";
@@ -204,6 +206,7 @@ function CompareContent() {
   const [a, setA] = useState<TraceDetail | null>(null);
   const [b, setB] = useState<TraceDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const isDesktop = useIsDesktop();
 
   useEffect(() => {
     setA(null); setB(null); setError(null);
@@ -267,11 +270,12 @@ function CompareContent() {
 
   return (
     <div className="p-6">
-      <div className="hidden xl:grid xl:grid-cols-[1fr_360px] xl:gap-6">
-        {mainColumn}
-        {judgeColumn}
-      </div>
-      <div className="xl:hidden">
+      {isDesktop ? (
+        <div className="grid grid-cols-[1fr_360px] gap-6">
+          {mainColumn}
+          {judgeColumn}
+        </div>
+      ) : (
         <Tabs defaultValue="aligned">
           <TabsList>
             <TabsTrigger value="aligned">对齐视图</TabsTrigger>
@@ -284,7 +288,7 @@ function CompareContent() {
             {judgeColumn}
           </TabsContent>
         </Tabs>
-      </div>
+      )}
     </div>
   );
 }
