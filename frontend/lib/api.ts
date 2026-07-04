@@ -1,5 +1,13 @@
 export const API_BASE = "";
 
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -71,14 +79,15 @@ export interface TraceDetail {
 }
 
 async function get<T>(path: string): Promise<T> {
-  const resp = await fetch(`${API_BASE}${path}`);
-  if (!resp.ok) throw new Error(`GET ${path} failed: ${resp.status}`);
+  const resp = await fetch(`${API_BASE}${path}`, { credentials: "include" });
+  if (!resp.ok) throw new ApiError(resp.status, `GET ${path} failed: ${resp.status}`);
   return resp.json();
 }
 
 async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
   const resp = await fetch(`${API_BASE}${path}`, {
     method,
+    credentials: "include",
     headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
@@ -88,7 +97,7 @@ async function send<T>(method: string, path: string, body?: unknown): Promise<T>
       const data = await resp.json();
       detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
     } catch { /* keep status */ }
-    throw new Error(detail);
+    throw new ApiError(resp.status, detail);
   }
   return resp.json();
 }
@@ -203,6 +212,25 @@ export interface ApiKeyCreated {
   key: string;
 }
 
+export interface CurrentUser {
+  id: string;
+  email: string;
+  display_name: string;
+  auth_source: string;
+}
+
+export interface AuthConfig {
+  allow_registration: boolean;
+}
+
+export interface Member {
+  user_id: string;
+  email: string;
+  display_name: string;
+  role: "owner" | "member";
+  created_at: string;
+}
+
 export const api = {
   getProjects: () => get<Project[]>("/api/projects"),
   getTraces: (params: {
@@ -268,4 +296,21 @@ export const api = {
     send<ApiKeyCreated>("POST", `/api/projects/${projectId}/keys`),
   revokeKey: (keyId: string) =>
     send<{ revoked: boolean }>("DELETE", `/api/keys/${keyId}`),
+
+  // Auth
+  getMe: () => get<CurrentUser>("/api/auth/me"),
+  getAuthConfig: () => get<AuthConfig>("/api/auth/config"),
+  login: (body: { email: string; password: string }) =>
+    send<CurrentUser>("POST", "/api/auth/login", body),
+  register: (body: { email: string; password: string; display_name: string }) =>
+    send<CurrentUser>("POST", "/api/auth/register", body),
+  logout: () => send<{ logged_out: boolean }>("POST", "/api/auth/logout"),
+
+  // Members
+  getMembers: (projectId: string) =>
+    get<Member[]>(`/api/projects/${projectId}/members`),
+  addMember: (projectId: string, email: string) =>
+    send<Member[]>("POST", `/api/projects/${projectId}/members`, { email }),
+  removeMember: (projectId: string, userId: string) =>
+    send<{ removed: boolean }>("DELETE", `/api/projects/${projectId}/members/${userId}`),
 };
