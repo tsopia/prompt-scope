@@ -14,10 +14,10 @@ Design spec: `docs/superpowers/specs/2026-07-04-agent-replay-platform-design.md`
 
 ```bash
 cd backend
-source .venv/bin/activate
-uvicorn main:app --reload --port 8000
-python -m pytest tests/ -v          # test suite
-python -m scripts.create_project <name>   # create project + API key (printed once)
+uv venv && uv pip install -r requirements.txt   # first-time setup
+uv run uvicorn main:app --reload --port 8000
+uv run pytest tests/ -v                          # test suite
+uv run python -m scripts.create_project <name>   # create project + API key (printed once)
 ```
 
 ### Frontend (Next.js 14)
@@ -116,10 +116,10 @@ Phase 5 redesigned the UI on top of shadcn/ui (`components/ui/`, vendored Radix-
 ## Toolchain Conventions（工具链规范）
 
 - **前端统一使用 bun**：`bun install` / `bun run dev|build|lint` / `bunx vitest run`。不要混用 npm/yarn/pnpm。迁移状态：仓库当前 lockfile 仍是 `package-lock.json`（npm）——完成 bun 迁移（生成 `bun.lock`、移除 `package-lock.json`、更新 e2e/docker 里的 npm 调用）之前，以现有 lockfile 为准，勿双轨并存。
-- **后端 Python 统一使用 uv**：`uv venv` / `uv pip install -r requirements.txt` / `uv run pytest tests/ -v`。不要直接调用 pip。迁移状态：当前 `.venv` 由 pip 创建、依赖声明在 `requirements.txt`——迁移到 uv 管理（可选 `pyproject.toml` + `uv.lock`）前两者兼容。
+- **后端 Python 统一使用 uv**：`uv venv` / `uv pip install -r requirements.txt` / `uv run pytest tests/ -v` / `uv run uvicorn main:app --reload --port 8000`。不要直接调用 pip。依赖声明保持 `requirements.txt`（暂不引入 `pyproject.toml` + `uv.lock`）。已验证：`uv venv` 新建的环境装好 `requirements.txt` + `requirements-dev.txt` 后，`pytest tests/ -v` 120 个测试全部通过。团队切换方式：`uv venv .venv && uv pip install -r requirements.txt`（沿用同一个 `backend/.venv` 目录，直接覆盖即可，无需删除重建）。
 
 ## Working Conventions
 
 - Follow the phase plans in `docs/superpowers/plans/`; Phase 2 (compare + judge), Phase 3 (replay engine), Phase 4 (prompt mgmt, SDK, batch) build on the existing entities — avoid schema rewrites.
-- Backend tests: TDD, run `python -m pytest tests/ -v` from `backend/` before committing.
+- Backend tests: TDD, run `uv run pytest tests/ -v` from `backend/` before committing.
 - git commits: no AI attribution of any kind.

@@ -36,10 +36,9 @@ PromptScope Frontend (Next.js)
 
 ```bash
 cd backend
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+uv venv
+uv pip install -r requirements.txt
+uv run uvicorn main:app --reload --port 8000
 ```
 
 **2. 启动前端：**
@@ -54,7 +53,7 @@ npm run dev
 
 ```bash
 cd backend
-python -m scripts.create_project demo
+uv run python -m scripts.create_project demo
 # 输出:
 # project: demo (<project_id>)
 # api key (save it now, shown only once): ps-xxxxxxxx...
@@ -97,9 +96,8 @@ Phase 6 引入本地账号密码 + 项目成员体系：
 
 ```bash
 cd backend
-source .venv/bin/activate
-python -m scripts.create_user you@example.com <password> "Your Name"
-python -m scripts.backfill_owner you@example.com
+uv run python -m scripts.create_user you@example.com <password> "Your Name"
+uv run python -m scripts.backfill_owner you@example.com
 ```
 
 - `create_user`：创建一个本地密码账号（邮箱已存在则直接复用，不会报错），`display_name` 参数可省略（省略时用邮箱代替）。
