@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from db import get_db
@@ -18,17 +19,26 @@ def list_prompts(project_id: str | None = None, db: Session = Depends(get_db),
         allowed = [project_id]
     else:
         allowed = member_project_ids(db, user)
-    q = db.query(Prompt).filter(Prompt.project_id.in_(allowed)) if allowed \
-        else db.query(Prompt).filter(False)
+    if not allowed:
+        return []
+    prompts = (db.query(Prompt).filter(Prompt.project_id.in_(allowed))
+              .order_by(Prompt.created_at.desc()).all())
+    if not prompts:
+        return []
+    # Single group-by query over PromptVersion for all prompts at once (no N+1).
+    prompt_ids = [p.id for p in prompts]
+    agg_rows = (db.query(PromptVersion.prompt_id,
+                         func.count(PromptVersion.id),
+                         func.max(PromptVersion.version))
+                .filter(PromptVersion.prompt_id.in_(prompt_ids))
+                .group_by(PromptVersion.prompt_id).all())
+    agg = {prompt_id: (count, latest) for prompt_id, count, latest in agg_rows}
     out = []
-    for p in q.order_by(Prompt.created_at.desc()).all():
-        # Explicitly fetch versions to ensure they're fresh
-        versions = db.query(PromptVersion).filter(
-            PromptVersion.prompt_id == p.id).order_by(PromptVersion.version).all()
+    for p in prompts:
+        count, latest = agg.get(p.id, (0, 0))
         out.append(PromptSummary(
-            id=p.id, name=p.name, version_count=len(versions),
-            latest_version=versions[-1].version if versions else 0,
-            created_at=p.created_at))
+            id=p.id, name=p.name, version_count=count,
+            latest_version=latest or 0, created_at=p.created_at))
     return out
 
 

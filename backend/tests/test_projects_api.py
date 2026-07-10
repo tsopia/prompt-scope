@@ -35,7 +35,7 @@ def test_create_key_returns_plaintext_once_and_list_hides_it(client, project):
     resp = client.post(f"/api/projects/{pid}/keys")
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body.keys()) == {"id", "prefix", "key"}
+    assert set(body.keys()) == {"id", "prefix", "name", "key"}
     plaintext_key = body["key"]
     assert plaintext_key.startswith("ps-")
     assert body["prefix"] == plaintext_key[:7]
@@ -73,3 +73,55 @@ def test_non_owner_cannot_touch_keys(client, project):
 def test_create_key_missing_project_404_and_delete_unknown_key_404(client):
     assert client.post("/api/projects/nope/keys").status_code == 404
     assert client.delete("/api/keys/nope").status_code == 404
+
+
+def test_create_key_with_name_roundtrips_and_last_used_touched_on_use(client, project, db_session):
+    pid = project["id"]
+    created = client.post(f"/api/projects/{pid}/keys", json={"name": "生产上报"}).json()
+    assert created["name"] == "生产上报"
+
+    listed = client.get(f"/api/projects/{pid}/keys").json()
+    assert listed[0]["name"] == "生产上报"
+    assert listed[0]["last_used_at"] is None
+
+    # authenticating an ingest call with the raw key should touch last_used_at
+    from services.auth import resolve_api_key
+    resolve_api_key(db_session, created["key"])
+    listed_after = client.get(f"/api/projects/{pid}/keys").json()
+    assert listed_after[0]["last_used_at"] is not None
+
+
+def test_key_without_name_defaults_to_none(client, project):
+    pid = project["id"]
+    created = client.post(f"/api/projects/{pid}/keys", json={}).json()
+    assert created["name"] is None
+    created2 = client.post(f"/api/projects/{pid}/keys").json()
+    assert created2["name"] is None
+
+
+def test_rename_project_success_and_duplicate_409(client, project):
+    other = client.post("/api/projects", json={"name": "other"}).json()
+    resp = client.put(f"/api/projects/{project['id']}", json={"name": "renamed"})
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "renamed"
+    assert client.get("/api/projects").json()  # sanity: still listable
+
+    dup = client.put(f"/api/projects/{project['id']}", json={"name": other["name"]})
+    assert dup.status_code == 409
+
+
+def test_rename_project_requires_owner(client, project):
+    client.post("/api/auth/register", json={
+        "email": "member2@x.com", "password": "pw123456", "display_name": "M2"})
+    client.post("/api/auth/logout")
+    client.post("/api/auth/login", json={"email": "owner@x.com", "password": "pw123456"})
+    client.post(f"/api/projects/{project['id']}/members", json={"email": "member2@x.com"})
+
+    client.post("/api/auth/logout")
+    client.post("/api/auth/login", json={"email": "member2@x.com", "password": "pw123456"})
+    resp = client.put(f"/api/projects/{project['id']}", json={"name": "hijacked"})
+    assert resp.status_code == 403
+
+
+def test_rename_project_missing_404(client):
+    assert client.put("/api/projects/nope", json={"name": "x"}).status_code == 404

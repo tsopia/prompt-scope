@@ -34,8 +34,10 @@ class ApiKey(Base):
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
     key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     prefix: Mapped[str] = mapped_column(String(16))
+    name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     project: Mapped["Project"] = relationship(back_populates="api_keys")
 
@@ -184,6 +186,9 @@ class ModelProvider(Base):
     api_key: Mapped[str] = mapped_column(String(512))  # 内部平台，明文存储
     provider_type: Mapped[str] = mapped_column(String(16), default="openai")
     # openai | anthropic
+    kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # official | aggregator
+    note: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

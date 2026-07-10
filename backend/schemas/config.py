@@ -10,6 +10,8 @@ class ProviderIn(BaseModel):
     base_url: str = Field(max_length=512)
     api_key: str | None = Field(default=None, max_length=512)
     provider_type: Literal["openai", "anthropic"] = "openai"
+    kind: Literal["official", "aggregator"] = "official"
+    note: str | None = Field(default=None, max_length=255)
 
 
 class ProviderOut(BaseModel):
@@ -18,6 +20,8 @@ class ProviderOut(BaseModel):
     name: str
     base_url: str
     provider_type: str
+    kind: str | None
+    note: str | None
     api_key_set: bool
     created_at: datetime
 
