@@ -296,7 +296,7 @@ function CompareContent() {
 export default function ComparePage() {
   return (
     <div>
-      <PageHeader crumbs={[{ label: "Compare" }]} />
+      <PageHeader crumbs={[{ label: "对比" }]} subtitle="逐条对齐两次运行，查看差异并交叉打分。" />
       <Suspense fallback={<div className="p-6"><p className="text-sm text-muted-foreground">加载中…</p></div>}>
         <CompareContent />
       </Suspense>

@@ -47,8 +47,8 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
 
   // ---- Step 3: switch to e2e-proj via sidebar project switcher, verify traces list ----
   await page.goto("/traces");
-  await page.getByRole("combobox").click();
-  await page.getByRole("option", { name: PROJECT_NAME }).click();
+  await page.getByRole("button", { name: "切换项目" }).click();
+  await page.getByRole("button", { name: PROJECT_NAME, exact: true }).click();
 
   await expect(page.getByText(/共 3 条/)).toBeVisible();
   const rows = page.locator("table tbody tr");

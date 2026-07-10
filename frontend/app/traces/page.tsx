@@ -69,7 +69,10 @@ export default function TracesPage() {
 
   return (
     <div className={showTray ? "pb-24" : undefined}>
-      <PageHeader crumbs={[{ label: "Traces" }]} />
+      <PageHeader
+        crumbs={[{ label: "链路" }]}
+        subtitle="agent 每次运行的完整调用链，实时上报与录制回放。"
+      />
       <main className="mx-auto max-w-6xl space-y-4 p-6">
         <div className="flex items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">共 {total} 条</p>

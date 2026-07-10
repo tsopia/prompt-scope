@@ -15,11 +15,11 @@ export const E2E_USER_PASSWORD = "e2e-password-123";
  */
 export async function registerAndLogin(page: Page, email: string, password = "e2e-password-123") {
   await page.goto("/login");
-  await page.getByText("没有账号？去注册").click();
-  await page.getByPlaceholder("邮箱").fill(email);
-  await page.getByPlaceholder("显示名").fill("E2E User");
-  await page.getByPlaceholder("密码（至少 8 位）").fill(password);
-  await page.getByRole("button", { name: "注册" }).click();
+  await page.getByRole("button", { name: "注册", exact: true }).click();
+  await page.getByLabel("显示名").fill("E2E User");
+  await page.getByLabel("邮箱").fill(email);
+  await page.getByLabel("密码").fill(password);
+  await page.getByRole("button", { name: "创建账户" }).click();
   await expect(page).toHaveURL(/\/traces/);
 }
 
@@ -32,8 +32,8 @@ export async function registerAndLogin(page: Page, email: string, password = "e2
  */
 export async function login(page: Page, email: string, password = "e2e-password-123") {
   await page.goto("/login");
-  await page.getByPlaceholder("邮箱").fill(email);
-  await page.getByPlaceholder("密码（至少 8 位）").fill(password);
+  await page.getByLabel("邮箱").fill(email);
+  await page.getByLabel("密码").fill(password);
   await page.getByRole("button", { name: "登录", exact: true }).click();
   await expect(page).toHaveURL(/\/traces/);
 }

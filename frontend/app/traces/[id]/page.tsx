@@ -45,7 +45,7 @@ export default function TraceDetailPage() {
   return (
     <div>
       <PageHeader
-        crumbs={[{ label: "Traces", href: "/traces" }, { label: traceName }]}
+        crumbs={[{ label: "链路", href: "/traces" }, { label: traceName }]}
         actions={
           <>
             {trace.origin === "live" && (

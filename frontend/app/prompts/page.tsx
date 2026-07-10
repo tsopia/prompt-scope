@@ -364,7 +364,8 @@ export default function PromptsPage() {
   return (
     <div>
       <PageHeader
-        crumbs={[{ label: "Prompts" }]}
+        crumbs={[{ label: "提示词" }]}
+        subtitle="管理 prompt 版本，基于历史版本回放与对比。"
         actions={
           currentProject && (
             <Button onClick={() => setCreateOpen(true)}>新建 Prompt</Button>

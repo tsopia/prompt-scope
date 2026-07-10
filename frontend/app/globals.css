@@ -57,3 +57,56 @@
     @apply bg-background text-foreground font-sans antialiased;
   }
 }
+
+/* Keyframes from docs/design/Traces.dc.html + docs/design/Login.dc.html */
+@keyframes ps-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.72);
+  }
+}
+@keyframes ps-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes ps-fade {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes ps-flow {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes ps-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes ps-blip {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}

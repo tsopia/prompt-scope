@@ -970,7 +970,7 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <PageHeader crumbs={[{ label: "Settings" }]} />
+      <PageHeader crumbs={[{ label: "设置" }]} subtitle="项目、API Key、模型 provider 与定价。" />
 
       <main className="mx-auto max-w-6xl p-6">
         {error && <p className="mb-4 text-sm text-destructive">{error}</p>}

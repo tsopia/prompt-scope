@@ -306,7 +306,7 @@ function ReplayContent() {
     <div>
       <PageHeader
         crumbs={[
-          { label: "Traces", href: "/traces" },
+          { label: "链路", href: "/traces" },
           { label: traceName, href: `/traces/${trace.id}` },
           { label: "回放" },
         ]}
