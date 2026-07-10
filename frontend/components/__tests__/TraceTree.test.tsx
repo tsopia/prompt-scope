@@ -26,8 +26,8 @@ describe("TraceTree", () => {
     render(<TraceTree nodes={tree} selectedId={null} onSelect={() => {}} />);
     expect(screen.getByText("plan")).toBeDefined();
     expect(screen.getByText("search")).toBeDefined();
-    expect(screen.getByText("llm")).toBeDefined();
-    expect(screen.getByText("tool")).toBeDefined();
+    expect(screen.getByText("LLM")).toBeDefined();
+    expect(screen.getByText("TOOL")).toBeDefined();
   });
 
   it("fires onSelect with node id when clicked", () => {

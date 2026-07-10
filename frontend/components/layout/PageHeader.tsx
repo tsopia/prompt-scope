@@ -5,10 +5,12 @@ import { Fragment, type ReactNode, type SVGProps } from "react";
 
 import { useSidebar } from "@/components/layout/SidebarContext";
 import { useProject } from "@/contexts/ProjectContext";
+import { cn } from "@/lib/utils";
 
 interface Crumb {
   label: string;
   href?: string;
+  mono?: boolean;
 }
 
 interface PageHeaderProps {
@@ -56,11 +58,13 @@ export function PageHeader({ crumbs, subtitle, actions }: PageHeaderProps) {
             <Fragment key={`${crumb.label}-${index}`}>
               {index > 0 && <span className="opacity-50">/</span>}
               {crumb.href && !isLast ? (
-                <Link href={crumb.href} className="hover:text-foreground">
+                <Link href={crumb.href} className={crumb.mono ? "font-mono hover:text-foreground" : "hover:text-foreground"}>
                   {crumb.label}
                 </Link>
               ) : (
-                <span className={isLast ? "text-muted-foreground" : ""}>{crumb.label}</span>
+                <span className={cn(isLast && "text-muted-foreground", crumb.mono && "font-mono")}>
+                  {crumb.label}
+                </span>
               )}
             </Fragment>
           );

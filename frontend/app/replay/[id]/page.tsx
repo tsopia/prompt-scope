@@ -4,7 +4,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Loader2, ChevronDown, ChevronRight as ChevronRightIcon, Info, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { api, Divergence, JudgeModel, ObservationNode, PromptDetail, PromptSummary, ReplayRun, TraceDetail } from "@/lib/api";
-import { formatCost, formatCostFull, formatLatency } from "@/lib/format";
+import { formatCost, formatCostFull, formatLatency, formatRelativeTime } from "@/lib/format";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { MetricText } from "@/components/MetricText";
@@ -79,17 +79,6 @@ function DivergenceItem({ d }: { d: Divergence }) {
       )}
     </div>
   );
-}
-
-function formatRelativeTime(iso: string): string {
-  const diffSec = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
-  if (diffSec < 60) return "刚刚";
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin} 分钟前`;
-  const diffHour = Math.floor(diffMin / 60);
-  if (diffHour < 24) return `${diffHour} 小时前`;
-  const diffDay = Math.floor(diffHour / 24);
-  return `${diffDay} 天前`;
 }
 
 function HistoryEntry({

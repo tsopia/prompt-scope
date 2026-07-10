@@ -26,6 +26,7 @@ export interface TraceSummary {
   latency_ms: number | null;
   started_at: string | null;
   created_at: string;
+  divergence_count: number;
 }
 
 export interface TraceListResult {
@@ -75,6 +76,7 @@ export interface TraceDetail {
   total_cost: number | null;
   created_at: string;
   metadata: Record<string, unknown> | null;
+  divergence_count: number;
   observations: ObservationNode[];
 }
 
@@ -282,6 +284,7 @@ export const api = {
     override_prompt_text?: string;
     override_prompt_version_id?: string;
   }) => send<ReplayRun>("POST", "/api/replays", body),
+  getReplay: (id: string) => get<ReplayRun>(`/api/replays/${id}`),
   getReplays: (sourceTraceId: string) =>
     get<ReplayRun[]>(`/api/replays?source_trace_id=${encodeURIComponent(sourceTraceId)}`),
   getPrompts: (projectId: string) =>

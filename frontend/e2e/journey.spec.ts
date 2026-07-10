@@ -50,13 +50,13 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   await page.getByRole("button", { name: "切换项目" }).click();
   await page.getByRole("button", { name: PROJECT_NAME, exact: true }).click();
 
-  await expect(page.getByText(/共 3 条/)).toBeVisible();
+  await expect(page.getByText(/3 条 · 共 3/)).toBeVisible();
   const rows = page.locator("table tbody tr");
   await expect(rows).toHaveCount(3);
 
   // search filter
-  await page.getByPlaceholder("按名称搜索…").fill("weather");
-  await expect(page.getByText(/共 2 条/)).toBeVisible();
+  await page.getByPlaceholder("按名称搜索链路…").fill("weather");
+  await expect(page.getByText(/2 条 · 共 2/)).toBeVisible();
   await expect(page.locator("table tbody tr")).toHaveCount(2);
 
   // origin filter: every fixture trace is "live" (this journey never produces a
@@ -67,13 +67,13 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   // zero rows plus the origin-specific empty state (not the project-level
   // onboarding card, since the project does have data — just none matching
   // this filter).
-  await page.getByPlaceholder("按名称搜索…").fill("");
+  await page.getByPlaceholder("按名称搜索链路…").fill("");
   await page.getByRole("button", { name: "回放" }).click();
   await expect(page.locator("table tbody tr")).toHaveCount(0);
   await expect(page.getByText("该来源下暂无 trace")).toBeVisible();
 
   await page.getByRole("button", { name: "全部" }).click();
-  await expect(page.getByText(/共 3 条/)).toBeVisible();
+  await expect(page.getByText(/3 条 · 共 3/)).toBeVisible();
   await expect(page.locator("table tbody tr")).toHaveCount(3);
 
   // ---- Step 4: trace detail — click a node, assert detail changes ----
@@ -82,11 +82,11 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   await expect(page).toHaveURL(/\/traces\//);
 
   await page.getByText("get_weather", { exact: true }).first().click();
-  await expect(page.locator("main").getByText("入参")).toBeVisible();
+  await expect(page.locator("main").getByText("input")).toBeVisible();
 
   // ---- Step 5: back to list, select two weather traces, compare tray ----
   await page.goto("/traces");
-  await page.getByPlaceholder("按名称搜索…").fill("weather");
+  await page.getByPlaceholder("按名称搜索链路…").fill("weather");
   await expect(page.locator("table tbody tr")).toHaveCount(2);
   const weatherRows = page.locator("table tbody tr");
   await weatherRows.nth(0).getByRole("checkbox").click();
@@ -128,7 +128,7 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   await expect(page.getByText("定价已创建")).toBeVisible();
 
   await page.goto("/traces");
-  await page.getByPlaceholder("按名称搜索…").fill("weather");
+  await page.getByPlaceholder("按名称搜索链路…").fill("weather");
   await expect(page.locator("table tbody tr")).toHaveCount(2);
   const rowsAgain = page.locator("table tbody tr");
   await rowsAgain.nth(0).getByRole("checkbox").click();
@@ -145,9 +145,9 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
 
   // ---- Step 7: replay from trace detail, expect a real failure (fake provider) ----
   await page.goto("/traces");
-  await page.getByPlaceholder("按名称搜索…").fill("weather");
+  await page.getByPlaceholder("按名称搜索链路…").fill("weather");
   await page.locator("table tbody tr").first().click();
-  await page.getByRole("link", { name: "回放 ▶" }).click();
+  await page.getByRole("link", { name: "回放整条" }).click();
   await expect(page).toHaveURL(/\/replay\//);
 
   const overrideModelSelect = page.locator("label", { hasText: "覆盖模型" }).locator("..").locator("select");
