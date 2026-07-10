@@ -40,7 +40,7 @@ export default defineConfig({
       cwd: __dirname,
     },
     {
-      command: 'bash -c "API_PROXY_HOST=http://localhost:8100 npm run dev -- --port 3100"',
+      command: 'bash -c "API_PROXY_HOST=http://localhost:8100 bun run dev -- --port 3100"',
       port: 3100,
       reuseExistingServer: false,
       timeout: 60_000,

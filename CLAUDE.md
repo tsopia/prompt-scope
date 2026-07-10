@@ -24,10 +24,11 @@ uv run python -m scripts.create_project <name>   # create project + API key (pri
 
 ```bash
 cd frontend
-npm run dev       # dev server on :3000 (proxies /api/* to :8000 via next.config.js)
-npm run build
-npx vitest run    # component tests
-npm run e2e       # Playwright e2e (spins up its own backend :8100 / frontend :3100 + temp sqlite db)
+bun install
+bun run dev       # dev server on :3000 (proxies /api/* to :8000 via next.config.js)
+bun run build
+bunx vitest run   # component tests
+bun run e2e       # Playwright e2e (spins up its own backend :8100 / frontend :3100 + temp sqlite db)
 ```
 
 ### Docker (full stack, Postgres 16)
@@ -115,7 +116,7 @@ Phase 5 redesigned the UI on top of shadcn/ui (`components/ui/`, vendored Radix-
 
 ## Toolchain Conventions（工具链规范）
 
-- **前端统一使用 bun**：`bun install` / `bun run dev|build|lint` / `bunx vitest run`。不要混用 npm/yarn/pnpm。迁移状态：仓库当前 lockfile 仍是 `package-lock.json`（npm）——完成 bun 迁移（生成 `bun.lock`、移除 `package-lock.json`、更新 e2e/docker 里的 npm 调用）之前，以现有 lockfile 为准，勿双轨并存。
+- **前端统一使用 bun**：`bun install` / `bun run dev|build|lint` / `bunx vitest run`。不要混用 npm/yarn/pnpm。已验证：`bun install` 生成 `bun.lock`（`package-lock.json` 已移除），`bun run build`、`bunx vitest run`、`bun run lint`、`bunx tsc --noEmit`、`bun run e2e`（Playwright webServer 已改用 `bun run dev`）全绿；`frontend/Dockerfile` 在 `node:20-slim` 基础镜像内通过 `npm install -g bun` 装好 bun 后走 `bun install --frozen-lockfile` / `bun run build`（保留 node 基础镜像而非切换到 `oven/bun`，避免 Next.js 生产 server 在 bun runtime 下的兼容性风险）。
 - **后端 Python 统一使用 uv**：`uv venv` / `uv pip install -r requirements.txt` / `uv run pytest tests/ -v` / `uv run uvicorn main:app --reload --port 8000`。不要直接调用 pip。依赖声明保持 `requirements.txt`（暂不引入 `pyproject.toml` + `uv.lock`）。已验证：`uv venv` 新建的环境装好 `requirements.txt` + `requirements-dev.txt` 后，`pytest tests/ -v` 120 个测试全部通过。团队切换方式：`uv venv .venv && uv pip install -r requirements.txt`（沿用同一个 `backend/.venv` 目录，直接覆盖即可，无需删除重建）。
 
 ## Working Conventions

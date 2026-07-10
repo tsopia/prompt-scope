@@ -45,8 +45,8 @@ uv run uvicorn main:app --reload --port 8000
 
 ```bash
 cd frontend
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 **3. 建项目、拿 API Key**：浏览器打开 `http://localhost:3000`（自动跳转 `/traces`），首次使用无需任何 CLI 操作——打开左侧侧边栏底部进入 **Settings → 项目与密钥** 标签页：「新建项目」建一个项目并自动切换为当前项目，「新建 API Key」弹窗展示完整 key（**仅此一次可见**，关闭前请立即复制保存）。旧的命令行方式仍然保留，适合脚本化/CI 场景：
@@ -143,7 +143,7 @@ Phase 5 对前端做了整体视觉与交互重设计：`components/ui/` 引入 
 
 ```bash
 cd frontend
-npm run e2e
+bun run e2e
 ```
 
 `playwright.config.ts` 会自起一套完全独立的前后端进程，不依赖你本地已经在跑的 `dev`/`uvicorn`：后端用临时 `backend/db/e2e.db`（`journey` 用例组运行前先 `rm -f`，保证每次全新库）跑在 `:8100`，前端跑在 `:3100`（`API_PROXY_HOST` 指向 `:8100`）。共两组用例，`theme` 依赖 `journey` 先跑完：
