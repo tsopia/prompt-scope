@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0D14; --bg-grid:#0C1019; --surface:#10141E; --surface-2:#141926;
+    --surface-hover:#182031; --border:#222A3A; --border-soft:#1A2130;
+    --text:#E7ECF5; --text-2:#94A0B5; --text-3:#5C687E;
+    --accent:#22D3EE; --accent-fg:#04141B;
+    --accent-subtle:color-mix(in srgb, var(--accent) 15%, transparent);
+    --accent-border:color-mix(in srgb, var(--accent) 42%, transparent);
+    --live-fg:#7FC0FF; --live-dot:#3B82F6; --live-bg:color-mix(in srgb,#3B82F6 15%,transparent);
+    --replay-fg:#C4B5FD; --replay-dot:#8B5CF6; --replay-bg:color-mix(in srgb,#8B5CF6 16%,transparent);
+    --pass-fg:#5FE6A0; --pass-dot:#22C55E; --pass-bg:color-mix(in srgb,#22C55E 14%,transparent);
+    --warn-fg:#F7C24B; --warn-dot:#F59E0B; --warn-bg:color-mix(in srgb,#F59E0B 15%,transparent);
+    --fail-fg:#FB8091; --fail-dot:#EF4444; --fail-bg:color-mix(in srgb,#EF4444 15%,transparent);
+    --shadow:0 12px 40px -12px rgba(0,0,0,.7);
+    --font-sans:'Geist','Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;
+    --font-mono:'Geist Mono','JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  html[data-theme="light"]{
+    --bg:#F7F9FC; --bg-grid:#EEF2F8; --surface:#FFFFFF; --surface-2:#FFFFFF;
+    --surface-hover:#F3F6FB; --border:#E1E7F0; --border-soft:#EBEFF6;
+    --text:#0F172A; --text-2:#556074; --text-3:#8A94A6;
+    --accent:#0E9BB8; --accent-fg:#FFFFFF;
+    --accent-subtle:color-mix(in srgb, var(--accent) 12%, transparent);
+    --accent-border:color-mix(in srgb, var(--accent) 45%, transparent);
+    --live-fg:#1D6FD6; --live-dot:#2563EB; --live-bg:color-mix(in srgb,#2563EB 11%,transparent);
+    --replay-fg:#7C3AED; --replay-dot:#7C3AED; --replay-bg:color-mix(in srgb,#7C3AED 11%,transparent);
+    --pass-fg:#0F9D58; --pass-dot:#16A34A; --pass-bg:color-mix(in srgb,#16A34A 12%,transparent);
+    --warn-fg:#B7791F; --warn-dot:#D97706; --warn-bg:color-mix(in srgb,#D97706 14%,transparent);
+    --fail-fg:#DC2626; --fail-dot:#DC2626; --fail-bg:color-mix(in srgb,#DC2626 11%,transparent);
+    --shadow:0 12px 40px -14px rgba(15,23,42,.18);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans);-webkit-font-smoothing:antialiased;}
+  a{color:var(--accent);text-decoration:none;} a:hover{opacity:.8;}
+  ::selection{background:var(--accent-subtle);}
+  @keyframes ps-fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes ps-overlay{from{opacity:0;}to{opacity:1;}}
+  pre{margin:0;}
+  ::-webkit-scrollbar{height:10px;width:10px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:6px;border:3px solid transparent;background-clip:padding-box;}
+  ::-webkit-scrollbar-track{background:transparent;}
+</style>
+</helmet>
+
+<div style="display:flex;min-height:100vh;width:100%;background:var(--bg);">
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside style="{{ sidebarStyle }}">
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 8px 4px;height:34px;overflow:hidden;">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;">
+        <circle cx="12" cy="12" r="9.2" stroke="var(--accent)" stroke-width="1.4" opacity="0.9"/>
+        <circle cx="12" cy="12" r="4.4" stroke="var(--accent)" stroke-width="1.4"/>
+        <circle cx="12" cy="12" r="1.7" fill="var(--accent)"/>
+        <path d="M12 0.6V4.2M12 19.8V23.4M0.6 12H4.2M19.8 12H23.4" stroke="var(--accent)" stroke-width="1.3" stroke-linecap="round" opacity="0.55"/>
+      </svg>
+      <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}"><span style="font-size:15px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;">PromptScope</span></sc-if>
+    </div>
+    <div style="position:relative;">
+      <button onClick="{{ toggleWs }}" style="{{ wsBtnStyle }}">
+        <span style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;background:linear-gradient(140deg,var(--accent),#7C3AED);color:#04141B;font-size:12px;font-weight:700;flex:0 0 auto;">A</span>
+        <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+          <span style="display:flex;flex-direction:column;align-items:flex-start;min-width:0;flex:1;line-height:1.15;">
+            <span style="font-size:13px;font-weight:600;white-space:nowrap;">{{ currentProject }}</span>
+            <span style="font-size:11px;color:var(--text-3);white-space:nowrap;">Acme AI · 生产环境</span>
+          </span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;color:var(--text-3);"><path d="M7 9l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </sc-if>
+      </button>
+      <sc-if value="{{ wsOpen }}">
+        <div style="position:absolute;top:calc(100% + 6px);left:0;min-width:260px;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:6px;z-index:50;">
+          <!-- workspace header -->
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px 8px;">
+            <span style="font-size:11px;font-weight:600;color:var(--text-3);letter-spacing:.04em;text-transform:uppercase;">工作区</span>
+            <button style="{{ wsSwitchLink }}" style-hover="color:var(--accent);">切换…</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;padding:8px 8px 9px;border-radius:8px;background:var(--bg-grid);margin-bottom:6px;">
+            <span style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;background:linear-gradient(140deg,var(--accent),#7C3AED);color:#04141B;font-size:11px;font-weight:700;">A</span>
+            <span style="font-size:12.5px;font-weight:600;">Acme AI</span>
+          </div>
+          <!-- projects -->
+          <div style="padding:2px 8px 6px;"><span style="font-size:11px;font-weight:600;color:var(--text-3);letter-spacing:.04em;text-transform:uppercase;">项目</span></div>
+          <sc-for list="{{ projects }}" as="p" hint-placeholder-count="3">
+            <button onClick="{{ p.onPick }}" style="{{ p.style }}">
+              <span style="width:7px;height:7px;border-radius:50%;background:{{ p.dot }};flex:0 0 auto;"></span>
+              <span style="flex:1;text-align:left;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.name }}</span>
+              <span style="font-size:11px;color:var(--text-3);font-family:var(--font-mono);">{{ p.env }}</span>
+              <sc-if value="{{ p.active }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:var(--accent);flex:0 0 auto;"><path d="M5 12.5l4.2 4.2L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></sc-if>
+            </button>
+          </sc-for>
+          <div style="height:1px;background:var(--border-soft);margin:6px 4px;"></div>
+          <button onClick="{{ openNewProject }}" style="{{ newProjectBtn }}" style-hover="background:var(--surface-hover);color:var(--text);">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            新建项目
+          </button>
+        </div>
+      </sc-if>
+    </div>
+    <nav style="display:flex;flex-direction:column;gap:3px;margin-top:18px;">
+      <sc-for list="{{ navItems }}" as="nav" hint-placeholder-count="4">
+        <a href="#" onClick="{{ nav.onClick }}" title="{{ nav.label }}" style="{{ nav.style }}">
+          <span style="{{ nav.barStyle }}"></span>
+          <span style="display:flex;width:20px;height:20px;flex:0 0 auto;color:{{ nav.iconColor }};" data-icon="{{ nav.key }}"></span>
+          <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}"><span style="font-size:13.5px;font-weight:{{ nav.weight }};white-space:nowrap;">{{ nav.label }}</span></sc-if>
+        </a>
+      </sc-for>
+    </nav>
+    <div style="flex:1 1 auto;"></div>
+    <div style="{{ themeWrapStyle }}">
+      <sc-for list="{{ themeOpts }}" as="t" hint-placeholder-count="3">
+        <button onClick="{{ t.onClick }}" title="{{ t.label }}" style="{{ t.style }}">
+          <span style="display:flex;width:16px;height:16px;" data-ticon="{{ t.key }}"></span>
+          <sc-if value="{{ t.showLabel }}"><span style="font-size:12px;font-weight:600;">{{ t.label }}</span></sc-if>
+        </button>
+      </sc-for>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding:8px;border-radius:10px;overflow:hidden;">
+      <span style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:var(--surface-hover);border:1px solid var(--border);font-size:12px;font-weight:700;flex:0 0 auto;">林</span>
+      <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+        <span style="display:flex;flex-direction:column;min-width:0;line-height:1.2;">
+          <span style="font-size:12.5px;font-weight:600;white-space:nowrap;">林越</span>
+          <span style="font-size:11px;color:var(--text-3);white-space:nowrap;">管理员</span>
+        </span>
+      </sc-if>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column;height:100vh;overflow:hidden;">
+
+    <!-- page header -->
+    <header style="flex:0 0 auto;padding:22px 32px 0;">
+      <div style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--text-3);margin-bottom:9px;">
+        <button onClick="{{ toggleCollapse }}" title="折叠侧边栏" style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;margin-left:-4px;margin-right:2px;border:none;background:transparent;color:var(--text-2);border-radius:7px;cursor:pointer;" style-hover="background:var(--surface-hover);">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><rect x="3" y="4.5" width="18" height="15" rx="2.4" stroke="currentColor" stroke-width="1.6"/><path d="M9 4.5v15" stroke="currentColor" stroke-width="1.6"/></svg>
+        </button>
+        <span>Acme AI</span><span style="opacity:.5;">/</span><span style="color:var(--text-2);">设置</span>
+      </div>
+      <h1 style="margin:0;font-size:23px;font-weight:700;letter-spacing:-.02em;">设置</h1>
+
+      <!-- tabs -->
+      <div style="display:flex;gap:2px;margin-top:18px;border-bottom:1px solid var(--border);">
+        <sc-for list="{{ tabs }}" as="tab" hint-placeholder-count="4">
+          <button onClick="{{ tab.onClick }}" style="{{ tab.style }}">
+            {{ tab.label }}
+            <span style="{{ tab.underline }}"></span>
+          </button>
+        </sc-for>
+      </div>
+    </header>
+
+    <!-- content -->
+    <div style="flex:1;min-height:0;overflow:auto;">
+      <div style="max-width:980px;padding:26px 32px 60px;" key="{{ activeTab }}">
+
+        <!-- ============ PROJECT & KEYS ============ -->
+        <sc-if value="{{ isKeys }}">
+          <div style="display:flex;flex-direction:column;gap:24px;animation:ps-fade .2s ease;">
+            <!-- project info -->
+            <section style="{{ cardStyle }}">
+              <div style="{{ cardHeadStyle }}">项目信息</div>
+              <div style="padding:18px 20px;display:grid;grid-template-columns:auto 1fr;gap:16px 24px;align-items:center;">
+                <label style="{{ fieldLabel }}">项目名称</label>
+                <input value="结账助手" style="{{ inputStyle }}" style-focus="border-color:var(--accent-border);" />
+                <label style="{{ fieldLabel }}">项目 ID</label>
+                <div style="display:flex;align-items:center;gap:10px;"><code style="{{ codeChip }}">proj_ac0e14b2</code><span style="font-size:12px;color:var(--text-3);">不可修改</span></div>
+                <label style="{{ fieldLabel }}">环境</label>
+                <div style="display:flex;align-items:center;gap:8px;"><span style="{{ envBadge }}"><span style="width:6px;height:6px;border-radius:50%;background:var(--pass-dot);"></span>生产</span></div>
+              </div>
+            </section>
+
+            <!-- API keys -->
+            <section style="{{ cardStyle }}">
+              <div style="{{ cardHeadRowStyle }}">
+                <div><div style="font-size:13px;font-weight:600;">API 密钥</div><div style="font-size:12px;color:var(--text-3);margin-top:2px;">用于 SDK 上报链路数据。密钥仅在创建时完整显示一次。</div></div>
+                <button onClick="{{ openNewKey }}" style="{{ primaryBtnSm }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>新建密钥</button>
+              </div>
+              <div style="overflow-x:auto;">
+                <div style="min-width:640px;">
+                  <div style="{{ keysHeadStyle }}">
+                    <div>名称</div><div>密钥前缀</div><div>创建时间</div><div>最近使用</div><div style="text-align:center;">状态</div><div></div>
+                  </div>
+                  <sc-for list="{{ keys }}" as="k" hint-placeholder-count="3">
+                    <div style="{{ keysRowStyle }}" style-hover="background:var(--surface-hover);">
+                      <div style="font-size:13px;font-weight:500;">{{ k.name }}</div>
+                      <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--text-2);">{{ k.prefix }}</div>
+                      <div style="font-family:var(--font-mono);font-size:12px;color:var(--text-3);">{{ k.created }}</div>
+                      <div style="font-family:var(--font-mono);font-size:12px;color:var(--text-3);">{{ k.used }}</div>
+                      <div style="text-align:center;"><span style="{{ k.badge }}"><span style="{{ k.dot }}"></span>{{ k.status }}</span></div>
+                      <div style="text-align:right;"><sc-if value="{{ k.active }}"><button onClick="{{ k.onRevoke }}" style="{{ dangerLinkStyle }}" style-hover="background:var(--fail-bg);">撤销</button></sc-if></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </section>
+          </div>
+        </sc-if>
+
+        <!-- ============ PROVIDERS ============ -->
+        <sc-if value="{{ isProviders }}">
+          <section style="{{ cardStyle }}">
+            <div style="{{ cardHeadRowStyle }}">
+              <div><div style="font-size:13px;font-weight:600;">模型 Provider</div><div style="font-size:12px;color:var(--text-3);margin-top:2px;">官方直连或三方聚合网关（OpenRouter 等）皆可。按接口协议标注 OpenAI / Anthropic 兼容；api_key 只写不回显。</div></div>
+              <button onClick="{{ openNewProvider }}" style="{{ primaryBtnSm }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>新增 Provider</button>
+            </div>
+            <div style="overflow-x:auto;">
+              <div style="min-width:840px;">
+                <div style="{{ provHeadStyle }}">
+                  <div>名称</div><div>种类</div><div>接口协议</div><div>base_url</div><div style="text-align:center;">api_key</div><div></div>
+                </div>
+                <sc-for list="{{ providers }}" as="p" hint-placeholder-count="4">
+                  <div style="{{ provRowStyle }}" style-hover="background:var(--surface-hover);">
+                    <div style="display:flex;flex-direction:column;gap:2px;min-width:0;">
+                      <span style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.name }}</span>
+                      <sc-if value="{{ p.note }}"><span style="font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.note }}</span></sc-if>
+                    </div>
+                    <div><span style="{{ p.kindBadge }}"><span style="{{ p.kindDot }}"></span>{{ p.kindLabel }}</span></div>
+                    <div><span style="{{ p.protoChip }}">{{ p.protoLabel }}</span></div>
+                    <div style="font-family:var(--font-mono);font-size:12px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.baseUrl }}</div>
+                    <div style="text-align:center;"><span style="{{ p.keyBadge }}"><span style="{{ p.keyDot }}"></span>{{ p.keyLabel }}</span></div>
+                    <div style="display:flex;justify-content:flex-end;gap:4px;">
+                      <button onClick="{{ p.onEdit }}" style="{{ iconBtnStyle }}" style-hover="background:var(--surface-hover);color:var(--text);" title="编辑"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 20h4L18.5 9.5a2 2 0 00-2.83-2.83L5 17.2V20z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
+                      <button style="{{ iconBtnStyle }}" style-hover="background:var(--fail-bg);color:var(--fail-fg);" title="删除"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V5h6v2M6 7l1 13h10l1-13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </section>
+        </sc-if>
+
+        <!-- ============ PRICING ============ -->
+        <sc-if value="{{ isPricing }}">
+          <section style="{{ cardStyle }}">
+            <div style="{{ cardHeadRowStyle }}">
+              <div><div style="font-size:13px;font-weight:600;">定价</div><div style="font-size:12px;color:var(--text-3);margin-top:2px;">用于估算链路成本。单位：美元 / 1K token。</div></div>
+              <button onClick="{{ openNewPricing }}" style="{{ primaryBtnSm }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>新增定价</button>
+            </div>
+            <div style="overflow-x:auto;">
+              <div style="min-width:680px;">
+                <div style="{{ priceHeadStyle }}">
+                  <div>模型</div><div>关联 Provider</div><div style="text-align:right;">每 1K 输入</div><div style="text-align:right;">每 1K 输出</div><div></div>
+                </div>
+                <sc-for list="{{ pricing }}" as="pr" hint-placeholder-count="4">
+                  <div style="{{ priceRowStyle }}" style-hover="background:var(--surface-hover);">
+                    <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--text);">{{ pr.model }}</div>
+                    <div style="font-size:12.5px;color:var(--text-2);">{{ pr.provider }}</div>
+                    <div style="text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--text);">{{ pr.priceIn }}</div>
+                    <div style="text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--text);">{{ pr.priceOut }}</div>
+                    <div style="display:flex;justify-content:flex-end;gap:4px;">
+                      <button style="{{ iconBtnStyle }}" style-hover="background:var(--surface-hover);color:var(--text);" title="编辑"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 20h4L18.5 9.5a2 2 0 00-2.83-2.83L5 17.2V20z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
+                      <button style="{{ iconBtnStyle }}" style-hover="background:var(--fail-bg);color:var(--fail-fg);" title="删除"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V5h6v2M6 7l1 13h10l1-13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </section>
+        </sc-if>
+
+        <!-- ============ MEMBERS ============ -->
+        <sc-if value="{{ isMembers }}">
+          <section style="{{ cardStyle }}">
+            <div style="{{ cardHeadRowStyle }}">
+              <div><div style="font-size:13px;font-weight:600;">成员</div><div style="font-size:12px;color:var(--text-3);margin-top:2px;">owner 可添加已注册用户、调整角色或移除成员。</div></div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input value="{{ inviteEmail }}" onInput="{{ onInvite }}" placeholder="按邮箱添加成员…" style="{{ inviteInputStyle }}" style-focus="border-color:var(--accent-border);" />
+                <button onClick="{{ addMember }}" style="{{ primaryBtnSm }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>添加</button>
+              </div>
+            </div>
+            <div style="overflow-x:auto;">
+              <div style="min-width:600px;">
+                <div style="{{ memHeadStyle }}">
+                  <div>成员</div><div>邮箱</div><div style="text-align:center;">角色</div><div></div>
+                </div>
+                <sc-for list="{{ members }}" as="m" hint-placeholder-count="3">
+                  <div style="{{ memRowStyle }}" style-hover="background:var(--surface-hover);">
+                    <div style="display:flex;align-items:center;gap:11px;min-width:0;">
+                      <span style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:{{ m.avatarBg }};color:#fff;font-size:12px;font-weight:700;flex:0 0 auto;">{{ m.initial }}</span>
+                      <span style="display:flex;flex-direction:column;min-width:0;line-height:1.25;">
+                        <span style="font-size:13px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ m.name }}<sc-if value="{{ m.isYou }}"><span style="font-size:11px;color:var(--text-3);font-weight:400;"> · 你</span></sc-if></span>
+                      </span>
+                    </div>
+                    <div style="font-family:var(--font-mono);font-size:12px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ m.email }}</div>
+                    <div style="text-align:center;"><span style="{{ m.roleBadge }}">{{ m.roleLabel }}</span></div>
+                    <div style="text-align:right;"><sc-if value="{{ m.removable }}"><button onClick="{{ m.onRemove }}" style="{{ dangerLinkStyle }}" style-hover="background:var(--fail-bg);">移除</button></sc-if><sc-if value="{{ m.locked }}"><span title="{{ m.lockReason }}" style="font-size:12px;color:var(--text-3);cursor:help;">—</span></sc-if></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </section>
+        </sc-if>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- ===== NEW KEY DIALOG ===== -->
+  <sc-if value="{{ keyDialogOpen }}">
+    <div onClick="{{ closeKeyDialog }}" style="position:fixed;inset:0;background:rgba(4,7,13,.68);backdrop-filter:blur(3px);z-index:80;display:flex;align-items:center;justify-content:center;padding:24px;animation:ps-overlay .15s ease;">
+      <div onClick="{{ stop }}" style="width:100%;max-width:520px;background:var(--surface-2);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);overflow:hidden;animation:ps-fade .2s ease;">
+        <div style="padding:20px 22px 0;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+            <span style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:var(--pass-bg);color:var(--pass-fg);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.2 4.2L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <h3 style="margin:0;font-size:16px;font-weight:650;">密钥已创建</h3>
+          </div>
+          <p style="margin:0;font-size:13px;color:var(--text-2);line-height:1.6;">请立即复制并妥善保存。<b style="color:var(--warn-fg);font-weight:600;">离开此对话框后将无法再次查看完整密钥。</b></p>
+        </div>
+        <div style="padding:16px 22px 22px;">
+          <div style="display:flex;align-items:center;gap:10px;padding:13px 15px;background:var(--bg-grid);border:1px solid var(--border-soft);border-radius:11px;">
+            <code style="flex:1;font-family:var(--font-mono);font-size:13px;color:var(--text);word-break:break-all;">{{ newKeyValue }}</code>
+            <button onClick="{{ copyKey }}" style="{{ copyBtnStyle }}" style-hover="background:var(--accent-subtle);">
+              <sc-if value="{{ copied }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.2 4.2L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>已复制</sc-if>
+              <sc-if value="{{ notCopied }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="8" y="8" width="12" height="12" rx="2.4" stroke="currentColor" stroke-width="1.7"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2" stroke="currentColor" stroke-width="1.7"/></svg>复制</sc-if>
+            </button>
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-top:20px;">
+            <button onClick="{{ closeKeyDialog }}" style="{{ primaryBtnStyle }}">我已保存，完成</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ===== PROVIDER DIALOG ===== -->
+  <sc-if value="{{ providerDialogOpen }}">
+    <div onClick="{{ closeProviderDialog }}" style="position:fixed;inset:0;background:rgba(4,7,13,.68);backdrop-filter:blur(3px);z-index:80;display:flex;align-items:center;justify-content:center;padding:24px;animation:ps-overlay .15s ease;">
+      <div onClick="{{ stop }}" style="width:100%;max-width:560px;max-height:90vh;overflow:auto;background:var(--surface-2);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);animation:ps-fade .2s ease;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border-soft);position:sticky;top:0;background:var(--surface-2);">
+          <h3 style="margin:0;font-size:16px;font-weight:650;">{{ providerDialogTitle }}</h3>
+          <button onClick="{{ closeProviderDialog }}" style="{{ iconBtnStyle }}" style-hover="background:var(--surface-hover);color:var(--text);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+        </div>
+        <div style="padding:20px 22px;display:flex;flex-direction:column;gap:18px;">
+          <!-- kind -->
+          <div>
+            <label style="{{ dlgLabel }}">供应商种类</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <sc-for list="{{ kindCards }}" as="k" hint-placeholder-count="2">
+                <button onClick="{{ k.onPick }}" style="{{ k.style }}">
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="display:flex;width:18px;height:18px;color:{{ k.iconColor }};" data-picon="{{ k.key }}"></span>
+                    <span style="font-size:13px;font-weight:600;color:var(--text);">{{ k.title }}</span>
+                    <sc-if value="{{ k.active }}"><span style="margin-left:auto;display:flex;width:16px;height:16px;color:var(--accent);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.2 4.2L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></sc-if>
+                  </div>
+                  <span style="font-size:11.5px;color:var(--text-3);line-height:1.5;text-align:left;">{{ k.desc }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+          <!-- protocol -->
+          <div>
+            <label style="{{ dlgLabel }}">接口协议 <span style="font-weight:400;color:var(--text-3);">决定按哪种 API 格式请求</span></label>
+            <div style="display:flex;padding:3px;background:var(--bg-grid);border:1px solid var(--border-soft);border-radius:9px;gap:2px;">
+              <sc-for list="{{ protoOpts }}" as="pr" hint-placeholder-count="2">
+                <button onClick="{{ pr.onClick }}" style="{{ pr.style }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ pr.dot }};"></span>{{ pr.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+          <!-- name -->
+          <div>
+            <label style="{{ dlgLabel }}">名称</label>
+            <input value="{{ formName }}" onInput="{{ onFormName }}" placeholder="如 OpenRouter、自建网关" style="{{ dlgInput }}" style-focus="border-color:var(--accent-border);" />
+          </div>
+          <!-- base_url -->
+          <div>
+            <label style="{{ dlgLabel }}">base_url</label>
+            <input value="{{ formUrl }}" onInput="{{ onFormUrl }}" placeholder="{{ urlPlaceholder }}" style="{{ dlgInputMono }}" style-focus="border-color:var(--accent-border);" />
+            <sc-if value="{{ isAggregator }}"><p style="margin:7px 0 0;font-size:11.5px;color:var(--text-3);line-height:1.5;">三方聚合网关通常暴露一个 OpenAI 兼容端点，模型名用 <code style="font-family:var(--font-mono);color:var(--text-2);">provider/model</code> 形式（如 <code style="font-family:var(--font-mono);color:var(--text-2);">anthropic/claude-3.5-sonnet</code>）。</p></sc-if>
+          </div>
+          <!-- api_key -->
+          <div>
+            <label style="{{ dlgLabel }}">api_key <span style="font-weight:400;color:var(--warn-fg);">只写不回显</span></label>
+            <input type="password" value="{{ formKey }}" onInput="{{ onFormKey }}" placeholder="{{ keyPlaceholder }}" style="{{ dlgInputMono }}" style-focus="border-color:var(--accent-border);" />
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;padding:0 22px 22px;">
+          <button onClick="{{ closeProviderDialog }}" style="{{ dlgGhostBtn }}" style-hover="background:var(--surface-hover);">取消</button>
+          <button onClick="{{ closeProviderDialog }}" style="{{ primaryBtnStyle }}">{{ providerSaveLabel }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:860},&quot;defaultTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;,&quot;system&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'dark'|'light'|'system'&quot;,&quot;section&quot;:&quot;主题&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#22D3EE&quot;,&quot;options&quot;:[&quot;#22D3EE&quot;,&quot;#2DD4BF&quot;,&quot;#60A5FA&quot;,&quot;#A78BFA&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;主题&quot;},&quot;tab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;keys&quot;,&quot;providers&quot;,&quot;pricing&quot;,&quot;members&quot;],&quot;default&quot;:&quot;keys&quot;,&quot;tsType&quot;:&quot;'keys'|'providers'|'pricing'|'members'&quot;,&quot;section&quot;:&quot;设置&quot;}}">
+class Component extends DCLogic {
+  state = { theme:'dark', resolved:'dark', collapsed:false, tab:'keys',
+    keyDialogOpen:false, copied:false, inviteEmail:'',
+    revoked:{}, removed:{}, wsOpen:false, project:'checkout',
+    providerDialogOpen:false, editing:null,
+    formKind:'aggregator', formProto:'openai', formName:'', formUrl:'', formKey:'' };
+
+  componentDidMount(){
+    this._mq=window.matchMedia('(prefers-color-scheme: dark)');
+    this._onMq=()=>{ if(this.state.theme==='system') this.setState({resolved:this._mq.matches?'dark':'light'}); };
+    this._mq.addEventListener('change', this._onMq);
+    let init = this.props.defaultTheme||'dark';
+    try{ const saved = localStorage.getItem('ps-theme'); if(saved) init = saved; }catch(e){}
+    this.setTheme(init);
+    if(this.props.accent) document.documentElement.style.setProperty('--accent', this.props.accent);
+    if(this.props.tab) this.setState({tab:this.props.tab});
+    this._injectIcons();
+  }
+  componentDidUpdate(){ if(this.props.accent) document.documentElement.style.setProperty('--accent', this.props.accent); this._injectIcons(); }
+  componentWillUnmount(){ this._mq && this._mq.removeEventListener('change', this._onMq); }
+  setTheme(mode){ let r=mode==='system'?(this._mq&&this._mq.matches?'dark':'light'):mode; document.documentElement.setAttribute('data-theme',r); try{ localStorage.setItem('ps-theme', mode); }catch(e){} this.setState({theme:mode,resolved:r}); }
+  _go(url){ window.location.href = url; }
+  toggleCollapse(){ this.setState(s=>({collapsed:!s.collapsed})); }
+  _injectIcons(){
+    const nav={
+      traces:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2.4" stroke="currentColor" stroke-width="1.7"/><circle cx="6" cy="18" r="2.4" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="12" r="2.4" stroke="currentColor" stroke-width="1.7"/><path d="M8.4 6H14a2.5 2.5 0 012.5 2.5V10M8.4 18H14a2.5 2.5 0 002.5-2.5V14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+      compare:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="4.5" width="7" height="15" rx="1.6" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="4.5" width="7" height="15" rx="1.6" stroke="currentColor" stroke-width="1.7"/></svg>',
+      prompts:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 5l4 4-4 4M11 15h7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      settings:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 7h10M4 12h16M4 17h7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="17" cy="7" r="2.2" stroke="currentColor" stroke-width="1.7"/><circle cx="14" cy="17" r="2.2" stroke="currentColor" stroke-width="1.7"/></svg>',
+    };
+    const th={
+      light:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4.4" stroke="currentColor" stroke-width="1.7"/><path d="M12 2.5v2.5M12 19v2.5M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2.5 12H5M19 12h2.5M4.2 19.8L6 18M18 6l1.8-1.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+      dark:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
+      system:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="4.5" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M9 20h6M12 16.5V20" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+    };
+    document.querySelectorAll('[data-icon]').forEach(el=>{const k=el.getAttribute('data-icon'); if(nav[k]&&el.innerHTML!==nav[k]) el.innerHTML=nav[k];});
+    document.querySelectorAll('[data-ticon]').forEach(el=>{const k=el.getAttribute('data-ticon'); if(th[k]&&el.innerHTML!==th[k]) el.innerHTML=th[k];});
+    const pic={
+      official:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.2-2.9 7.4-7 8.6C7.9 18.4 5 15.2 5 11V6l7-3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 11.5l2 2 4-4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      aggregator:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="2.4" stroke="currentColor" stroke-width="1.6"/><circle cx="5" cy="6" r="1.9" stroke="currentColor" stroke-width="1.6"/><circle cx="5" cy="18" r="1.9" stroke="currentColor" stroke-width="1.6"/><circle cx="19" cy="12" r="1.9" stroke="currentColor" stroke-width="1.6"/><path d="M6.7 6.8l3.4 3.9M6.7 17.2l3.4-3.9M14.4 12h2.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    };
+    document.querySelectorAll('[data-picon]').forEach(el=>{const k=el.getAttribute('data-picon'); if(pic[k]&&el.innerHTML!==pic[k]) el.innerHTML=pic[k];});
+  }
+  openNewKey(){
+    const rnd=Array.from({length:32},()=>'abcdef0123456789'[Math.floor(Math.random()*16)]).join('');
+    this._newKey='psk_live_'+rnd;
+    this.setState({keyDialogOpen:true, copied:false});
+  }
+  copyKey(){ try{ navigator.clipboard && navigator.clipboard.writeText(this._newKey); }catch(e){} this.setState({copied:true}); }
+  closeKeyDialog(){ this.setState({keyDialogOpen:false}); }
+  openNewProvider(){ this.setState({providerDialogOpen:true, editing:null, formKind:'aggregator', formProto:'openai', formName:'', formUrl:'', formKey:''}); }
+  editProvider(p){ this.setState({providerDialogOpen:true, editing:p.name, formKind:p.kind, formProto:p.protocol, formName:p.name, formUrl:p.baseUrl, formKey:''}); }
+  closeProviderDialog(){ this.setState({providerDialogOpen:false}); }
+
+  _badge(fg,bg,tie){ return {display:'inline-flex',alignItems:'center',gap:'6px',padding:'2.5px 9px',borderRadius:'999px',fontSize:'11px',fontWeight:600,lineHeight:'16px',whiteSpace:'nowrap',color:`var(${fg})`,background:`var(${bg})`,border:tie?'1px solid var(--border-soft)':'none'}; }
+  _dot(c){ return {width:'6px',height:'6px',borderRadius:'50%',flex:'0 0 auto',background:`var(${c})`}; }
+  _chip(color){ return {display:'inline-flex',alignItems:'center',padding:'2px 9px',borderRadius:'7px',fontFamily:'var(--font-mono)',fontSize:'11.5px',fontWeight:600,background:'var(--bg-grid)',border:'1px solid var(--border-soft)',color}; }
+
+  renderVals(){
+    const S=this.state;
+    const tab=S.tab;
+
+    // tabs
+    const tabDefs=[{v:'keys',label:'项目与密钥'},{v:'providers',label:'模型 Provider'},{v:'pricing',label:'定价'},{v:'members',label:'成员'}];
+    const tabs=tabDefs.map(t=>{const on=tab===t.v;return{label:t.label,onClick:()=>this.setState({tab:t.v}),
+      style:{position:'relative',height:'40px',padding:'0 15px',border:'none',background:'transparent',cursor:'pointer',fontFamily:'var(--font-sans)',fontSize:'13.5px',fontWeight:on?600:500,color:on?'var(--text)':'var(--text-3)'},
+      underline:{position:'absolute',left:'12px',right:'12px',bottom:'-1px',height:'2px',borderRadius:'2px 2px 0 0',background:on?'var(--accent)':'transparent'}};});
+
+    // keys
+    const keyDefs=[
+      {id:'k1',name:'生产上报', prefix:'psk_live_9f2a…c10b', created:'2026-05-18', used:'3 分钟前', active:true},
+      {id:'k2',name:'CI 流水线', prefix:'psk_live_7c81…de44', created:'2026-04-02', used:'2 天前', active:true},
+      {id:'k3',name:'本地调试（旧）', prefix:'psk_live_1b60…fa92', created:'2026-01-11', used:'已撤销', active:false},
+    ];
+    const keys=keyDefs.map(k=>{
+      const revoked = !k.active || S.revoked[k.id];
+      return {name:k.name, prefix:k.prefix, created:k.created, used:revoked?'—':k.used,
+        status:revoked?'已撤销':'启用中', active:!revoked,
+        badge:this._badge(revoked?'--text-3':'--pass-fg', revoked?'--surface-hover':'--pass-bg', revoked),
+        dot:this._dot(revoked?'--text-3':'--pass-dot'),
+        onRevoke:()=>this.setState(s=>({revoked:{...s.revoked,[k.id]:true}}))};
+    });
+
+    // providers
+    const provDefs=[
+      {name:'OpenAI 主账户', kind:'official', protocol:'openai', baseUrl:'https://api.openai.com/v1', hasKey:true},
+      {name:'Anthropic', kind:'official', protocol:'anthropic', baseUrl:'https://api.anthropic.com', hasKey:true},
+      {name:'OpenRouter', kind:'aggregator', protocol:'openai', baseUrl:'https://openrouter.ai/api/v1', hasKey:true, note:'聚合 200+ 模型 · openai/model 命名'},
+      {name:'Groq Cloud', kind:'aggregator', protocol:'openai', baseUrl:'https://api.groq.com/openai/v1', hasKey:false, note:'高速推理'},
+      {name:'自建 vLLM 网关', kind:'aggregator', protocol:'openai', baseUrl:'https://llm.internal.acme.ai/v1', hasKey:true, note:'内网私有部署'},
+    ];
+    const kindMap={ official:{label:'官方直连',fg:'--text-2',bg:'--surface-hover',dot:'--text-3'}, aggregator:{label:'三方聚合',fg:'--replay-fg',bg:'--replay-bg',dot:'--replay-dot'} };
+    const protoMap={ openai:{label:'OpenAI 兼容',color:'var(--pass-fg)'}, anthropic:{label:'Anthropic 兼容',color:'var(--replay-fg)'} };
+    const providers=provDefs.map(p=>{
+      const km=kindMap[p.kind], pm=protoMap[p.protocol];
+      return {name:p.name, note:p.note||'', baseUrl:p.baseUrl, kind:p.kind, protocol:p.protocol,
+        kindLabel:km.label, kindBadge:this._badge(km.fg,km.bg, p.kind==='official'), kindDot:this._dot(km.dot),
+        protoLabel:pm.label, protoChip:this._chip(pm.color),
+        keyLabel:p.hasKey?'已设置':'未设置', keyBadge:this._badge(p.hasKey?'--pass-fg':'--warn-fg', p.hasKey?'--pass-bg':'--warn-bg'),
+        keyDot:this._dot(p.hasKey?'--pass-dot':'--warn-dot'),
+        onEdit:()=>this.editProvider(p)};
+    });
+
+    // pricing
+    const priceDefs=[
+      {model:'gpt-4o', provider:'OpenAI 主账户', pin:'$0.0050', pout:'$0.0150'},
+      {model:'gpt-4o-mini', provider:'OpenAI 主账户', pin:'$0.00015', pout:'$0.00060'},
+      {model:'claude-3.5-sonnet', provider:'Anthropic', pin:'$0.0030', pout:'$0.0150'},
+      {model:'gemini-1.5-pro', provider:'OpenRouter', pin:'$0.00125', pout:'$0.0050'},
+    ];
+    const pricing=priceDefs.map(p=>({model:p.model, provider:p.provider, priceIn:p.pin, priceOut:p.pout}));
+
+    // members
+    const memDefs=[
+      {id:'m1', name:'林越', email:'lin@acme.ai', role:'owner', you:true, avatar:'linear-gradient(140deg,var(--accent),#7C3AED)', initial:'林'},
+      {id:'m2', name:'Sarah Chen', email:'sarah@acme.ai', role:'owner', avatar:'linear-gradient(140deg,#8B5CF6,#EC4899)', initial:'S'},
+      {id:'m3', name:'王工', email:'wang@acme.ai', role:'member', avatar:'linear-gradient(140deg,#22C55E,#0EA5E9)', initial:'王'},
+      {id:'m4', name:'Diego M.', email:'diego@acme.ai', role:'member', avatar:'linear-gradient(140deg,#F59E0B,#EF4444)', initial:'D'},
+    ];
+    const ownerCount = memDefs.filter(m=>m.role==='owner' && !S.removed[m.id]).length;
+    const members=memDefs.filter(m=>!S.removed[m.id]).map(m=>{
+      const isLastOwner = m.role==='owner' && ownerCount<=1;
+      const locked = m.you || isLastOwner;
+      return {name:m.name, email:m.email, initial:m.initial, avatarBg:m.avatar, isYou:!!m.you,
+        roleLabel:m.role==='owner'?'Owner':'Member',
+        roleBadge: m.role==='owner' ? this._badge('--accent','--accent-subtle') : this._badge('--text-2','--surface-hover',true),
+        removable:!locked, locked,
+        lockReason: m.you?'不能移除自己':'不能移除最后一个 owner',
+        onRemove:()=>this.setState(s=>({removed:{...s.removed,[m.id]:true}}))};
+    });
+
+    // nav
+    const navDef=[{key:'traces',label:'链路'},{key:'compare',label:'对比'},{key:'prompts',label:'提示词'},{key:'settings',label:'设置',active:true}];
+    const navFile = { traces:'Traces.dc.html', compare:'Compare.dc.html', prompts:'Prompts.dc.html', settings:'Settings.dc.html' };
+    const navItems=navDef.map(n=>({key:n.key,label:n.label,onClick:(e)=>{ e.preventDefault(); if(!n.active) this._go(navFile[n.key]); },weight:n.active?600:500,iconColor:n.active?'var(--accent)':'var(--text-2)',
+      style:{position:'relative',display:'flex',alignItems:'center',gap:'11px',height:'38px',padding:S.collapsed?'0':'0 11px',justifyContent:S.collapsed?'center':'flex-start',borderRadius:'9px',textDecoration:'none',background:n.active?'var(--accent-subtle)':'transparent',color:n.active?'var(--accent)':'var(--text-2)'},
+      barStyle:{position:'absolute',left:'-11px',top:'9px',bottom:'9px',width:'3px',borderRadius:'0 3px 3px 0',background:n.active?'var(--accent)':'transparent',display:S.collapsed?'none':'block'}}));
+    const themeDefs=[{key:'light',label:'亮'},{key:'dark',label:'暗'},{key:'system',label:'系统'}];
+    const themeOpts=themeDefs.map(t=>{const on=S.theme===t.key;return{key:t.key,label:t.label,showLabel:!S.collapsed,onClick:()=>this.setTheme(t.key),
+      style:{display:'flex',alignItems:'center',justifyContent:'center',gap:'6px',flex:S.collapsed?'0 0 auto':'1',height:'30px',padding:S.collapsed?'0':'0 6px',border:'none',borderRadius:'7px',cursor:'pointer',fontFamily:'var(--font-sans)',background:on?'var(--surface-2)':'transparent',color:on?'var(--accent)':'var(--text-3)',boxShadow:on?'inset 0 0 0 1px var(--border)':'none'}};});
+
+    const gcKeys='2fr 2fr 1.4fr 1.4fr 1fr 0.8fr';
+    const gcProv='1.7fr 1.1fr 1.2fr 2.2fr 0.9fr 0.9fr';
+    const gcPrice='1.6fr 1.6fr 1.2fr 1.2fr 0.8fr';
+    const gcMem='2fr 2fr 1fr 0.9fr';
+    const rowBase={borderBottom:'1px solid var(--border-soft)',alignItems:'center',height:'56px',padding:'0 20px',fontSize:'13px'};
+    const headBase={borderBottom:'1px solid var(--border)',background:'var(--surface-2)',alignItems:'center',height:'40px',padding:'0 20px',fontSize:'11.5px',fontWeight:600,color:'var(--text-3)',letterSpacing:'.02em'};
+
+    const isAgg = S.formKind==='aggregator';
+    const kindCards=[
+      {key:'official', title:'官方直连', desc:'厂商官方 API，如 OpenAI、Anthropic。',
+        pick:'official', proto:null},
+      {key:'aggregator', title:'三方聚合', desc:'聚合网关或自建代理，如 OpenRouter、Groq、vLLM。',
+        pick:'aggregator', proto:'openai'},
+    ].map(k=>{const on=S.formKind===k.key;return{key:k.key,title:k.title,desc:k.desc,active:on,
+      iconColor:on?'var(--accent)':'var(--text-3)',
+      onPick:()=>this.setState({formKind:k.key, formProto:k.key==='aggregator'?'openai':S.formProto}),
+      style:{display:'flex',flexDirection:'column',gap:'6px',padding:'12px 13px',border:on?'1px solid var(--accent-border)':'1px solid var(--border)',borderRadius:'11px',background:on?'var(--accent-subtle)':'var(--surface)',cursor:'pointer',textAlign:'left'}};});
+    const protoDefs=[{v:'openai',label:'OpenAI 兼容',dot:'var(--pass-dot)'},{v:'anthropic',label:'Anthropic 兼容',dot:'var(--replay-dot)'}];
+    const protoOpts=protoDefs.map(o=>{const on=S.formProto===o.v;return{label:o.label,dot:o.dot,onClick:()=>this.setState({formProto:o.v}),
+      style:{display:'flex',alignItems:'center',justifyContent:'center',gap:'7px',flex:'1',height:'34px',border:'none',borderRadius:'7px',cursor:'pointer',fontFamily:'var(--font-sans)',fontSize:'12.5px',fontWeight:on?600:500,background:on?'var(--surface)':'transparent',color:on?'var(--text)':'var(--text-3)',boxShadow:on?'inset 0 0 0 1px var(--border)':'none'}};});
+
+    // projects (workspace switcher)
+    const projDefs=[
+      {id:'checkout', name:'结账助手', env:'prod', dot:'var(--pass-dot)'},
+      {id:'support', name:'支持工单分诊', env:'prod', dot:'var(--pass-dot)'},
+      {id:'sandbox', name:'实验沙盒', env:'dev', dot:'var(--warn-dot)'},
+    ];
+    const projects=projDefs.map(p=>{const on=S.project===p.id;return{name:p.name, env:p.env, dot:p.dot, active:on,
+      onPick:()=>this.setState({project:p.id, wsOpen:false}),
+      style:{display:'flex',alignItems:'center',gap:'10px',width:'100%',padding:'8px 9px',border:'none',borderRadius:'8px',cursor:'pointer',background:on?'var(--surface-hover)':'transparent',color:'var(--text)',fontFamily:'var(--font-sans)'}};});
+    const currentProject=(projDefs.find(p=>p.id===S.project)||projDefs[0]).name;
+
+    return {
+      expanded:!S.collapsed, toggleCollapse:()=>this.toggleCollapse(),
+      navItems, themeOpts, tabs, activeTab:tab,
+      isKeys:tab==='keys', isProviders:tab==='providers', isPricing:tab==='pricing', isMembers:tab==='members',
+      keys, providers, pricing, members,
+      inviteEmail:S.inviteEmail, onInvite:(e)=>this.setState({inviteEmail:e.target.value}), addMember:()=>this.setState({inviteEmail:''}),
+      openNewKey:()=>this.openNewKey(), openNewProvider:()=>this.openNewProvider(), openNewPricing:()=>{},
+      // workspace / project switcher
+      wsOpen:S.wsOpen, toggleWs:()=>this.setState(s=>({wsOpen:!s.wsOpen})),
+      currentProject, projects, openNewProject:()=>this.setState({wsOpen:false}),
+      // provider dialog
+      providerDialogOpen:S.providerDialogOpen, closeProviderDialog:()=>this.closeProviderDialog(),
+      providerDialogTitle:S.editing?('编辑 Provider · '+S.editing):'新增 Provider',
+      providerSaveLabel:S.editing?'保存修改':'添加 Provider',
+      kindCards, protoOpts, isAggregator:isAgg,
+      formName:S.formName, onFormName:(e)=>this.setState({formName:e.target.value}),
+      formUrl:S.formUrl, onFormUrl:(e)=>this.setState({formUrl:e.target.value}),
+      formKey:S.formKey, onFormKey:(e)=>this.setState({formKey:e.target.value}),
+      urlPlaceholder: S.formProto==='anthropic'?'https://api.anthropic.com':'https://api.openai.com/v1',
+      keyPlaceholder: S.editing?'留空则不修改现有 key':'sk-…',
+      keyDialogOpen:S.keyDialogOpen, newKeyValue:this._newKey||'', copied:S.copied, notCopied:!S.copied,
+      copyKey:()=>this.copyKey(), closeKeyDialog:()=>this.closeKeyDialog(), stop:(e)=>e.stopPropagation(),
+      // grids
+      keysHeadStyle:{display:'grid',gridTemplateColumns:gcKeys,...headBase}, keysRowStyle:{display:'grid',gridTemplateColumns:gcKeys,...rowBase},
+      provHeadStyle:{display:'grid',gridTemplateColumns:gcProv,...headBase}, provRowStyle:{display:'grid',gridTemplateColumns:gcProv,...rowBase},
+      priceHeadStyle:{display:'grid',gridTemplateColumns:gcPrice,...headBase}, priceRowStyle:{display:'grid',gridTemplateColumns:gcPrice,...rowBase},
+      memHeadStyle:{display:'grid',gridTemplateColumns:gcMem,...headBase}, memRowStyle:{display:'grid',gridTemplateColumns:gcMem,...rowBase},
+      // shared styles
+      cardStyle:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'14px',overflow:'hidden'},
+      cardHeadStyle:{display:'flex',alignItems:'center',height:'46px',padding:'0 20px',borderBottom:'1px solid var(--border-soft)',fontSize:'13px',fontWeight:600,color:'var(--text-2)'},
+      cardHeadRowStyle:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'16px',padding:'16px 20px',borderBottom:'1px solid var(--border-soft)',flexWrap:'wrap'},
+      fieldLabel:{fontSize:'12.5px',color:'var(--text-2)',fontWeight:500,whiteSpace:'nowrap'},
+      inputStyle:{height:'38px',padding:'0 12px',background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:'9px',color:'var(--text)',fontSize:'13px',fontFamily:'var(--font-sans)',outline:'none',maxWidth:'320px'},
+      codeChip:{fontFamily:'var(--font-mono)',fontSize:'12.5px',color:'var(--text-2)',background:'var(--bg-grid)',border:'1px solid var(--border-soft)',padding:'4px 10px',borderRadius:'7px'},
+      envBadge:this._badge('--pass-fg','--pass-bg'),
+      primaryBtnSm:{display:'flex',alignItems:'center',gap:'6px',height:'34px',padding:'0 13px',border:'none',borderRadius:'9px',background:'var(--accent)',color:'var(--accent-fg)',cursor:'pointer',fontFamily:'var(--font-sans)',fontSize:'12.5px',fontWeight:600,flex:'0 0 auto'},
+      primaryBtnStyle:{height:'38px',padding:'0 18px',border:'none',borderRadius:'9px',background:'var(--accent)',color:'var(--accent-fg)',cursor:'pointer',fontFamily:'var(--font-sans)',fontSize:'13px',fontWeight:600},
+      dlgLabel:{display:'block',fontSize:'12.5px',fontWeight:600,color:'var(--text-2)',marginBottom:'8px'},
+      dlgInput:{width:'100%',height:'40px',padding:'0 13px',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'9px',color:'var(--text)',fontSize:'13px',fontFamily:'var(--font-sans)',outline:'none'},
+      dlgInputMono:{width:'100%',height:'40px',padding:'0 13px',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'9px',color:'var(--text)',fontSize:'13px',fontFamily:'var(--font-mono)',outline:'none'},
+      dlgGhostBtn:{height:'38px',padding:'0 16px',border:'1px solid var(--border)',borderRadius:'9px',background:'transparent',color:'var(--text-2)',cursor:'pointer',fontFamily:'var(--font-sans)',fontSize:'13px',fontWeight:500},
+      wsSwitchLink:{border:'none',background:'transparent',color:'var(--text-3)',fontSize:'11.5px',fontWeight:500,cursor:'pointer',fontFamily:'var(--font-sans)',padding:0},
+      newProjectBtn:{display:'flex',alignItems:'center',gap:'9px',width:'100%',padding:'9px',border:'none',borderRadius:'8px',background:'transparent',color:'var(--text-2)',cursor:'pointer',fontFamily:'var(--font-sans)',fontSize:'13px',fontWeight:550},
+      copyBtnStyle:{display:'flex',alignItems:'center',gap:'6px',height:'32px',padding:'0 13px',border:'1px solid var(--accent-border)',borderRadius:'8px',background:'transparent',color:'var(--accent)',cursor:'pointer',fontFamily:'var(--font-sans)',fontSize:'12.5px',fontWeight:600,flex:'0 0 auto'},
+      dangerLinkStyle:{height:'28px',padding:'0 11px',border:'none',borderRadius:'7px',background:'transparent',color:'var(--fail-fg)',cursor:'pointer',fontFamily:'var(--font-sans)',fontSize:'12.5px',fontWeight:500},
+      iconBtnStyle:{display:'flex',alignItems:'center',justifyContent:'center',width:'30px',height:'30px',border:'none',borderRadius:'8px',background:'transparent',color:'var(--text-3)',cursor:'pointer'},
+      inviteInputStyle:{height:'34px',width:'220px',padding:'0 12px',background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:'9px',color:'var(--text)',fontSize:'12.5px',fontFamily:'var(--font-mono)',outline:'none'},
+      sidebarStyle:{flex:'0 0 auto',width:S.collapsed?'66px':'244px',transition:'width .16s cubic-bezier(.3,.7,.3,1)',display:'flex',flexDirection:'column',padding:'16px 12px',borderRight:'1px solid var(--border)',background:'var(--surface)',height:'100vh',position:'sticky',top:'0'},
+      wsBtnStyle:{display:'flex',alignItems:'center',gap:'9px',width:'100%',height:'44px',marginTop:'14px',padding:S.collapsed?'0':'0 9px',justifyContent:S.collapsed?'center':'flex-start',border:'1px solid var(--border)',borderRadius:'10px',background:'var(--surface-2)',color:'var(--text)',cursor:'pointer',fontFamily:'var(--font-sans)'},
+      themeWrapStyle:{display:'flex',flexDirection:S.collapsed?'column':'row',gap:'3px',padding:'3px',background:'var(--bg-grid)',border:'1px solid var(--border-soft)',borderRadius:'9px'},
+    };
+  }
+}
+</script>
+</body>
+</html>

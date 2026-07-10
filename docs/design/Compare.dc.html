@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0D14; --bg-grid:#0C1019; --surface:#10141E; --surface-2:#141926;
+    --surface-hover:#182031; --border:#222A3A; --border-soft:#1A2130;
+    --text:#E7ECF5; --text-2:#94A0B5; --text-3:#5C687E;
+    --accent:#22D3EE; --accent-fg:#04141B;
+    --accent-subtle:color-mix(in srgb, var(--accent) 15%, transparent);
+    --accent-border:color-mix(in srgb, var(--accent) 42%, transparent);
+    --live-fg:#7FC0FF; --live-dot:#3B82F6; --live-bg:color-mix(in srgb,#3B82F6 15%,transparent);
+    --replay-fg:#C4B5FD; --replay-dot:#8B5CF6; --replay-bg:color-mix(in srgb,#8B5CF6 16%,transparent);
+    --pass-fg:#5FE6A0; --pass-dot:#22C55E; --pass-bg:color-mix(in srgb,#22C55E 14%,transparent);
+    --warn-fg:#F7C24B; --warn-dot:#F59E0B; --warn-bg:color-mix(in srgb,#F59E0B 15%,transparent);
+    --fail-fg:#FB8091; --fail-dot:#EF4444; --fail-bg:color-mix(in srgb,#EF4444 15%,transparent);
+    --shadow:0 12px 40px -12px rgba(0,0,0,.7);
+    --font-sans:'Geist','Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;
+    --font-mono:'Geist Mono','JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  html[data-theme="light"]{
+    --bg:#F7F9FC; --bg-grid:#EEF2F8; --surface:#FFFFFF; --surface-2:#FFFFFF;
+    --surface-hover:#F3F6FB; --border:#E1E7F0; --border-soft:#EBEFF6;
+    --text:#0F172A; --text-2:#556074; --text-3:#8A94A6;
+    --accent:#0E9BB8; --accent-fg:#FFFFFF;
+    --accent-subtle:color-mix(in srgb, var(--accent) 12%, transparent);
+    --accent-border:color-mix(in srgb, var(--accent) 45%, transparent);
+    --live-fg:#1D6FD6; --live-dot:#2563EB; --live-bg:color-mix(in srgb,#2563EB 11%,transparent);
+    --replay-fg:#7C3AED; --replay-dot:#7C3AED; --replay-bg:color-mix(in srgb,#7C3AED 11%,transparent);
+    --pass-fg:#0F9D58; --pass-dot:#16A34A; --pass-bg:color-mix(in srgb,#16A34A 12%,transparent);
+    --warn-fg:#B7791F; --warn-dot:#D97706; --warn-bg:color-mix(in srgb,#D97706 14%,transparent);
+    --fail-fg:#DC2626; --fail-dot:#DC2626; --fail-bg:color-mix(in srgb,#DC2626 11%,transparent);
+    --shadow:0 12px 40px -14px rgba(15,23,42,.18);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans);-webkit-font-smoothing:antialiased;}
+  a{color:var(--accent);text-decoration:none;} a:hover{opacity:.8;}
+  ::selection{background:var(--accent-subtle);}
+  @keyframes ps-spin{to{transform:rotate(360deg);}}
+  pre{margin:0;}
+  ::-webkit-scrollbar{height:10px;width:10px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:6px;border:3px solid transparent;background-clip:padding-box;}
+  ::-webkit-scrollbar-track{background:transparent;}
+</style>
+</helmet>
+
+<div style="display:flex;min-height:100vh;width:100%;background:var(--bg);">
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside style="{{ sidebarStyle }}">
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 8px 4px;height:34px;overflow:hidden;">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;">
+        <circle cx="12" cy="12" r="9.2" stroke="var(--accent)" stroke-width="1.4" opacity="0.9"/>
+        <circle cx="12" cy="12" r="4.4" stroke="var(--accent)" stroke-width="1.4"/>
+        <circle cx="12" cy="12" r="1.7" fill="var(--accent)"/>
+        <path d="M12 0.6V4.2M12 19.8V23.4M0.6 12H4.2M19.8 12H23.4" stroke="var(--accent)" stroke-width="1.3" stroke-linecap="round" opacity="0.55"/>
+      </svg>
+      <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}"><span style="font-size:15px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;">PromptScope</span></sc-if>
+    </div>
+    <button style="{{ wsBtnStyle }}">
+      <span style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;background:linear-gradient(140deg,var(--accent),#7C3AED);color:#04141B;font-size:12px;font-weight:700;flex:0 0 auto;">A</span>
+      <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+        <span style="display:flex;flex-direction:column;align-items:flex-start;min-width:0;flex:1;line-height:1.15;">
+          <span style="font-size:13px;font-weight:600;white-space:nowrap;">Acme AI</span>
+          <span style="font-size:11px;color:var(--text-3);white-space:nowrap;">生产环境</span>
+        </span>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;color:var(--text-3);"><path d="M7 9l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </sc-if>
+    </button>
+    <nav style="display:flex;flex-direction:column;gap:3px;margin-top:18px;">
+      <sc-for list="{{ navItems }}" as="nav" hint-placeholder-count="4">
+        <a href="#" onClick="{{ nav.onClick }}" title="{{ nav.label }}" style="{{ nav.style }}">
+          <span style="{{ nav.barStyle }}"></span>
+          <span style="display:flex;width:20px;height:20px;flex:0 0 auto;color:{{ nav.iconColor }};" data-icon="{{ nav.key }}"></span>
+          <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}"><span style="font-size:13.5px;font-weight:{{ nav.weight }};white-space:nowrap;">{{ nav.label }}</span></sc-if>
+        </a>
+      </sc-for>
+    </nav>
+    <div style="flex:1 1 auto;"></div>
+    <div style="{{ themeWrapStyle }}">
+      <sc-for list="{{ themeOpts }}" as="t" hint-placeholder-count="3">
+        <button onClick="{{ t.onClick }}" title="{{ t.label }}" style="{{ t.style }}">
+          <span style="display:flex;width:16px;height:16px;" data-ticon="{{ t.key }}"></span>
+          <sc-if value="{{ t.showLabel }}"><span style="font-size:12px;font-weight:600;">{{ t.label }}</span></sc-if>
+        </button>
+      </sc-for>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding:8px;border-radius:10px;overflow:hidden;">
+      <span style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:var(--surface-hover);border:1px solid var(--border);font-size:12px;font-weight:700;flex:0 0 auto;">林</span>
+      <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+        <span style="display:flex;flex-direction:column;min-width:0;line-height:1.2;">
+          <span style="font-size:12.5px;font-weight:600;white-space:nowrap;">林越</span>
+          <span style="font-size:11px;color:var(--text-3);white-space:nowrap;">管理员</span>
+        </span>
+      </sc-if>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column;height:100vh;overflow:hidden;">
+
+    <!-- page header -->
+    <header style="flex:0 0 auto;padding:20px 32px 18px;border-bottom:1px solid var(--border);">
+      <div style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--text-3);margin-bottom:11px;">
+        <button onClick="{{ toggleCollapse }}" title="折叠侧边栏" style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;margin-left:-4px;margin-right:2px;border:none;background:transparent;color:var(--text-2);border-radius:7px;cursor:pointer;" style-hover="background:var(--surface-hover);">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><rect x="3" y="4.5" width="18" height="15" rx="2.4" stroke="currentColor" stroke-width="1.6"/><path d="M9 4.5v15" stroke="currentColor" stroke-width="1.6"/></svg>
+        </button>
+        <a href="Traces.dc.html" style="color:var(--text-3);">链路</a>
+        <span style="opacity:.5;">/</span>
+        <span style="color:var(--text-2);">对比</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <h1 style="margin:0;font-size:22px;font-weight:700;letter-spacing:-.02em;">对比</h1>
+        <sc-if value="{{ isHub }}">
+          <p style="margin:0;font-size:13px;color:var(--text-2);">收藏与最近的对比，或新建一组。评分按「链路对 + 裁判 + 上下文」缓存复用。</p>
+        </sc-if>
+        <sc-if value="{{ isDiff }}">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="display:flex;align-items:center;gap:8px;padding:5px 11px 5px 9px;background:var(--surface);border:1px solid var(--border);border-radius:10px;">
+            <span style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;background:var(--accent-subtle);color:var(--accent);font-size:11px;font-weight:700;">A</span>
+            <div style="display:flex;flex-direction:column;line-height:1.2;">
+              <span style="font-size:12.5px;font-weight:600;">结账助手 · 生产</span>
+              <span style="font-size:11px;font-family:var(--font-mono);color:var(--text-3);">tr_9f2ac10b · 实时</span>
+            </div>
+          </div>
+          <span style="font-size:12px;color:var(--text-3);font-weight:600;">vs</span>
+          <div style="display:flex;align-items:center;gap:8px;padding:5px 11px 5px 9px;background:var(--surface);border:1px solid var(--border);border-radius:10px;">
+            <span style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;background:var(--replay-bg);color:var(--replay-fg);font-size:11px;font-weight:700;">B</span>
+            <div style="display:flex;flex-direction:column;line-height:1.2;">
+              <span style="font-size:12.5px;font-weight:600;">结账助手 · 生产</span>
+              <span style="font-size:11px;font-family:var(--font-mono);color:var(--text-3);">tr_2e9b7740 · 回放</span>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+      </div>
+    </header>
+
+    <!-- body -->
+    <div style="flex:1;min-height:0;overflow:auto;">
+      <div style="max-width:1120px;padding:24px 32px 64px;display:flex;flex-direction:column;gap:22px;">
+
+        <!-- ===== HUB (no a/b params) ===== -->
+        <sc-if value="{{ isHub }}">
+          <div style="display:flex;flex-direction:column;gap:22px;">
+
+            <!-- new comparison -->
+            <section style="background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px 20px;">
+              <div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:14px;">新建对比</div>
+              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                <div style="position:relative;flex:1 1 220px;min-width:200px;">
+                  <button onClick="{{ togglePickA }}" style="{{ pickBtnStyle }}">
+                    <span style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;background:var(--accent-subtle);color:var(--accent);font-size:11px;font-weight:700;flex:0 0 auto;">A</span>
+                    <span style="flex:1;text-align:left;font-size:12.5px;color:{{ pickAColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ pickALabel }}</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="color:var(--text-3);flex:0 0 auto;"><path d="M7 9l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                  <sc-if value="{{ pickAOpen }}">
+                    <div style="{{ pickDropStyle }}">
+                      <sc-for list="{{ pickAOpts }}" as="p" hint-placeholder-count="4">
+                        <button onClick="{{ p.onPick }}" style="{{ p.style }}">
+                          <span style="flex:1;text-align:left;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.name }}</span>
+                          <span style="font-family:var(--font-mono);font-size:10.5px;color:var(--text-3);flex:0 0 auto;">{{ p.tid }}</span>
+                        </button>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+                <span style="font-size:12px;color:var(--text-3);font-weight:600;flex:0 0 auto;">vs</span>
+                <div style="position:relative;flex:1 1 220px;min-width:200px;">
+                  <button onClick="{{ togglePickB }}" style="{{ pickBtnStyle }}">
+                    <span style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;background:var(--replay-bg);color:var(--replay-fg);font-size:11px;font-weight:700;flex:0 0 auto;">B</span>
+                    <span style="flex:1;text-align:left;font-size:12.5px;color:{{ pickBColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ pickBLabel }}</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="color:var(--text-3);flex:0 0 auto;"><path d="M7 9l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                  <sc-if value="{{ pickBOpen }}">
+                    <div style="{{ pickDropStyle }}">
+                      <sc-for list="{{ pickBOpts }}" as="p" hint-placeholder-count="4">
+                        <button onClick="{{ p.onPick }}" style="{{ p.style }}">
+                          <span style="flex:1;text-align:left;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.name }}</span>
+                          <span style="font-family:var(--font-mono);font-size:10.5px;color:var(--text-3);flex:0 0 auto;">{{ p.tid }}</span>
+                        </button>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+                <button onClick="{{ startNewCompare }}" style="{{ newCompareBtnStyle }}">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 4v16M6 8H4v8h2M18 8h2v8h-2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  开始对比
+                </button>
+              </div>
+              <p style="margin:12px 0 0;font-size:11.5px;color:var(--text-3);">也可在链路列表勾选 2 条后直接发起，或从回放结果一键进入。</p>
+            </section>
+
+            <!-- saved comparisons -->
+            <section>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                <div style="font-size:13px;font-weight:600;color:var(--text-2);">收藏的对比</div>
+                <span style="font-family:var(--font-mono);font-size:11.5px;color:var(--text-3);">{{ savedCount }}</span>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:13px;overflow:hidden;">
+                <sc-for list="{{ savedComps }}" as="s" hint-placeholder-count="3">
+                  <div onClick="{{ s.onOpen }}" style="{{ s.rowStyle }}" style-hover="background:var(--surface-hover);">
+                    <div style="display:flex;flex-direction:column;gap:3px;min-width:0;flex:1;">
+                      <span style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.label }}</span>
+                      <span style="font-size:11.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.note }}</span>
+                    </div>
+                    <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-3);flex:0 0 auto;">{{ s.pair }}</span>
+                    <sc-if value="{{ s.hasCache }}"><span style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-family:var(--font-mono);color:var(--pass-fg);background:var(--pass-bg);padding:2px 8px;border-radius:999px;flex:0 0 auto;">评分已缓存 ×{{ s.cacheN }}</span></sc-if>
+                    <span style="font-size:11.5px;color:var(--text-3);flex:0 0 auto;white-space:nowrap;">{{ s.time }}</span>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:var(--text-3);flex:0 0 auto;"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </div>
+                </sc-for>
+              </div>
+            </section>
+
+            <!-- recent comparisons -->
+            <section>
+              <div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:12px;">最近的对比</div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:13px;overflow:hidden;">
+                <sc-for list="{{ recentComps }}" as="r" hint-placeholder-count="4">
+                  <div onClick="{{ r.onOpen }}" style="{{ r.rowStyle }}" style-hover="background:var(--surface-hover);">
+                    <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-2);flex:0 0 auto;">{{ r.a }}</span>
+                    <span style="font-size:11px;color:var(--text-3);font-weight:600;flex:0 0 auto;">vs</span>
+                    <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-2);flex:0 0 auto;">{{ r.b }}</span>
+                    <span style="font-size:12px;color:var(--text-3);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.desc }}</span>
+                    <span style="font-size:11.5px;color:var(--text-3);flex:0 0 auto;white-space:nowrap;">{{ r.time }}</span>
+                    <button onClick="{{ r.onSave }}" title="收藏为命名对比" style="{{ starBtnStyle }}" style-hover="color:var(--warn-fg);">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3.5l2.47 5.3 5.53.7-4.1 3.9 1.1 5.6-5-2.9-5 2.9 1.1-5.6-4.1-3.9 5.53-.7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+                    </button>
+                  </div>
+                </sc-for>
+              </div>
+            </section>
+
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isDiff }}">
+        <div style="display:flex;flex-direction:column;gap:22px;">
+
+        <!-- ===== DIFF SUMMARY ===== -->
+        <section>
+          <div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:12px;">差异摘要</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;">
+            <sc-for list="{{ summary }}" as="s" hint-placeholder-count="4">
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:15px 16px;">
+                <div style="font-size:11.5px;color:var(--text-3);margin-bottom:12px;">{{ s.label }}</div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">
+                  <span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--text-3);"><span style="width:14px;height:14px;border-radius:4px;background:var(--accent-subtle);color:var(--accent);font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;">A</span></span>
+                  <span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:15px;font-weight:600;">{{ s.a }}</span>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                  <span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--text-3);"><span style="width:14px;height:14px;border-radius:4px;background:var(--replay-bg);color:var(--replay-fg);font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;">B</span></span>
+                  <span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:15px;font-weight:600;">{{ s.b }}</span>
+                </div>
+                <div style="margin-top:12px;padding-top:11px;border-top:1px solid var(--border-soft);display:flex;align-items:center;justify-content:space-between;">
+                  <span style="font-size:11px;color:var(--text-3);">Δ (B−A)</span>
+                  <span style="display:inline-flex;align-items:center;gap:4px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:12.5px;font-weight:600;color:var(--text-2);">
+                    <span style="font-size:11px;">{{ s.arrow }}</span>{{ s.delta }} <span style="color:var(--text-3);font-weight:400;">{{ s.pct }}</span>
+                  </span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+
+        <!-- ===== ALIGNED VIEW ===== -->
+        <section>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <div style="font-size:13px;font-weight:600;color:var(--text-2);">对齐视图</div>
+            <div style="display:flex;align-items:center;gap:16px;font-size:11px;color:var(--text-3);">
+              <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:2px;background:var(--warn-dot);"></span>参数偏离</span>
+              <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:2px;background:var(--accent);"></span>仅一侧</span>
+            </div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+            <div style="display:grid;grid-template-columns:1fr 140px 1fr;align-items:center;height:40px;padding:0 16px;border-bottom:1px solid var(--border-soft);background:var(--surface-2);">
+              <div style="display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--text-2);"><span style="width:16px;height:16px;border-radius:5px;background:var(--accent-subtle);color:var(--accent);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;">A</span>gpt-4o · 实时</div>
+              <div style="text-align:center;font-size:11px;color:var(--text-3);">对齐</div>
+              <div style="display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--text-2);"><span style="width:16px;height:16px;border-radius:5px;background:var(--replay-bg);color:var(--replay-fg);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;">B</span>gpt-4o-mini · 回放</div>
+            </div>
+            <sc-for list="{{ aligned }}" as="r" hint-placeholder-count="6">
+              <div style="{{ r.rowStyle }}">
+                <!-- A side -->
+                <sc-if value="{{ r.a }}">
+                  <div style="{{ r.aCellStyle }}">
+                    <span style="{{ r.a.tagStyle }}">{{ r.a.tag }}</span>
+                    <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">
+                      <span style="font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.a.label }}</span>
+                      <span style="font-size:11px;font-family:var(--font-mono);color:{{ r.a.subColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.a.sub }}</span>
+                    </span>
+                    <span style="font-size:11px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--text-3);flex:0 0 auto;">{{ r.a.metric }}</span>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ r.aEmpty }}"><div style="height:44px;border:1px dashed var(--border-soft);border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:12px;">—</div></sc-if>
+                <!-- center marker -->
+                <div style="display:flex;align-items:center;justify-content:center;padding:0 8px;">
+                  <span style="{{ r.markStyle }}"><sc-if value="{{ r.markDot }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ r.markDotColor }};"></span></sc-if>{{ r.mark }}</span>
+                </div>
+                <!-- B side -->
+                <sc-if value="{{ r.b }}">
+                  <div style="{{ r.bCellStyle }}">
+                    <span style="{{ r.b.tagStyle }}">{{ r.b.tag }}</span>
+                    <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">
+                      <span style="font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.b.label }}</span>
+                      <span style="font-size:11px;font-family:var(--font-mono);color:{{ r.b.subColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.b.sub }}</span>
+                    </span>
+                    <span style="font-size:11px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--text-3);flex:0 0 auto;">{{ r.b.metric }}</span>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ r.bEmpty }}"><div style="height:44px;border:1px dashed var(--border-soft);border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:12px;">—</div></sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+
+        <!-- ===== SCORING ===== -->
+        <section>
+          <div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:12px;">多模型评分</div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+            <!-- controls -->
+            <div style="display:flex;align-items:flex-end;gap:16px;padding:16px;border-bottom:1px solid var(--border-soft);flex-wrap:wrap;">
+              <div style="position:relative;">
+                <div style="font-size:11px;color:var(--text-3);margin-bottom:6px;">裁判模型</div>
+                <button onClick="{{ toggleJudges }}" style="display:flex;align-items:center;gap:8px;min-width:180px;height:36px;padding:0 12px;background:var(--bg-grid);border:1px solid var(--border);border-radius:9px;color:var(--text);cursor:pointer;font-family:var(--font-sans);font-size:13px;">
+                  <span style="flex:1;text-align:left;">已选 {{ judgeCount }} 个模型</span>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:var(--text-3);"><path d="M7 9l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <sc-if value="{{ judgesOpen }}">
+                  <div style="position:absolute;top:calc(100% + 6px);left:0;min-width:240px;background:var(--surface-2);border:1px solid var(--border);border-radius:11px;box-shadow:var(--shadow);padding:5px;z-index:40;">
+                    <sc-for list="{{ judgeOpts }}" as="j" hint-placeholder-count="4">
+                      <button onClick="{{ j.onToggle }}" style="display:flex;align-items:center;gap:10px;width:100%;padding:8px 9px;border:none;border-radius:8px;background:transparent;cursor:pointer;font-family:var(--font-sans);" style-hover="background:var(--surface-hover);">
+                        <span style="{{ j.boxStyle }}"><sc-if value="{{ j.on }}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.2 4.2L19 7" stroke="var(--accent-fg)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></sc-if></span>
+                        <span style="flex:1;text-align:left;font-family:var(--font-mono);font-size:12.5px;color:var(--text);">{{ j.name }}</span>
+                      </button>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+              <div style="position:relative;">
+                <div style="font-size:11px;color:var(--text-3);margin-bottom:6px;">上下文模式</div>
+                <button onClick="{{ toggleCtx }}" style="display:flex;align-items:center;gap:8px;min-width:150px;height:36px;padding:0 12px;background:var(--bg-grid);border:1px solid var(--border);border-radius:9px;color:var(--text);cursor:pointer;font-family:var(--font-sans);font-size:13px;">
+                  <span style="flex:1;text-align:left;">{{ ctxLabel }}</span>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:var(--text-3);"><path d="M7 9l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <sc-if value="{{ ctxOpen }}">
+                  <div style="position:absolute;top:calc(100% + 6px);left:0;min-width:180px;background:var(--surface-2);border:1px solid var(--border);border-radius:11px;box-shadow:var(--shadow);padding:5px;z-index:40;">
+                    <sc-for list="{{ ctxOpts }}" as="c" hint-placeholder-count="3">
+                      <button onClick="{{ c.onPick }}" style="{{ c.style }}">
+                        <span style="flex:1;text-align:left;font-size:13px;">{{ c.label }}</span>
+                        <sc-if value="{{ c.on }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="color:var(--accent);"><path d="M5 12.5l4.2 4.2L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></sc-if>
+                      </button>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+              <div style="flex:1;"></div>
+              <button onClick="{{ runScore }}" style="{{ runBtnStyle }}">
+                <sc-if value="{{ scoring }}"><span style="width:14px;height:14px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:ps-spin .7s linear infinite;display:inline-block;"></span></sc-if>
+                <sc-if value="{{ notScoring }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></sc-if>
+                {{ runLabel }}
+              </button>
+            </div>
+
+            <!-- results -->
+            <div style="padding:16px;">
+              <sc-if value="{{ showPlaceholder }}">
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:34px 20px;text-align:center;">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" style="color:var(--text-3);"><path d="M12 3l2.5 5.5L20 9l-4 4 1 6-5-3-5 3 1-6-4-4 5.5-.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+                  <div style="font-size:13px;color:var(--text-2);font-weight:500;">选择裁判模型后运行评分</div>
+                  <div style="font-size:12px;color:var(--text-3);max-width:340px;">交叉裁决 A / B 哪个可替代，结果按「trace 对 + 裁判 + 上下文」缓存，重复运行直接复用。</div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ showResults }}">
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                  <sc-for list="{{ results }}" as="res" hint-placeholder-count="2">
+                    <div style="border:1px solid var(--border-soft);border-radius:11px;padding:15px 16px;background:var(--bg-grid);">
+                      <div style="display:flex;align-items:center;gap:10px;margin-bottom:13px;flex-wrap:wrap;">
+                        <span style="display:inline-flex;align-items:center;gap:7px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:var(--text-3);"><path d="M4 7l8-4 8 4-8 4-8-4z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><span style="font-family:var(--font-mono);font-size:13px;font-weight:600;">{{ res.model }}</span></span>
+                        <span style="{{ res.verdictBadge }}"><span style="{{ res.verdictDot }}"></span>{{ res.verdict }}</span>
+                        <sc-if value="{{ res.cached }}"><span style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-family:var(--font-mono);color:var(--text-3);border:1px solid var(--border);border-radius:6px;padding:1.5px 7px;">已缓存</span></sc-if>
+                        <div style="flex:1;"></div>
+                      </div>
+                      <!-- score bars -->
+                      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:13px;">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                          <span style="width:16px;height:16px;border-radius:5px;background:var(--accent-subtle);color:var(--accent);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto;">A</span>
+                          <div style="flex:1;height:7px;border-radius:4px;background:var(--surface-hover);overflow:hidden;"><div style="height:100%;width:{{ res.aW }};background:var(--text-2);border-radius:4px;"></div></div>
+                          <span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:12.5px;font-weight:600;width:34px;text-align:right;flex:0 0 auto;">{{ res.aScore }}</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:10px;">
+                          <span style="width:16px;height:16px;border-radius:5px;background:var(--replay-bg);color:var(--replay-fg);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto;">B</span>
+                          <div style="flex:1;height:7px;border-radius:4px;background:var(--surface-hover);overflow:hidden;"><div style="height:100%;width:{{ res.bW }};background:var(--accent);border-radius:4px;"></div></div>
+                          <span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:12.5px;font-weight:600;width:34px;text-align:right;flex:0 0 auto;">{{ res.bScore }}</span>
+                        </div>
+                      </div>
+                      <div style="display:flex;gap:8px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;margin-top:2px;color:var(--text-3);"><path d="M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" stroke="currentColor" stroke-width="1.5"/></svg>
+                        <p style="margin:0;font-size:12.5px;line-height:1.6;color:var(--text-2);">{{ res.reason }}</p>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </section>
+
+        </div>
+        </sc-if>
+
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1320,&quot;height&quot;:900},&quot;defaultTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;,&quot;system&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'dark'|'light'|'system'&quot;,&quot;section&quot;:&quot;主题&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#22D3EE&quot;,&quot;options&quot;:[&quot;#22D3EE&quot;,&quot;#2DD4BF&quot;,&quot;#60A5FA&quot;,&quot;#A78BFA&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;主题&quot;}}">
+class Component extends DCLogic {
+  state = { theme:'dark', resolved:'dark', collapsed:false, judges:['claude-3.5-sonnet','gpt-4o'], judgesOpen:false, ctx:'full', ctxOpen:false, scored:false, scoring:false, view:'diff', pickA:'', pickB:'', pickAOpen:false, pickBOpen:false };
+
+  componentDidMount(){
+    this._mq = window.matchMedia('(prefers-color-scheme: dark)');
+    this._onMq = ()=>{ if(this.state.theme==='system') this.setState({resolved:this._mq.matches?'dark':'light'}); };
+    this._mq.addEventListener('change', this._onMq);
+    let init = this.props.defaultTheme || 'dark';
+    try{ const saved = localStorage.getItem('ps-theme'); if(saved) init = saved; }catch(e){}
+    this.setTheme(init);
+    const qs = new URLSearchParams(location.search);
+    this.setState({ view: (qs.get('a') && qs.get('b')) ? 'diff' : 'hub' });
+    if(this.props.accent) document.documentElement.style.setProperty('--accent', this.props.accent);
+    this._injectIcons();
+  }
+  componentDidUpdate(){ if(this.props.accent) document.documentElement.style.setProperty('--accent', this.props.accent); this._injectIcons(); }
+  componentWillUnmount(){ this._mq && this._mq.removeEventListener('change', this._onMq); this._t && clearTimeout(this._t); }
+  setTheme(mode){ let r = mode==='system'?(this._mq&&this._mq.matches?'dark':'light'):mode; document.documentElement.setAttribute('data-theme', r); try{ localStorage.setItem('ps-theme', mode); }catch(e){} this.setState({theme:mode, resolved:r}); }
+  _go(url){ window.location.href = url; }
+  toggleCollapse(){ this.setState(s=>({collapsed:!s.collapsed})); }
+  _injectIcons(){
+    const nav={traces:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2.4" stroke="currentColor" stroke-width="1.7"/><circle cx="6" cy="18" r="2.4" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="12" r="2.4" stroke="currentColor" stroke-width="1.7"/><path d="M8.4 6H14a2.5 2.5 0 012.5 2.5V10M8.4 18H14a2.5 2.5 0 002.5-2.5V14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+      compare:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="4.5" width="7" height="15" rx="1.6" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="4.5" width="7" height="15" rx="1.6" stroke="currentColor" stroke-width="1.7"/></svg>',
+      prompts:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 5l4 4-4 4M11 15h7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      settings:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 7h10M4 12h16M4 17h7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="17" cy="7" r="2.2" stroke="currentColor" stroke-width="1.7"/><circle cx="14" cy="17" r="2.2" stroke="currentColor" stroke-width="1.7"/></svg>'};
+    const th={light:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4.4" stroke="currentColor" stroke-width="1.7"/><path d="M12 2.5v2.5M12 19v2.5M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2.5 12H5M19 12h2.5M4.2 19.8L6 18M18 6l1.8-1.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+      dark:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
+      system:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="4.5" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M9 20h6M12 16.5V20" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>'};
+    document.querySelectorAll('[data-icon]').forEach(el=>{const k=el.getAttribute('data-icon');if(nav[k]&&el.innerHTML!==nav[k])el.innerHTML=nav[k];});
+    document.querySelectorAll('[data-ticon]').forEach(el=>{const k=el.getAttribute('data-ticon');if(th[k]&&el.innerHTML!==th[k])el.innerHTML=th[k];});
+  }
+
+  toggleJudge(m){ this.setState(s=>({ judges: s.judges.includes(m)?s.judges.filter(x=>x!==m):[...s.judges,m], scored:false })); }
+  setCtx(v){ this.setState({ctx:v, ctxOpen:false, scored:false}); }
+  runScore(){ if(this.state.judges.length===0||this.state.scoring) return; this.setState({scoring:true, judgesOpen:false, ctxOpen:false}); this._t=setTimeout(()=>this.setState({scoring:false, scored:true}), 750); }
+
+  _tag(type){ const map={llm:{t:'LLM',c:'var(--accent)'},tool:{t:'TOOL',c:'var(--text-2)'}}; const m=map[type]; return {label:m.t, style:{display:'inline-flex',alignItems:'center',padding:'1.5px 7px',borderRadius:'6px',fontSize:'10px',fontWeight:600,fontFamily:'var(--font-mono)',letterSpacing:'.05em',background:'var(--bg-grid)',border:'1px solid var(--border-soft)',color:m.c,flex:'0 0 auto'}}; }
+
+  renderVals(){
+    const S=this.state;
+
+    // diff summary
+    const summary=[
+      {label:'成本', a:'$0.0642', b:'$0.0389', delta:'$0.0253', pct:'−39%', arrow:'↓'},
+      {label:'延迟', a:'4.12s', b:'3.98s', delta:'0.14s', pct:'−3%', arrow:'↓'},
+      {label:'输入 token', a:'8,420', b:'8,210', delta:'210', pct:'−2%', arrow:'↓'},
+      {label:'输出 token', a:'1,980', b:'1,760', delta:'220', pct:'−11%', arrow:'↓'},
+    ];
+
+    // aligned rows
+    const llmTag=this._tag('llm'), toolTag=this._tag('tool');
+    const cell=(t,label,sub,subColor,metric)=>({tag:t.label,tagStyle:t.style,label,sub,subColor:subColor||'var(--text-3)',metric});
+    const markNeutral=(txt)=>({mark:txt, dot:false, style:{display:'inline-flex',alignItems:'center',gap:'6px',padding:'2px 9px',borderRadius:'999px',fontSize:'11px',fontWeight:600,whiteSpace:'nowrap',background:'var(--bg-grid)',border:'1px solid var(--border-soft)',color:'var(--text-3)'}});
+    const markWarn=()=>({mark:'参数偏离', dot:true, dotColor:'var(--warn-dot)', style:{display:'inline-flex',alignItems:'center',gap:'6px',padding:'2px 9px',borderRadius:'999px',fontSize:'11px',fontWeight:600,whiteSpace:'nowrap',background:'var(--warn-bg)',color:'var(--warn-fg)'}});
+    const markOnly=(txt)=>({mark:txt, dot:true, dotColor:'var(--accent)', style:{display:'inline-flex',alignItems:'center',gap:'6px',padding:'2px 9px',borderRadius:'999px',fontSize:'11px',fontWeight:600,whiteSpace:'nowrap',background:'var(--accent-subtle)',color:'var(--accent)'}});
+
+    const rowsDef=[
+      {kind:'both', a:cell(llmTag,'规划：读取购物车','gpt-4o','var(--text-3)','1.24k'), b:cell(llmTag,'规划：读取购物车','gpt-4o-mini','var(--text-3)','1.18k'), mark:markNeutral('双侧一致')},
+      {kind:'both', a:cell(toolTag,'get_cart','get_cart','var(--text-3)','240ms'), b:cell(toolTag,'get_cart','get_cart','var(--text-3)','235ms'), mark:markNeutral('双侧一致')},
+      {kind:'both', a:cell(llmTag,'决定发起支付','gpt-4o','var(--text-3)','2.42k'), b:cell(llmTag,'决定发起支付','gpt-4o-mini','var(--text-3)','2.30k'), mark:markNeutral('双侧一致')},
+      {kind:'drift', a:cell(toolTag,'charge_payment','method: "default_card"','var(--warn-fg)','1.38s'), b:cell(toolTag,'charge_payment','method: "saved_card"','var(--warn-fg)','1.31s'), mark:markWarn()},
+      {kind:'both', a:cell(llmTag,'生成确认回复','gpt-4o','var(--text-3)','6.56k'), b:cell(llmTag,'生成确认回复','gpt-4o-mini','var(--text-3)','6.02k'), mark:markNeutral('双侧一致')},
+      {kind:'onlyB', b:cell(toolTag,'send_receipt_email','send_receipt_email','var(--text-3)','410ms'), mark:markOnly('仅 B')},
+      {kind:'onlyA', a:cell(llmTag,'风险检查','gpt-4o','var(--text-3)','0.88k'), mark:markOnly('仅 A')},
+    ];
+    const aligned=rowsDef.map((r,i)=>{
+      const base={display:'grid',gridTemplateColumns:'1fr 140px 1fr',alignItems:'center',padding:'9px 16px',gap:'0',borderBottom: i<rowsDef.length-1?'1px solid var(--border-soft)':'none'};
+      if(r.kind==='drift') base.background='color-mix(in srgb, var(--warn-dot) 6%, transparent)';
+      const cellSt={display:'flex',alignItems:'center',gap:'9px',minWidth:0,height:'44px',padding:'0 12px',borderRadius:'9px',background:'var(--bg-grid)',border:'1px solid var(--border-soft)'};
+      const driftCellSt={...cellSt, border:'1px solid color-mix(in srgb, var(--warn-dot) 35%, transparent)'};
+      const cs = r.kind==='drift'?driftCellSt:cellSt;
+      return {
+        rowStyle:base,
+        a:r.a||null, b:r.b||null,
+        aEmpty: !r.a, bEmpty: !r.b,
+        aCellStyle:cs, bCellStyle:cs,
+        mark:r.mark.mark, markStyle:r.mark.style, markDot:!!r.mark.dot, markDotColor:r.mark.dotColor||'transparent',
+      };
+    });
+
+    // judges
+    const avail=['claude-3.5-sonnet','gpt-4o','gemini-1.5-pro','o1-mini'];
+    const judgeOpts=avail.map(m=>{ const on=S.judges.includes(m); return { name:m, on, onToggle:()=>this.toggleJudge(m),
+      boxStyle:{display:'flex',alignItems:'center',justifyContent:'center',width:'17px',height:'17px',borderRadius:'5px',flex:'0 0 auto', border:on?'none':'1.5px solid var(--border)', background:on?'var(--accent)':'transparent'} }; });
+
+    const ctxDefs=[{v:'full',label:'完整对话'},{v:'final',label:'仅最终输出'},{v:'tools',label:'工具输出对齐'}];
+    const ctxLabel=(ctxDefs.find(c=>c.v===S.ctx)||ctxDefs[0]).label;
+    const ctxOpts=ctxDefs.map(c=>({label:c.label,on:S.ctx===c.v,onPick:()=>this.setCtx(c.v),
+      style:{display:'flex',alignItems:'center',gap:'8px',width:'100%',padding:'8px 9px',border:'none',borderRadius:'8px',cursor:'pointer',background:S.ctx===c.v?'var(--surface-hover)':'transparent',color:'var(--text)',fontFamily:'var(--font-sans)'}}));
+
+    // results
+    const RES={
+      'claude-3.5-sonnet':{verdict:'B 可替代 A', kind:'pass', a:8.2, b:8.6, cached:false, reason:'两条链路最终输出等价：均正确完成结算并给出确认。B 使用 gpt-4o-mini 成本下降 39%、延迟相近，可安全替代。'},
+      'gpt-4o':{verdict:'B 可替代 A', kind:'pass', a:8.5, b:8.4, cached:true, reason:'输出质量基本一致，B 略微精简且省略了冗余的风险检查步骤，差异在可接受范围内。'},
+      'gemini-1.5-pro':{verdict:'倾向保留 A', kind:'warn', a:8.7, b:7.9, cached:false, reason:'B 在 charge_payment 使用了 saved_card，与用户「默认卡」的原始意图存在偏离；且缺少 A 的风险检查，判定为需人工确认。'},
+      'o1-mini':{verdict:'两者相当', kind:'tie', a:8.1, b:8.1, cached:false, reason:'在「仅最终输出」口径下两者无显著差异，未评估中间步骤的意图偏离。'},
+    };
+    const badge=(kind)=>{
+      const map={pass:['--pass-fg','--pass-bg','--pass-dot'],warn:['--warn-fg','--warn-bg','--warn-dot'],fail:['--fail-fg','--fail-bg','--fail-dot'],tie:['--text-2','--bg-grid','--text-3']};
+      const c=map[kind]||map.tie;
+      return {badge:{display:'inline-flex',alignItems:'center',gap:'6px',padding:'2.5px 10px',borderRadius:'999px',fontSize:'11.5px',fontWeight:600,color:`var(${c[0]})`,background:`var(${c[1]})`,border:kind==='tie'?'1px solid var(--border-soft)':'none'}, dot:{width:'6px',height:'6px',borderRadius:'50%',background:`var(${c[2]})`,flex:'0 0 auto'}};
+    };
+    const results=S.judges.map(m=>{ const r=RES[m]; if(!r) return null; const b=badge(r.kind); return {
+      model:m, verdict:r.verdict, verdictBadge:b.badge, verdictDot:b.dot, cached:r.cached,
+      aScore:r.a.toFixed(1), bScore:r.b.toFixed(1), aW:(r.a/10*100)+'%', bW:(r.b/10*100)+'%', reason:r.reason,
+    };}).filter(Boolean);
+
+    // nav
+    const navDef=[{key:'traces',label:'链路'},{key:'compare',label:'对比',active:true},{key:'prompts',label:'提示词'},{key:'settings',label:'设置'}];
+    const navFile = { traces:'Traces.dc.html', compare:'Compare.dc.html', prompts:'Prompts.dc.html', settings:'Settings.dc.html' };
+    const navItems=navDef.map(n=>({key:n.key,label:n.label,onClick:(e)=>{ e.preventDefault(); if(!n.active) this._go(navFile[n.key]); },weight:n.active?600:500,iconColor:n.active?'var(--accent)':'var(--text-2)',
+      style:{position:'relative',display:'flex',alignItems:'center',gap:'11px',height:'38px',padding:S.collapsed?'0':'0 11px',justifyContent:S.collapsed?'center':'flex-start',borderRadius:'9px',textDecoration:'none',background:n.active?'var(--accent-subtle)':'transparent',color:n.active?'var(--accent)':'var(--text-2)'},
+      barStyle:{position:'absolute',left:'-11px',top:'9px',bottom:'9px',width:'3px',borderRadius:'0 3px 3px 0',background:n.active?'var(--accent)':'transparent',display:S.collapsed?'none':'block'}}));
+    const themeDefs=[{key:'light',label:'亮'},{key:'dark',label:'暗'},{key:'system',label:'系统'}];
+    const themeOpts=themeDefs.map(t=>{const on=S.theme===t.key;return{key:t.key,label:t.label,showLabel:!S.collapsed,onClick:()=>this.setTheme(t.key),
+      style:{display:'flex',alignItems:'center',justifyContent:'center',gap:'6px',flex:S.collapsed?'0 0 auto':'1',height:'30px',padding:S.collapsed?'0':'0 6px',border:'none',borderRadius:'7px',cursor:'pointer',fontFamily:'var(--font-sans)',background:on?'var(--surface-2)':'transparent',color:on?'var(--accent)':'var(--text-3)',boxShadow:on?'inset 0 0 0 1px var(--border)':'none'}};});
+
+    const canRun=S.judges.length>0 && !S.scoring;
+
+    // ===== hub data =====
+    const traceOpts=[
+      {id:'tr_9f2ac10b', name:'结账助手 · 生产'},
+      {id:'tr_2e9b7740', name:'结账助手 · 生产（回放）'},
+      {id:'tr_7c81de44', name:'支持工单分诊'},
+      {id:'tr_1b60fa92', name:'code-review-bot #4821'},
+      {id:'tr_0d3e91aa', name:'多步研究 agent'},
+      {id:'tr_5c04ab19', name:'sql-copilot'},
+    ];
+    const pickOptStyle={display:'flex',alignItems:'center',gap:'10px',width:'100%',padding:'8px 10px',border:'none',borderRadius:'8px',cursor:'pointer',background:'transparent',color:'var(--text)',fontFamily:'var(--font-sans)'};
+    const mkPickOpts=(side)=>traceOpts.map(t=>({name:t.name, tid:t.id,
+      onPick:()=>this.setState(side==='a'?{pickA:t.id,pickAOpen:false}:{pickB:t.id,pickBOpen:false}),
+      style:{...pickOptStyle, background:(side==='a'?S.pickA:S.pickB)===t.id?'var(--surface-hover)':'transparent'}}));
+    const pA=traceOpts.find(t=>t.id===S.pickA), pB=traceOpts.find(t=>t.id===S.pickB);
+    const canStart=!!(pA&&pB&&S.pickA!==S.pickB);
+    const savedDefs=[
+      {label:'gpt-4o vs sonnet · 结账主流程', note:'换模型可替代性验证，v4 prompt', pair:'tr_9f2ac10b ↔ tr_2e9b7740', cacheN:3, time:'昨天', a:'tr_9f2ac10b', b:'tr_2e9b7740'},
+      {label:'降本:mini 换 4o · 分诊', note:'低成本模型是否守住分诊质量', pair:'tr_7c81de44 ↔ tr_63aa1f02', cacheN:2, time:'3 天前', a:'tr_7c81de44', b:'tr_63aa1f02'},
+      {label:'新 system prompt 回归 · code-review', note:'v3 → v4 prompt 对行为的影响', pair:'tr_1b60fa92 ↔ tr_88cd0e51', cacheN:0, time:'上周', a:'tr_1b60fa92', b:'tr_88cd0e51'},
+    ];
+    const compRowStyle={display:'flex',alignItems:'center',gap:'14px',padding:'13px 18px',borderBottom:'1px solid var(--border-soft)',cursor:'pointer'};
+    const savedComps=savedDefs.map(s=>({label:s.label, note:s.note, pair:s.pair, hasCache:s.cacheN>0, cacheN:s.cacheN, time:s.time,
+      rowStyle:compRowStyle, onOpen:()=>this._go('Compare.dc.html?a='+s.a+'&b='+s.b)}));
+    const recentDefs=[
+      {a:'tr_9f2ac10b', b:'tr_replay_c47a', desc:'回放结果 · 1 偏离', time:'2 小时前'},
+      {a:'tr_0d3e91aa', b:'tr_44bb0f15', desc:'多步研究 vs 客服总结', time:'昨天'},
+      {a:'tr_5c04ab19', b:'tr_6b22cf07', desc:'sql-copilot 两次实时运行', time:'2 天前'},
+      {a:'tr_1b60fa92', b:'tr_3a5719e8', desc:'code-review #4821 vs #4820', time:'3 天前'},
+    ];
+    const recentComps=recentDefs.map(r=>({a:r.a, b:r.b, desc:r.desc, time:r.time,
+      rowStyle:compRowStyle,
+      onOpen:()=>this._go('Compare.dc.html?a='+r.a+'&b='+r.b),
+      onSave:(e)=>{ e.stopPropagation(); }}));
+
+    return {
+      expanded:!S.collapsed, toggleCollapse:()=>this.toggleCollapse(),
+      navItems, themeOpts,
+      isHub:S.view==='hub', isDiff:S.view==='diff',
+      // hub
+      pickAOpen:S.pickAOpen, pickBOpen:S.pickBOpen,
+      togglePickA:()=>this.setState(s=>({pickAOpen:!s.pickAOpen,pickBOpen:false})),
+      togglePickB:()=>this.setState(s=>({pickBOpen:!s.pickBOpen,pickAOpen:false})),
+      pickAOpts:mkPickOpts('a'), pickBOpts:mkPickOpts('b'),
+      pickALabel:pA?pA.name:'选择链路 A…', pickBLabel:pB?pB.name:'选择链路 B…',
+      pickAColor:pA?'var(--text)':'var(--text-3)', pickBColor:pB?'var(--text)':'var(--text-3)',
+      startNewCompare:()=>{ if(canStart) this._go('Compare.dc.html?a='+S.pickA+'&b='+S.pickB); },
+      savedComps, savedCount:savedComps.length, recentComps,
+      pickBtnStyle:{display:'flex',alignItems:'center',gap:'9px',width:'100%',height:'40px',padding:'0 12px',background:'var(--bg-grid)',border:'1px solid var(--border)',borderRadius:'10px',cursor:'pointer',fontFamily:'var(--font-sans)'},
+      pickDropStyle:{position:'absolute',top:'calc(100% + 6px)',left:0,right:0,maxHeight:'216px',overflowY:'auto',background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:'11px',boxShadow:'var(--shadow)',padding:'5px',zIndex:40},
+      newCompareBtnStyle:{display:'flex',alignItems:'center',gap:'8px',height:'40px',padding:'0 18px',border:'none',borderRadius:'10px',cursor:canStart?'pointer':'not-allowed',fontFamily:'var(--font-sans)',fontSize:'13px',fontWeight:600,background:canStart?'var(--accent)':'var(--surface-hover)',color:canStart?'var(--accent-fg)':'var(--text-3)',flex:'0 0 auto'},
+      starBtnStyle:{display:'flex',alignItems:'center',justifyContent:'center',width:'28px',height:'28px',border:'none',borderRadius:'7px',background:'transparent',color:'var(--text-3)',cursor:'pointer',flex:'0 0 auto'},
+      summary, aligned,
+      judgeCount:S.judges.length, judgeOpts, judgesOpen:S.judgesOpen, toggleJudges:()=>this.setState(s=>({judgesOpen:!s.judgesOpen, ctxOpen:false})),
+      ctxLabel, ctxOpts, ctxOpen:S.ctxOpen, toggleCtx:()=>this.setState(s=>({ctxOpen:!s.ctxOpen, judgesOpen:false})),
+      runScore:()=>this.runScore(), scoring:S.scoring, notScoring:!S.scoring, runLabel:S.scoring?'评分中…':'运行评分',
+      runBtnStyle:{display:'flex',alignItems:'center',gap:'8px',height:'36px',padding:'0 18px',border:'none',borderRadius:'9px',cursor:canRun?'pointer':'not-allowed',fontFamily:'var(--font-sans)',fontSize:'13px',fontWeight:600,background:canRun?'var(--accent)':'var(--surface-hover)',color:canRun?'var(--accent-fg)':'var(--text-3)'},
+      showPlaceholder: !S.scored, showResults: S.scored, results,
+      sidebarStyle:{flex:'0 0 auto',width:S.collapsed?'66px':'244px',transition:'width .16s cubic-bezier(.3,.7,.3,1)',display:'flex',flexDirection:'column',padding:'16px 12px',borderRight:'1px solid var(--border)',background:'var(--surface)',height:'100vh',position:'sticky',top:'0'},
+      wsBtnStyle:{display:'flex',alignItems:'center',gap:'9px',width:'100%',height:'44px',marginTop:'14px',padding:S.collapsed?'0':'0 9px',justifyContent:S.collapsed?'center':'flex-start',border:'1px solid var(--border)',borderRadius:'10px',background:'var(--surface-2)',color:'var(--text)',cursor:'pointer',fontFamily:'var(--font-sans)'},
+      themeWrapStyle:{display:'flex',flexDirection:S.collapsed?'column':'row',gap:'3px',padding:'3px',background:'var(--bg-grid)',border:'1px solid var(--border-soft)',borderRadius:'9px'},
+    };
+  }
+}
+</script>
+</body>
+</html>
