@@ -27,17 +27,18 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   await page.getByRole("dialog").getByRole("button", { name: "创建" }).click();
   await expect(page.getByText("项目已创建")).toBeVisible();
 
-  // Newly created project becomes current; wait for its key panel.
-  await expect(page.getByText(`${PROJECT_NAME} · API Key`)).toBeVisible();
-  await page.getByRole("button", { name: "新建 API Key" }).click();
+  // Newly created project becomes current; wait for its info card (name input) to load.
+  await expect(page.getByLabel("项目名称")).toHaveValue(PROJECT_NAME);
+  await page.getByRole("button", { name: "新建密钥" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "创建" }).click();
 
-  const keyDialog = page.getByRole("dialog").filter({ hasText: "API Key 已创建" });
+  const keyDialog = page.getByRole("dialog").filter({ hasText: "密钥已创建" });
   await expect(keyDialog).toBeVisible();
   const codeText = await keyDialog.locator("pre code").innerText();
   const match = codeText.match(/ps-[A-Za-z0-9_-]+/);
   expect(match).toBeTruthy();
   apiKey = match![0];
-  await keyDialog.getByRole("button", { name: "我已保存，关闭" }).click();
+  await keyDialog.getByRole("button", { name: "我已保存，完成" }).click();
 
   // ---- Step 2: ingest fixture traces via the Python SDK ----
   execFileSync(PYTHON_BIN, [INGEST_SCRIPT], {
@@ -110,10 +111,13 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   // ---- Step 6: settings -> fake provider + pricing -> back to compare -> run judge ----
   await page.goto("/settings");
   await page.getByRole("tab", { name: "模型 Provider" }).click();
-  await page.getByPlaceholder("名称").fill("e2e-fake-provider");
-  await page.getByPlaceholder("Base URL（openai 兼容含 /v1；anthropic 填根地址）").fill("https://fake.invalid/v1");
-  await page.getByPlaceholder("API Key").fill("sk-fake");
-  await page.getByRole("button", { name: "添加" }).click();
+  await page.getByRole("button", { name: "新增 Provider" }).click();
+  const providerDialog = page.getByRole("dialog");
+  await providerDialog.locator("button", { hasText: "官方直连" }).click();
+  await providerDialog.getByPlaceholder("如 OpenRouter、自建网关").fill("e2e-fake-provider");
+  await providerDialog.getByPlaceholder("https://api.openai.com/v1").fill("https://fake.invalid/v1");
+  await providerDialog.locator('input[type="password"]').fill("sk-fake");
+  await providerDialog.getByRole("button", { name: "添加 Provider" }).click();
   await expect(page.getByText("Provider 已创建")).toBeVisible();
 
   await page.getByRole("tab", { name: "定价" }).click();
@@ -167,12 +171,12 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
 
   // ---- Step 8: prompts — create prompt, fork to v2, diff ----
   await page.goto("/prompts");
-  await page.getByRole("button", { name: "新建 Prompt" }).click();
-  await page.getByPlaceholder("名称").fill("e2e-prompt");
+  await page.getByRole("button", { name: "新建 prompt" }).click();
+  await page.getByPlaceholder("prompt 名称（唯一）").fill("e2e-prompt");
   await page.getByPlaceholder("初始版本内容").fill("You are a helpful assistant.\nBe concise.");
-  await page.getByRole("dialog").getByRole("button", { name: "创建" }).click();
+  await page.getByRole("button", { name: "创建", exact: true }).click();
 
-  await expect(page.getByText("e2e-prompt 版本历史")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "e2e-prompt" })).toBeVisible();
   await page.getByRole("button", { name: "基于此版本新建" }).click();
   const forkTextarea = page.getByRole("dialog").locator("textarea");
   await forkTextarea.fill("You are a helpful assistant.\nBe concise.\nAlways greet the user.");
@@ -184,8 +188,10 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   await checkboxes.nth(0).click();
   await checkboxes.nth(1).click();
 
-  await expect(page.getByText("v1 → v2")).toBeVisible();
-  await expect(page.getByText("+ Always greet the user.")).toBeVisible();
+  const diffHeader = page.getByTestId("diff-version-range");
+  await expect(diffHeader).toContainText("v1");
+  await expect(diffHeader).toContainText("v2");
+  await expect(page.getByTestId("diff-panel").getByText("Always greet the user.")).toBeVisible();
 
   // ---- Step 9: theme toggle in sidebar, verify html class + reload persistence ----
   await page.getByRole("button", { name: "浅色" }).click();
