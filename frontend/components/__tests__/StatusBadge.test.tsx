@@ -10,17 +10,27 @@ describe("StatusBadge", () => {
 
   it("applies success semantic class for success kind", () => {
     render(<StatusBadge kind="success" />);
-    expect(screen.getByText("success").className).toContain("text-success");
+    expect(screen.getByText("success").className).toContain("text-success-fg");
   });
 
   it("applies replay semantic class for replay kind", () => {
     render(<StatusBadge kind="replay" />);
-    expect(screen.getByText("replay").className).toContain("text-replay");
+    expect(screen.getByText("replay").className).toContain("text-replay-fg");
   });
 
   it("applies destructive semantic class for error kind", () => {
     render(<StatusBadge kind="error" />);
-    expect(screen.getByText("error").className).toContain("text-destructive");
+    expect(screen.getByText("error").className).toContain("text-fail-fg");
+  });
+
+  it("maps running to the live blue pulsing dot, not warning amber", () => {
+    render(<StatusBadge kind="running" />);
+    const el = screen.getByText("running");
+    expect(el.className).toContain("text-live-fg");
+    expect(el.className).not.toContain("warning");
+    const dot = el.querySelector("span");
+    expect(dot?.className).toContain("bg-live");
+    expect(dot?.className).toContain("animate-pulse");
   });
 
   it("renders custom label overriding kind text", () => {
