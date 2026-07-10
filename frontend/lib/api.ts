@@ -171,6 +171,8 @@ export interface ReplayRun {
   error: string | null;
   created_at: string;
   finished_at: string | null;
+  result_cost: number | null;
+  result_latency_ms: number | null;
 }
 
 export interface PromptSummary {
@@ -274,7 +276,7 @@ export const api = {
     if (compareId) q.set("compare_trace_id", compareId);
     return get<Evaluation[]>(`/api/evaluations?${q.toString()}`);
   },
-  evaluate: (body: { subject_trace_id: string; compare_trace_id?: string; judge_models: string[]; force?: boolean }) =>
+  evaluate: (body: { subject_trace_id: string; compare_trace_id?: string; judge_models: string[]; context_mode?: string; force?: boolean }) =>
     send<{ results: JudgeRunResult[] }>("POST", "/api/evaluations", body),
   createReplay: (body: {
     source_trace_id: string;

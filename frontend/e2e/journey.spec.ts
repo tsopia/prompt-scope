@@ -104,8 +104,8 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   await expect(page.getByText("Tokens (in)").first()).toBeVisible();
   await expect(page.getByText("步数").first()).toBeVisible();
 
-  // aligned rows with a param mismatch warning badge (different city args)
-  await expect(page.getByText("⚠").first()).toBeVisible();
+  // aligned rows with a param mismatch warning chip (different city args)
+  await expect(page.getByText("参数偏离").first()).toBeVisible();
 
   // ---- Step 6: settings -> fake provider + pricing -> back to compare -> run judge ----
   await page.goto("/settings");
@@ -136,9 +136,10 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   await page.getByRole("link", { name: "开始对比" }).click();
   await expect(page).toHaveURL(/\/compare\?a=.+&b=.+/);
 
-  const judgeModelLabel = page.locator("label", { hasText: "gpt-4o" });
-  await judgeModelLabel.getByRole("checkbox").click();
-  await page.getByRole("button", { name: "运行 Judge ▶" }).click();
+  await page.getByRole("button", { name: /已选 \d+ 个模型/ }).click();
+  await page.getByRole("menuitemcheckbox", { name: /gpt-4o/ }).click();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "运行评分" }).click();
   // The fake provider has a bogus base URL, so the judge call must fail with
   // a real error surfaced in the panel — never a fabricated result.
   await expect(page.getByText(/gpt-4o:/)).toBeVisible({ timeout: 20_000 });
@@ -150,20 +151,19 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   await page.getByRole("link", { name: "回放整条" }).click();
   await expect(page).toHaveURL(/\/replay\//);
 
-  const overrideModelSelect = page.locator("label", { hasText: "覆盖模型" }).locator("..").locator("select");
-  await overrideModelSelect.selectOption({ label: "gpt-4o (e2e-fake-provider)" });
-  await page.getByRole("button", { name: "运行回放 ▶" }).click();
+  // 覆盖模型现在是自定义 Select（Radix combobox），main 内第一个 combobox 就是它
+  // （System Prompt 基准选择器是 main 内第二个）。
+  await page.locator("main").getByRole("combobox").first().click();
+  await page.getByRole("option", { name: /gpt-4o/ }).click();
+  await page.getByRole("button", { name: "运行回放" }).click();
 
-  // The fake provider has a bogus base URL, so the run must land in the history
-  // timeline as a failed entry: runStatusKind("failed") -> "error", rendered by
-  // StatusBadge as the literal text "error" (StatusBadge defaults its label to
-  // the `kind` string when no explicit `label` is passed — see
-  // components/StatusBadge.tsx). The run is auto-expanded (defaultExpanded when
-  // r.id === latestRunId, set by runReplay() on failure) so the real error text
-  // from run.error must also be visible, never a fabricated success.
-  const historyCard = page.locator("text=历史回放").locator("..").locator("..");
-  await expect(historyCard.getByText("error", { exact: true }).first()).toBeVisible({ timeout: 30_000 });
-  await expect(historyCard.getByText("Error", { exact: true })).toBeVisible();
+  // The fake provider has a bogus base URL, so the run must land as a failed
+  // result: kind="error" rendered with the explicit Chinese label "失败" (see
+  // ResultCard/HistoryEntry in app/replay/[id]/page.tsx), and the real error is
+  // surfaced unconditionally in the result card's "回放失败" banner (never a
+  // fabricated success) — no click-to-expand needed to see it.
+  await expect(page.getByText("失败", { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("回放失败")).toBeVisible();
 
   // ---- Step 8: prompts — create prompt, fork to v2, diff ----
   await page.goto("/prompts");
