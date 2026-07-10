@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session, selectinload
 
 from db import get_db
-from models.entities import Observation, Project, Trace, User
+from models.entities import Observation, Project, ReplayRun, Trace, User
 from schemas.query import (ObservationNode, ProjectOut, TraceDetail,
                            TraceListOut, TraceSummary)
 from services.authz import (assert_member, assert_trace_access,
@@ -45,6 +45,15 @@ def list_traces(
     total = q.count()
     rows = (q.options(selectinload(Trace.observations))
             .order_by(Trace.created_at.desc()).offset(offset).limit(limit).all())
+
+    divergence_counts: dict[str, int] = {}
+    if rows:
+        ids = [t.id for t in rows]
+        for result_trace_id, divergences in (
+                db.query(ReplayRun.result_trace_id, ReplayRun.divergences)
+                .filter(ReplayRun.result_trace_id.in_(ids)).all()):
+            divergence_counts[result_trace_id] = len(divergences or [])
+
     items = []
     for t in rows:
         obs = t.observations
@@ -56,6 +65,7 @@ def list_traces(
             total_output_tokens=t.total_output_tokens,
             total_cost=t.total_cost, latency_ms=t.latency_ms,
             started_at=t.started_at, created_at=t.created_at,
+            divergence_count=divergence_counts.get(t.id, 0),
         ))
     return TraceListOut(items=items, total=total)
 
@@ -76,11 +86,14 @@ def build_tree(observations: list[Observation]) -> list[ObservationNode]:
 def get_trace(trace_id: str, db: Session = Depends(get_db),
               user: User = Depends(get_current_user)):
     t = assert_trace_access(db, user, trace_id)
+    replay_run = (db.query(ReplayRun)
+                  .filter(ReplayRun.result_trace_id == trace_id).first())
     return TraceDetail.model_validate({
         **{c: getattr(t, c) for c in (
             "id", "project_id", "name", "origin", "status", "input", "output",
             "started_at", "ended_at", "latency_ms", "total_input_tokens",
             "total_output_tokens", "total_cost", "created_at")},
         "metadata": t.meta,
+        "divergence_count": len(replay_run.divergences or []) if replay_run else 0,
         "observations": build_tree(list(t.observations)),
     })
