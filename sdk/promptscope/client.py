@@ -41,7 +41,8 @@ class TraceContext:
     """
 
     def __init__(self, client: "PromptScopeClient", name: str,
-                 input: Any = None, metadata: dict | None = None):
+                 input: Any = None, metadata: dict | None = None,
+                 prompt_version_id: str | None = None):
         self._client = client
         self._seq = 0
         self._flushed = False
@@ -53,6 +54,7 @@ class TraceContext:
             "metadata": metadata,
             "status": "success",
             "started_at": _now_iso(),
+            "prompt_version_id": prompt_version_id,
         }
 
     def _next_seq(self) -> int:
@@ -67,6 +69,9 @@ class TraceContext:
             completion: Any = None,
             input_tokens: int | None = None,
             output_tokens: int | None = None,
+            prompt_version_id: str | None = None,
+            metadata: dict | None = None,
+            error: str | None = None,
             parent: str | None = None) -> str:
         obs_id = _new_id()
         started_at = _now_iso()
@@ -76,6 +81,9 @@ class TraceContext:
             "type": "llm",
             "name": name,
             "seq": self._next_seq(),
+            "status": "error" if error is not None else "success",
+            "error": error,
+            "metadata": metadata,
             "model": model,
             "model_params": model_params,
             "messages": messages,
@@ -84,6 +92,7 @@ class TraceContext:
             "completion": completion,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
+            "prompt_version_id": prompt_version_id,
             "started_at": started_at,
             "ended_at": _now_iso(),
         })
@@ -103,6 +112,36 @@ class TraceContext:
             "error": error,
             "tool_input": tool_input,
             "tool_output": tool_output,
+            "started_at": started_at,
+            "ended_at": _now_iso(),
+        })
+        return obs_id
+
+    def span(self, name: str, *, input: Any = None, output: Any = None,
+             metadata: dict | None = None, status: str = "success",
+             error: str | None = None, parent_id: str | None = None) -> str:
+        """Generic span observation, for grouping/marking a logical step
+        that is neither an `llm` nor a `tool` call (e.g. a retrieval step,
+        a sub-agent boundary). Unlike `llm`/`tool`, the ingestion schema has
+        no dedicated columns for span input/output, so they are folded into
+        `metadata` under the `input`/`output` keys rather than being
+        silently dropped."""
+        obs_id = _new_id()
+        started_at = _now_iso()
+        span_metadata = dict(metadata) if metadata else {}
+        if input is not None:
+            span_metadata.setdefault("input", input)
+        if output is not None:
+            span_metadata.setdefault("output", output)
+        self._observations.append({
+            "id": obs_id,
+            "parent_id": parent_id,
+            "type": "span",
+            "name": name,
+            "seq": self._next_seq(),
+            "status": "error" if error is not None else status,
+            "error": error,
+            "metadata": span_metadata or None,
             "started_at": started_at,
             "ended_at": _now_iso(),
         })
@@ -140,8 +179,27 @@ class PromptScopeClient:
         self._http = httpx.Client(transport=transport)
 
     def trace(self, name: str, input: Any = None,
-              metadata: dict | None = None) -> TraceContext:
-        return TraceContext(self, name, input=input, metadata=metadata)
+              metadata: dict | None = None,
+              prompt_version_id: str | None = None) -> TraceContext:
+        return TraceContext(self, name, input=input, metadata=metadata,
+                            prompt_version_id=prompt_version_id)
+
+    def close(self) -> None:
+        """Close the underlying httpx client (releases the connection pool).
+
+        This is independent of trace flushing: any `TraceContext` that
+        hasn't been flushed yet (e.g. via its `with` block or an explicit
+        `client.flush(...)` call) must be flushed *before* calling `close`,
+        otherwise the flush's HTTP request will fail against a closed
+        client.
+        """
+        self._http.close()
+
+    def __enter__(self) -> "PromptScopeClient":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
 
     def flush(self, trace_context: TraceContext) -> None:
         """Send the trace's observations to the ingestion API. Idempotent:
