@@ -12,37 +12,101 @@ MAX_FIELD_CHARS = 4000
 MAX_STEP_CHARS = 200
 MAX_CONTEXT_STEPS = 50
 
-PAIR_PROMPT = """你是严格的 LLM 输出质量评审。任务输入与两个候选（A 为基准，B 为候选替代）的输出如下。
+# ============================================================
+# 评分 prompt 模板在此维护/调优（"在哪改评分 prompt" 的答案）。
+# 调优措辞、评审标准、语气都可以自由改，但修改后必须保持输出 JSON 契约不变：
+#   - 单一评审 SINGLE_PROMPT:
+#     {"score": <number>, "verdict": "pass" 或 "fail", "reasoning": "<string>"}
+#   - 成对评审 PAIR_PROMPT:
+#     {"score_a": <number>, "score_b": <number>,
+#      "verdict": "replaceable" 或 "not_replaceable", "reasoning": "<string>"}
+# `_extract_json` 以及 tests/test_judge.py 都依赖以上字段名和取值集合，
+# 调整措辞/结构时注意保留 {{...}} 占位的 JSON 输出格式段落与 .format() 用到的
+# 具名占位符（input/model/output/model_a/output_a/model_b/output_b/trace_context）。
+# ============================================================
+
+PAIR_PROMPT = """你是严格的 LLM 输出质量评审。请基于以下材料评估「B 能否替代 A」。
 
 【任务输入】
 {input}
 
-【A 的输出】(模型: {model_a})
+【候选输出 A】(基准，模型: {model_a})
 {output_a}
 
-【B 的输出】(模型: {model_b})
+【候选输出 B】(候选替代，模型: {model_b})
 {output_b}
 {trace_context}
-请评估 B 能否替代 A：分别打分（0-10，质量维度：正确性、完整性、指令遵循），并给出结论。
+【评审标准】（综合权衡以下维度，不要求逐项加权算分）
+- 正确性：结论/事实/代码逻辑是否有误
+- 完整性：是否覆盖任务要求的所有要点，有无遗漏
+- 遵循指令：是否符合任务输入中的约束和格式要求
+- 简洁性：在满足以上前提下是否啰嗦或有冗余
+
+请分别给 A、B 打分（0-10），并给出结论：若 B 在以上维度不劣于 A 则判 replaceable；
+若两者质量相当且 B 没有明显缺陷，也可判 replaceable；否则判 not_replaceable。
+
 只输出 JSON，不要任何其他文字：
 {{"score_a": <number>, "score_b": <number>, "verdict": "replaceable" 或 "not_replaceable", "reasoning": "<中文理由>"}}"""
 
-SINGLE_PROMPT = """你是严格的 LLM 输出质量评审。任务输入与输出如下。
+SINGLE_PROMPT = """你是严格的 LLM 输出质量评审。请基于以下材料评估该输出是否合格。
 
 【任务输入】
 {input}
 
-【输出】(模型: {model})
+【候选输出】(模型: {model})
 {output}
 {trace_context}
-请打分（0-10）并判断是否合格。只输出 JSON，不要任何其他文字：
+【评审标准】（综合权衡以下维度，不要求逐项加权算分）
+- 正确性：结论/事实/代码逻辑是否有误
+- 完整性：是否覆盖任务要求的所有要点，有无遗漏
+- 遵循指令：是否符合任务输入中的约束和格式要求
+- 简洁性：在满足以上前提下是否啰嗦或有冗余
+
+请打分（0-10）并判断是否合格。
+
+只输出 JSON，不要任何其他文字：
 {{"score": <number>, "verdict": "pass" 或 "fail", "reasoning": "<中文理由>"}}"""
 
 
+def _is_message_list(value) -> bool:
+    """粗略判断是不是一段对话消息（[{"role": ..., "content": ...}, ...]）。"""
+    return bool(
+        isinstance(value, list) and value
+        and all(isinstance(m, dict) and "role" in m for m in value))
+
+
+def _dump_messages(messages: list) -> str:
+    lines = []
+    for m in messages:
+        role = m.get("role", "?")
+        content = m.get("content", "")
+        if not isinstance(content, str):
+            content = json.dumps(content, ensure_ascii=False, default=str)
+        lines.append(f"[{role}] {content}")
+    return "\n".join(lines)
+
+
 def _dump(value) -> str:
-    text = value if isinstance(value, str) else json.dumps(
-        value, ensure_ascii=False, default=str)
-    return text[:MAX_FIELD_CHARS]
+    """把任意字段格式化成 judge 更容易阅读的文本。
+
+    - 纯字符串：原样透传。
+    - 消息列表（含 role 字段的 dict 列表）：按 [role] content 逐行展开，
+      而不是丢一坨转义后的原始 JSON 给 judge。
+    - 其他 dict/list：json.dumps(indent=2) 缩进美化，比压缩单行 JSON 好读。
+    - 超过 MAX_FIELD_CHARS 时截断，并在末尾追加 …(截断) 标记，避免 judge
+      误以为内容本来就在那里结束。
+    """
+    if isinstance(value, str):
+        text = value
+    elif _is_message_list(value):
+        text = _dump_messages(value)
+    elif isinstance(value, (dict, list)):
+        text = json.dumps(value, ensure_ascii=False, indent=2, default=str)
+    else:
+        text = json.dumps(value, ensure_ascii=False, default=str)
+    if len(text) <= MAX_FIELD_CHARS:
+        return text
+    return text[:MAX_FIELD_CHARS] + "…(截断)"
 
 
 def _trace_models(trace: Trace) -> str:
@@ -51,28 +115,33 @@ def _trace_models(trace: Trace) -> str:
     return ", ".join(models) or "unknown"
 
 
+def _step_line(ob) -> str:
+    label = f"第{ob.seq}步 [{ob.type}] {ob.name}"
+    if ob.type == "tool":
+        detail = (f"入参={_dump(ob.tool_input)[:MAX_STEP_CHARS]} "
+                  f"结果={_dump(ob.tool_output)[:MAX_STEP_CHARS]}")
+        return f"{label}: {detail}"
+    if ob.type == "llm":
+        return f"{label}: 模型={ob.model or 'unknown'}"
+    return label
+
+
+def _dump_steps(observations, limit: int) -> list[str]:
+    lines = []
+    for i, ob in enumerate(observations):
+        if i >= limit:
+            lines.append(f"…（共 {len(observations)} 步，仅展示前 {limit} 步）")
+            break
+        lines.append(_step_line(ob))
+    return lines
+
+
 def _trace_context(trace: Trace, other: Trace | None) -> str:
     lines = ["", "【A 的调用链】" if other is not None else "【调用链】"]
-    for i, ob in enumerate(trace.observations):
-        if i >= MAX_CONTEXT_STEPS:
-            lines.append(f"…（共 {len(trace.observations)} 步，仅展示前 {MAX_CONTEXT_STEPS} 步）")
-            break
-        detail = ""
-        if ob.type == "tool":
-            detail = (f" 入参={_dump(ob.tool_input)[:MAX_STEP_CHARS]}"
-                      f" 结果={_dump(ob.tool_output)[:MAX_STEP_CHARS]}")
-        lines.append(f"{ob.seq}. [{ob.type}] {ob.name}{detail}")
+    lines.extend(_dump_steps(trace.observations, MAX_CONTEXT_STEPS))
     if other is not None:
         lines.append("【B 的调用链】")
-        for i, ob in enumerate(other.observations):
-            if i >= MAX_CONTEXT_STEPS:
-                lines.append(f"…（共 {len(other.observations)} 步，仅展示前 {MAX_CONTEXT_STEPS} 步）")
-                break
-            detail = ""
-            if ob.type == "tool":
-                detail = (f" 入参={_dump(ob.tool_input)[:MAX_STEP_CHARS]}"
-                          f" 结果={_dump(ob.tool_output)[:MAX_STEP_CHARS]}")
-            lines.append(f"{ob.seq}. [{ob.type}] {ob.name}{detail}")
+        lines.extend(_dump_steps(other.observations, MAX_CONTEXT_STEPS))
     lines.append("")
     return "\n".join(lines)
 

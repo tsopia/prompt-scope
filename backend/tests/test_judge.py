@@ -191,6 +191,25 @@ def test_evaluations_endpoint_survives_unexpected_error(client, db_session, seed
     assert "boom" in resp.json()["results"][0]["error"]
 
 
+def test_dump_pretty_prints_dict_and_marks_truncation():
+    from services.judge_service import MAX_FIELD_CHARS, _dump
+
+    pretty = _dump({"a": 1, "b": [1, 2]})
+    assert "\n" in pretty  # 缩进美化，不是压缩单行 JSON
+    assert '"a": 1' in pretty
+
+    passthrough = _dump("plain string")
+    assert passthrough == "plain string"
+
+    long_text = "x" * (MAX_FIELD_CHARS + 500)
+    truncated = _dump(long_text)
+    assert truncated.endswith("…(截断)")
+    assert len(truncated) == MAX_FIELD_CHARS + len("…(截断)")
+
+    short_text = "short"
+    assert _dump(short_text) == short_text  # 未截断时不追加标记
+
+
 def test_evaluations_hidden_from_non_member(client, db_session):
     # a project the logged-in user is NOT a member of
     other = Project(name="other-grp")

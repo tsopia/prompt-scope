@@ -4,11 +4,12 @@ from sqlalchemy.orm import Session
 from config import (AUTH_ALLOW_REGISTRATION, SECURE_COOKIES,
                     SESSION_COOKIE_NAME, SESSION_TTL_DAYS)
 from db import get_db
-from models.entities import User
-from schemas.auth import AuthConfigOut, LoginIn, RegisterIn, UserOut
+from models.entities import Session as UserSession, User
+from schemas.auth import AuthConfigOut, ChangePasswordIn, LoginIn, RegisterIn, UserOut
+from services.auth import hash_key
 from services.auth_providers import LocalPasswordProvider
 from services.authz import get_current_user
-from services.passwords import hash_password
+from services.passwords import hash_password, verify_password
 from services.sessions import create_session, delete_session
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -63,6 +64,26 @@ def logout(response: Response,
         delete_session(db, ps_session)
     response.delete_cookie(SESSION_COOKIE_NAME, path="/")
     return {"logged_out": True}
+
+
+@router.post("/change-password")
+def change_password(
+        payload: ChangePasswordIn,
+        ps_session: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+        user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)):
+    if user.auth_source != "local":
+        raise HTTPException(status_code=400, detail="SSO 账户无本地密码")
+    if not verify_password(payload.current_password, user.password_hash or ""):
+        raise HTTPException(status_code=400, detail="当前密码不正确")
+    user.password_hash = hash_password(payload.new_password)
+    current_hash = hash_key(ps_session) if ps_session else None
+    db.query(UserSession).filter(
+        UserSession.user_id == user.id,
+        UserSession.token_hash != current_hash,
+    ).delete(synchronize_session=False)
+    db.commit()
+    return {"changed": True}
 
 
 @router.get("/me", response_model=UserOut)
