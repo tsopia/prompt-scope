@@ -24,6 +24,8 @@ class ProviderOut(BaseModel):
     note: str | None
     api_key_set: bool
     created_at: datetime
+    created_by: str | None
+    created_by_name: str | None
 
 
 class PricingIn(BaseModel):
@@ -41,6 +43,8 @@ class PricingOut(BaseModel):
     input_price_per_1k: float
     output_price_per_1k: float
     provider_id: str | None
+    created_by: str | None
+    created_by_name: str | None
 
 
 class JudgeModelOut(BaseModel):

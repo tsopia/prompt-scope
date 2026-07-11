@@ -282,3 +282,198 @@ def test_update_provider_omitting_api_key_preserves_encrypted_value(db_session, 
     db_session.refresh(row)
     assert row.api_key == stored_before
     assert decrypt_secret(row.api_key) == "sk-keep"
+
+
+# --- creator-or-owner write scoping (Phase 9c) ------------------------------
+
+def _login_as(client, email, password="pw123456"):
+    client.post("/api/auth/logout")
+    resp = client.post("/api/auth/login", json={"email": email, "password": password})
+    assert resp.status_code == 200, resp.text
+
+
+def _add_member(client, project_id, email, display_name):
+    """Registers `email` as a new user and adds them to project_id as an
+    ordinary member, leaving the session logged back in as the project
+    owner (owner@x.com, from the `user_client` fixture) afterward."""
+    client.post("/api/auth/register", json={
+        "email": email, "password": "pw123456", "display_name": display_name})
+    _login_as(client, "owner@x.com")
+    resp = client.post(f"/api/projects/{project_id}/members", json={"email": email})
+    assert resp.status_code == 200, resp.text
+    return next(m["user_id"] for m in resp.json() if m["email"] == email)
+
+
+def test_created_by_recorded_on_create_provider(client, project):
+    resp = client.post("/api/providers", json={
+        "project_id": project.id,
+        "name": "p1", "base_url": "u", "api_key": "k", "provider_type": "openai"})
+    body = resp.json()
+    assert body["created_by"] == client.user_id
+    assert body["created_by_name"] == "Owner"
+
+
+def test_created_by_recorded_on_create_pricing(client, project):
+    resp = client.post("/api/pricing", json={
+        "project_id": project.id,
+        "model": "m1", "input_price_per_1k": 1, "output_price_per_1k": 1})
+    body = resp.json()
+    assert body["created_by"] == client.user_id
+    assert body["created_by_name"] == "Owner"
+
+
+def test_list_providers_and_pricing_expose_created_by_name(client, project):
+    _add_member(client, project.id, "membera@x.com", "MemberA")
+    _login_as(client, "membera@x.com")
+    client.post("/api/providers", json={
+        "project_id": project.id,
+        "name": "p1", "base_url": "u", "api_key": "k", "provider_type": "openai"})
+    client.post("/api/pricing", json={
+        "project_id": project.id,
+        "model": "m1", "input_price_per_1k": 1, "output_price_per_1k": 1})
+
+    _login_as(client, "owner@x.com")
+    providers = client.get(f"/api/providers?project_id={project.id}").json()
+    assert providers[0]["created_by_name"] == "MemberA"
+    pricing = client.get(f"/api/pricing?project_id={project.id}").json()
+    assert pricing[0]["created_by_name"] == "MemberA"
+
+
+def test_creator_can_edit_and_delete_own_provider(client, project):
+    _add_member(client, project.id, "membera@x.com", "MemberA")
+    _login_as(client, "membera@x.com")
+    pid = client.post("/api/providers", json={
+        "project_id": project.id,
+        "name": "p1", "base_url": "u", "api_key": "k", "provider_type": "openai"}).json()["id"]
+
+    resp = client.put(f"/api/providers/{pid}", json={
+        "project_id": project.id,
+        "name": "p1-renamed", "base_url": "u", "provider_type": "openai"})
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "p1-renamed"
+    assert client.delete(f"/api/providers/{pid}").json() == {"deleted": True}
+
+
+def test_non_creator_member_cannot_edit_or_delete_provider(client, project):
+    _add_member(client, project.id, "membera@x.com", "MemberA")
+    _add_member(client, project.id, "memberb@x.com", "MemberB")
+
+    _login_as(client, "membera@x.com")
+    pid = client.post("/api/providers", json={
+        "project_id": project.id,
+        "name": "p1", "base_url": "u", "api_key": "k", "provider_type": "openai"}).json()["id"]
+
+    _login_as(client, "memberb@x.com")
+    resp = client.put(f"/api/providers/{pid}", json={
+        "project_id": project.id,
+        "name": "p1-hijacked", "base_url": "u", "provider_type": "openai"})
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == "仅创建者或项目 owner 可修改"
+    assert client.delete(f"/api/providers/{pid}").status_code == 403
+
+
+def test_owner_can_edit_and_delete_any_provider(client, project):
+    _add_member(client, project.id, "membera@x.com", "MemberA")
+    _login_as(client, "membera@x.com")
+    pid = client.post("/api/providers", json={
+        "project_id": project.id,
+        "name": "p1", "base_url": "u", "api_key": "k", "provider_type": "openai"}).json()["id"]
+
+    _login_as(client, "owner@x.com")
+    resp = client.put(f"/api/providers/{pid}", json={
+        "project_id": project.id,
+        "name": "p1-by-owner", "base_url": "u", "provider_type": "openai"})
+    assert resp.status_code == 200
+    assert client.delete(f"/api/providers/{pid}").json() == {"deleted": True}
+
+
+def test_legacy_null_created_by_provider_member_403_owner_ok(client, project, db_session):
+    legacy = ModelProvider(project_id=project.id, name="legacy", base_url="u",
+                          api_key="k", provider_type="openai", created_by=None)
+    db_session.add(legacy)
+    db_session.commit()
+
+    _add_member(client, project.id, "membera@x.com", "MemberA")
+    _login_as(client, "membera@x.com")
+    resp = client.put(f"/api/providers/{legacy.id}", json={
+        "project_id": project.id,
+        "name": "legacy-renamed", "base_url": "u", "provider_type": "openai"})
+    assert resp.status_code == 403
+
+    _login_as(client, "owner@x.com")
+    resp = client.put(f"/api/providers/{legacy.id}", json={
+        "project_id": project.id,
+        "name": "legacy-renamed", "base_url": "u", "provider_type": "openai"})
+    assert resp.status_code == 200
+    assert client.delete(f"/api/providers/{legacy.id}").json() == {"deleted": True}
+
+
+def test_creator_can_edit_and_delete_own_pricing(client, project):
+    _add_member(client, project.id, "membera@x.com", "MemberA")
+    _login_as(client, "membera@x.com")
+    price_id = client.post("/api/pricing", json={
+        "project_id": project.id,
+        "model": "m1", "input_price_per_1k": 1, "output_price_per_1k": 1}).json()["id"]
+
+    resp = client.put(f"/api/pricing/{price_id}", json={
+        "project_id": project.id,
+        "model": "m1", "input_price_per_1k": 2, "output_price_per_1k": 2})
+    assert resp.status_code == 200
+    assert resp.json()["input_price_per_1k"] == 2
+    assert client.delete(f"/api/pricing/{price_id}").json() == {"deleted": True}
+
+
+def test_non_creator_member_cannot_edit_or_delete_pricing(client, project):
+    _add_member(client, project.id, "membera@x.com", "MemberA")
+    _add_member(client, project.id, "memberb@x.com", "MemberB")
+
+    _login_as(client, "membera@x.com")
+    price_id = client.post("/api/pricing", json={
+        "project_id": project.id,
+        "model": "m1", "input_price_per_1k": 1, "output_price_per_1k": 1}).json()["id"]
+
+    _login_as(client, "memberb@x.com")
+    resp = client.put(f"/api/pricing/{price_id}", json={
+        "project_id": project.id,
+        "model": "m1", "input_price_per_1k": 9, "output_price_per_1k": 9})
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == "仅创建者或项目 owner 可修改"
+    assert client.delete(f"/api/pricing/{price_id}").status_code == 403
+
+
+def test_owner_can_edit_and_delete_any_pricing(client, project):
+    _add_member(client, project.id, "membera@x.com", "MemberA")
+    _login_as(client, "membera@x.com")
+    price_id = client.post("/api/pricing", json={
+        "project_id": project.id,
+        "model": "m1", "input_price_per_1k": 1, "output_price_per_1k": 1}).json()["id"]
+
+    _login_as(client, "owner@x.com")
+    resp = client.put(f"/api/pricing/{price_id}", json={
+        "project_id": project.id,
+        "model": "m1", "input_price_per_1k": 3, "output_price_per_1k": 3})
+    assert resp.status_code == 200
+    assert client.delete(f"/api/pricing/{price_id}").json() == {"deleted": True}
+
+
+def test_legacy_null_created_by_pricing_member_403_owner_ok(client, project, db_session):
+    from models.entities import ModelPricing
+
+    legacy = ModelPricing(project_id=project.id, model="legacy-model",
+                          input_price_per_1k=1, output_price_per_1k=1, created_by=None)
+    db_session.add(legacy)
+    db_session.commit()
+
+    _add_member(client, project.id, "membera@x.com", "MemberA")
+    _login_as(client, "membera@x.com")
+    resp = client.put(f"/api/pricing/{legacy.id}", json={
+        "project_id": project.id,
+        "model": "legacy-model", "input_price_per_1k": 5, "output_price_per_1k": 5})
+    assert resp.status_code == 403
+
+    _login_as(client, "owner@x.com")
+    resp = client.put(f"/api/pricing/{legacy.id}", json={
+        "project_id": project.id,
+        "model": "legacy-model", "input_price_per_1k": 5, "output_price_per_1k": 5})
+    assert resp.status_code == 200
+    assert client.delete(f"/api/pricing/{legacy.id}").json() == {"deleted": True}

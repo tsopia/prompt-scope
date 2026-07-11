@@ -41,6 +41,26 @@ def assert_owner(db: Session, user: User, project_id: str) -> ProjectMember:
     return m
 
 
+def assert_resource_manager(db: Session, user: User, project_id: str,
+                            created_by: str | None) -> ProjectMember:
+    """写权限收窄至资源的创建者或所属 project 的 owner。
+
+    ModelProvider.base_url 可写意味着一个恶意/被盗账号的成员能把 base_url 改到
+    自己控制的服务器上——出站调用（services.llm_client）会带着解密后的 api_key
+    请求这个被替换的地址，等于把密钥原样递出去。把 provider/pricing 的写权限
+    收窄到 creator∨owner 就堵住了这条跨成员窃密路径，同时不必让所有写操作都
+    经过 owner 审批（创建者仍可自行维护自己接入的 provider/pricing）。
+
+    先走 assert_member 保留既有的 404/403 语义（project 不存在 → 404，非成员
+    → 403），再判断 created_by 匹配或 owner 角色；历史行 created_by 为 NULL 时
+    只有 owner 能改。
+    """
+    m = assert_member(db, user, project_id)
+    if user.id == created_by or m.role == "owner":
+        return m
+    raise HTTPException(status_code=403, detail="仅创建者或项目 owner 可修改")
+
+
 def assert_trace_access(db: Session, user: User, trace_id: str) -> Trace:
     t = db.get(Trace, trace_id)
     if t is None:

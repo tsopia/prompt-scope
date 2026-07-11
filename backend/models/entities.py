@@ -194,6 +194,9 @@ class ModelProvider(Base):
     kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # official | aggregator
     note: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True)
+    # 创建者；NULL 表示历史行（迁移前创建），写权限收窄为仅 owner，见 services.authz
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -209,6 +212,9 @@ class ModelPricing(Base):
     output_price_per_1k: Mapped[float] = mapped_column(Float)
     provider_id: Mapped[str | None] = mapped_column(
         ForeignKey("model_providers.id"), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True)
+    # 创建者；NULL 表示历史行（迁移前创建），写权限收窄为仅 owner，见 services.authz
 
 
 class User(Base):
