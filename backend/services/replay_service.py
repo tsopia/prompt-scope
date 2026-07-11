@@ -173,6 +173,8 @@ def execute_replay(db: Session, run: ReplayRun, client=None) -> ReplayRun:
                 input_tokens=result["input_tokens"],
                 output_tokens=result["output_tokens"],
                 started_at=t0, ended_at=utcnow(),
+                metadata=({"reasoning_content": result["reasoning_content"]}
+                          if result.get("reasoning_content") else None),
             )
             observations.append(llm_ob)
             seq += 1

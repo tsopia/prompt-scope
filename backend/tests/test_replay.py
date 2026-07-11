@@ -307,3 +307,46 @@ def test_wall_clock_guard(db_session, seeded, monkeypatch):
     assert any(d["type"] == "wall_clock_exceeded" for d in run.divergences)
     wall_clock_d = next(d for d in run.divergences if d["type"] == "wall_clock_exceeded")
     assert wall_clock_d["step"] == 1
+
+
+def test_reasoning_content_persisted_and_passed_back(db_session, seeded):
+    """思考模型：reasoning_content 落入 llm observation metadata；
+    多轮工具调用时 raw_message（含 reasoning_content）原样回传给 provider。"""
+    from models.entities import ReplayRun, Observation
+    run = ReplayRun(project_id=seeded.id, source_trace_id="src-1",
+                    override_model="cheap-model",
+                    override_model_params={"thinking": {"type": "enabled"}})
+    db_session.add(run)
+    db_session.commit()
+
+    step1 = {"choices": [{"message": {
+        "role": "assistant",
+        "content": None,
+        "reasoning_content": "需要先查天气工具。",
+        "tool_calls": [{"id": "c1", "type": "function",
+                        "function": {"name": "get_weather",
+                                     "arguments": "{\"city\": \"北京\"}"}}],
+    }}], "usage": {"prompt_tokens": 10, "completion_tokens": 20}}
+    step2 = {"choices": [{"message": {
+        "role": "assistant",
+        "content": "北京晴，32 度。",
+        "reasoning_content": "工具返回晴 32 度，直接总结。",
+    }}], "usage": {"prompt_tokens": 30, "completion_tokens": 15}}
+    client, calls = scripted_client([step1, step2])
+
+    execute_replay(db_session, run, client=client)
+
+    assert run.status == "success"
+    # thinking 参数透传进了每次请求
+    assert all(p.get("thinking") == {"type": "enabled"} for p in calls["payloads"])
+    # 第二轮请求回传了含 reasoning_content 的 assistant 原始消息（DeepSeek 400 红线）
+    second_msgs = calls["payloads"][1]["messages"]
+    assistant = [m for m in second_msgs if m.get("role") == "assistant"][-1]
+    assert assistant.get("reasoning_content") == "需要先查天气工具。"
+    # 两个 llm observation 的 metadata 都带 reasoning_content
+    obs = (db_session.query(Observation)
+           .filter(Observation.trace_id == run.result_trace_id,
+                   Observation.type == "llm")
+           .order_by(Observation.seq).all())
+    assert [o.meta.get("reasoning_content") for o in obs] == \
+        ["需要先查天气工具。", "工具返回晴 32 度，直接总结。"]

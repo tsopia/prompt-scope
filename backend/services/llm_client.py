@@ -51,6 +51,9 @@ def _openai_call(client: httpx.Client, provider: ModelProvider, model: str,
         "content": message.get("content"),
         "tool_calls": _normalize_tool_calls(message),
         "raw_message": message,
+        # DeepSeek 等思考模型的推理过程；raw_message 已含此字段，多轮工具调用时
+        # 必须原样回传（缺失会被 provider 400），单独暴露仅用于落库展示。
+        "reasoning_content": message.get("reasoning_content"),
         "input_tokens": usage.get("prompt_tokens"),
         "output_tokens": usage.get("completion_tokens"),
     }
@@ -81,6 +84,7 @@ def _anthropic_call(client: httpx.Client, provider: ModelProvider, model: str,
                            if b.get("type") == "text"),
         "tool_calls": None,
         "raw_message": None,
+        "reasoning_content": None,
         "input_tokens": usage.get("input_tokens"),
         "output_tokens": usage.get("output_tokens"),
     }

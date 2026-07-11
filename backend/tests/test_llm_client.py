@@ -26,6 +26,7 @@ def test_openai_compatible_success():
                           [{"role": "user", "content": "hi"}],
                           client=make_client(handler))
     assert out == {"content": "hello", "tool_calls": None, "raw_message": {"content": "hello"},
+                   "reasoning_content": None,
                    "input_tokens": 10, "output_tokens": 5}
 
 
@@ -44,6 +45,7 @@ def test_anthropic_success():
                           [{"role": "user", "content": "hi"}],
                           client=make_client(handler))
     assert out == {"content": "hey", "tool_calls": None, "raw_message": None,
+                   "reasoning_content": None,
                    "input_tokens": 8, "output_tokens": 3}
 
 
@@ -61,6 +63,7 @@ def test_anthropic_base_url_with_v1_suffix_not_doubled():
                           [{"role": "user", "content": "hi"}],
                           client=make_client(handler))
     assert out == {"content": "hey", "tool_calls": None, "raw_message": None,
+                   "reasoning_content": None,
                    "input_tokens": 8, "output_tokens": 3}
 
 
@@ -161,3 +164,43 @@ def test_anthropic_with_tools_rejected():
         chat_completion(provider, "claude-x", [{"role": "user", "content": "x"}],
                         tools=[{"type": "function", "function": {"name": "t"}}],
                         client=make_client(lambda r: httpx.Response(200, json={})))
+
+
+def test_thinking_param_passthrough_and_reasoning_extraction():
+    """DeepSeek 思考模式契约：model_params 里的 thinking 原样进 payload；
+    响应中的 reasoning_content 被单独暴露，且 raw_message 完整保留（多轮回传需要）。"""
+    seen = {}
+
+    def handler(request):
+        import json as _json
+        body = _json.loads(request.content)
+        seen.update(body)
+        return httpx.Response(200, json={
+            "choices": [{"message": {
+                "content": "答案是2",
+                "reasoning_content": "用户问1+1，显然等于2。",
+            }}],
+            "usage": {"prompt_tokens": 12, "completion_tokens": 70,
+                      "completion_tokens_details": {"reasoning_tokens": 63}}})
+
+    out = chat_completion(openai_provider(), "deepseek-v4-flash",
+                          [{"role": "user", "content": "1+1=?"}],
+                          model_params={"thinking": {"type": "enabled"}},
+                          client=make_client(handler))
+    assert seen["thinking"] == {"type": "enabled"}
+    assert out["reasoning_content"] == "用户问1+1，显然等于2。"
+    assert out["raw_message"]["reasoning_content"] == "用户问1+1，显然等于2。"
+    assert out["content"] == "答案是2"
+
+
+def test_thinking_disabled_no_reasoning():
+    def handler(request):
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": "2"}}],
+            "usage": {"prompt_tokens": 5, "completion_tokens": 1}})
+
+    out = chat_completion(openai_provider(), "deepseek-v4-flash",
+                          [{"role": "user", "content": "1+1=?"}],
+                          model_params={"thinking": {"type": "disabled"}},
+                          client=make_client(handler))
+    assert out["reasoning_content"] is None
