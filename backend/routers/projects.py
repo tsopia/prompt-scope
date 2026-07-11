@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from db import get_db
 from models.entities import ApiKey, Project, ProjectMember, User, utcnow
-from schemas.projects import KeyCreated, KeyOut, ProjectCreate, ProjectOut2
+from schemas.projects import (KeyCreated, KeyCreateIn, KeyOut, ProjectCreate,
+                              ProjectOut2, ProjectRename)
 from services.auth import generate_api_key
 from services.authz import assert_owner, get_current_user
 
@@ -23,6 +24,20 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db),
     return ProjectOut2.model_validate(p)
 
 
+@router.put("/projects/{project_id}", response_model=ProjectOut2)
+def rename_project(project_id: str, payload: ProjectRename,
+                   db: Session = Depends(get_db),
+                   user: User = Depends(get_current_user)):
+    assert_owner(db, user, project_id)
+    p = db.get(Project, project_id)
+    if payload.name != p.name and db.query(Project).filter(
+            Project.name == payload.name).first():
+        raise HTTPException(status_code=409, detail="project name already exists")
+    p.name = payload.name
+    db.commit()
+    return ProjectOut2.model_validate(p)
+
+
 @router.get("/projects/{project_id}/keys", response_model=list[KeyOut])
 def list_keys(project_id: str, db: Session = Depends(get_db),
               user: User = Depends(get_current_user)):
@@ -33,14 +48,16 @@ def list_keys(project_id: str, db: Session = Depends(get_db),
 
 
 @router.post("/projects/{project_id}/keys", response_model=KeyCreated)
-def create_key(project_id: str, db: Session = Depends(get_db),
+def create_key(project_id: str, payload: KeyCreateIn | None = Body(default=None),
+               db: Session = Depends(get_db),
                user: User = Depends(get_current_user)):
     assert_owner(db, user, project_id)
     raw, key_hash, prefix = generate_api_key()
-    k = ApiKey(project_id=project_id, key_hash=key_hash, prefix=prefix)
+    name = payload.name if payload else None
+    k = ApiKey(project_id=project_id, key_hash=key_hash, prefix=prefix, name=name)
     db.add(k)
     db.commit()
-    return KeyCreated(id=k.id, prefix=k.prefix, key=raw)
+    return KeyCreated(id=k.id, prefix=k.prefix, name=k.name, key=raw)
 
 
 @router.delete("/keys/{key_id}")

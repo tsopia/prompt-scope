@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { AlignedRow } from "@/lib/align";
 import { ObservationNode } from "@/lib/api";
@@ -11,9 +11,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 
 const TYPE_CLASSES: Record<string, string> = {
-  llm: "bg-replay/15 text-replay border-replay/30",
-  tool: "bg-success/15 text-success border-success/30",
-  span: "bg-muted text-muted-foreground border-border",
+  llm: "bg-bg-grid text-primary border-border-soft",
+  tool: "bg-bg-grid text-muted-foreground border-border-soft",
+  span: "bg-bg-grid text-text-3 border-border-soft",
 };
 
 function jsonText(value: unknown): string {
@@ -44,12 +44,25 @@ function Cell({ node, missing, missingLabel }: {
   );
 }
 
+function MarkChip({ className, dotClassName, children }: {
+  className: string; dotClassName?: string; children: ReactNode;
+}) {
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-semibold", className)}>
+      {dotClassName && <span className={cn("h-1.5 w-1.5 rounded-full", dotClassName)} />}
+      {children}
+    </span>
+  );
+}
+
 function MidBadge({ row }: { row: AlignedRow }) {
   if (row.status === "matched" && row.paramDiff) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="cursor-default text-warning">⚠</span>
+          <span className="cursor-default">
+            <MarkChip className="bg-warning/15 text-warning-fg" dotClassName="bg-warning">参数偏离</MarkChip>
+          </span>
         </TooltipTrigger>
         <TooltipContent className="p-2">
           <div className="flex gap-2">
@@ -66,9 +79,11 @@ function MidBadge({ row }: { row: AlignedRow }) {
       </Tooltip>
     );
   }
-  if (row.status === "matched") return <span className="text-muted-foreground">=</span>;
-  if (row.status === "only_left") return <span className="text-destructive">－</span>;
-  return <span className="text-success">＋</span>;
+  if (row.status === "matched") {
+    return <MarkChip className="border border-border-soft bg-bg-grid text-text-3">对齐</MarkChip>;
+  }
+  const label = row.status === "only_left" ? "仅 A" : "仅 B";
+  return <MarkChip className="bg-primary/15 text-primary" dotClassName="bg-primary">{label}</MarkChip>;
 }
 
 function Row({ row }: { row: AlignedRow }) {
@@ -82,8 +97,7 @@ function Row({ row }: { row: AlignedRow }) {
         className={cn(
           "flex items-stretch",
           canExpand && "cursor-pointer hover:bg-accent/50",
-          row.status === "only_left" && "bg-destructive/5",
-          row.status === "only_right" && "bg-success/5"
+          row.status === "matched" && row.paramDiff && "bg-warning/5"
         )}
       >
         <div className="flex w-6 shrink-0 items-center justify-center text-muted-foreground">

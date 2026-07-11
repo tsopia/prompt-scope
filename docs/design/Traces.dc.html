@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0D14; --bg-grid:#0C1019; --surface:#10141E; --surface-2:#141926;
+    --surface-hover:#182031; --border:#222A3A; --border-soft:#1A2130;
+    --text:#E7ECF5; --text-2:#94A0B5; --text-3:#5C687E;
+    --accent:#22D3EE; --accent-fg:#04141B;
+    --accent-subtle:color-mix(in srgb, var(--accent) 15%, transparent);
+    --accent-border:color-mix(in srgb, var(--accent) 42%, transparent);
+    --live-fg:#7FC0FF; --live-dot:#3B82F6; --live-bg:color-mix(in srgb,#3B82F6 15%,transparent);
+    --replay-fg:#C4B5FD; --replay-dot:#8B5CF6; --replay-bg:color-mix(in srgb,#8B5CF6 16%,transparent);
+    --pass-fg:#5FE6A0; --pass-dot:#22C55E; --pass-bg:color-mix(in srgb,#22C55E 14%,transparent);
+    --warn-fg:#F7C24B; --warn-dot:#F59E0B; --warn-bg:color-mix(in srgb,#F59E0B 15%,transparent);
+    --fail-fg:#FB8091; --fail-dot:#EF4444; --fail-bg:color-mix(in srgb,#EF4444 15%,transparent);
+    --shadow:0 12px 40px -12px rgba(0,0,0,.7);
+    --font-sans:'Geist','Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;
+    --font-mono:'Geist Mono','JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  html[data-theme="light"]{
+    --bg:#F7F9FC; --bg-grid:#EEF2F8; --surface:#FFFFFF; --surface-2:#FFFFFF;
+    --surface-hover:#F3F6FB; --border:#E1E7F0; --border-soft:#EBEFF6;
+    --text:#0F172A; --text-2:#556074; --text-3:#8A94A6;
+    --accent:#0E9BB8; --accent-fg:#FFFFFF;
+    --accent-subtle:color-mix(in srgb, var(--accent) 12%, transparent);
+    --accent-border:color-mix(in srgb, var(--accent) 45%, transparent);
+    --live-fg:#1D6FD6; --live-dot:#2563EB; --live-bg:color-mix(in srgb,#2563EB 11%,transparent);
+    --replay-fg:#7C3AED; --replay-dot:#7C3AED; --replay-bg:color-mix(in srgb,#7C3AED 11%,transparent);
+    --pass-fg:#0F9D58; --pass-dot:#16A34A; --pass-bg:color-mix(in srgb,#16A34A 12%,transparent);
+    --warn-fg:#B7791F; --warn-dot:#D97706; --warn-bg:color-mix(in srgb,#D97706 14%,transparent);
+    --fail-fg:#DC2626; --fail-dot:#DC2626; --fail-bg:color-mix(in srgb,#DC2626 11%,transparent);
+    --shadow:0 12px 40px -14px rgba(15,23,42,.18);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+  a{color:var(--accent);text-decoration:none;} a:hover{color:var(--accent);opacity:.8;}
+  ::selection{background:var(--accent-subtle);}
+  @keyframes ps-pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.35;transform:scale(.72);}}
+  @keyframes ps-ring{0%{box-shadow:0 0 0 0 var(--live-bg);}70%{box-shadow:0 0 0 5px transparent;}100%{box-shadow:0 0 0 0 transparent;}}
+  @keyframes ps-tray-in{from{opacity:0;transform:translate(-50%,14px);}to{opacity:1;transform:translate(-50%,0);}}
+  ::-webkit-scrollbar{height:10px;width:10px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:6px;border:3px solid var(--bg);}
+  ::-webkit-scrollbar-track{background:transparent;}
+</style>
+</helmet>
+
+<div style="display:flex;min-height:100vh;width:100%;background:var(--bg);">
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside style="{{ sidebarStyle }}">
+    <!-- brand -->
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 8px 4px;height:34px;overflow:hidden;">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;">
+        <circle cx="12" cy="12" r="9.2" stroke="var(--accent)" stroke-width="1.4" opacity="0.9"/>
+        <circle cx="12" cy="12" r="4.4" stroke="var(--accent)" stroke-width="1.4"/>
+        <circle cx="12" cy="12" r="1.7" fill="var(--accent)"/>
+        <path d="M12 0.6V4.2M12 19.8V23.4M0.6 12H4.2M19.8 12H23.4" stroke="var(--accent)" stroke-width="1.3" stroke-linecap="round" opacity="0.55"/>
+      </svg>
+      <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+        <span style="font-size:15px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;">PromptScope</span>
+      </sc-if>
+    </div>
+
+    <!-- workspace switcher -->
+    <div style="position:relative;margin-top:14px;">
+      <button onClick="{{ toggleWs }}" style="{{ wsBtnStyle }}">
+        <span style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;background:linear-gradient(140deg,var(--accent),#7C3AED);color:#04141B;font-size:12px;font-weight:700;flex:0 0 auto;">A</span>
+        <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+          <span style="display:flex;flex-direction:column;align-items:flex-start;min-width:0;flex:1;line-height:1.15;">
+            <span style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">Acme AI</span>
+            <span style="font-size:11px;color:var(--text-3);white-space:nowrap;">生产环境</span>
+          </span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;color:var(--text-3);"><path d="M7 9l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </sc-if>
+      </button>
+      <sc-if value="{{ wsOpen }}">
+        <div style="position:absolute;top:calc(100% + 6px);left:0;right:0;min-width:212px;background:var(--surface-2);border:1px solid var(--border);border-radius:11px;box-shadow:var(--shadow);padding:5px;z-index:40;">
+          <sc-for list="{{ workspaces }}" as="ws" hint-placeholder-count="3">
+            <button onClick="{{ ws.onPick }}" style="{{ ws.style }}">
+              <span style="display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:{{ ws.badgeBg }};color:#fff;font-size:11px;font-weight:700;flex:0 0 auto;">{{ ws.initial }}</span>
+              <span style="flex:1;text-align:left;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ ws.name }}</span>
+              <sc-if value="{{ ws.active }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:var(--accent);"><path d="M5 12.5l4.2 4.2L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></sc-if>
+            </button>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- nav -->
+    <nav style="display:flex;flex-direction:column;gap:3px;margin-top:18px;">
+      <sc-for list="{{ navItems }}" as="nav" hint-placeholder-count="4">
+        <a href="#" onClick="{{ nav.onClick }}" title="{{ nav.label }}" style="{{ nav.style }}">
+          <span style="{{ nav.barStyle }}"></span>
+          <span style="display:flex;width:20px;height:20px;flex:0 0 auto;color:{{ nav.iconColor }};" data-icon="{{ nav.key }}"></span>
+          <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+            <span style="font-size:13.5px;font-weight:{{ nav.weight }};white-space:nowrap;">{{ nav.label }}</span>
+          </sc-if>
+        </a>
+      </sc-for>
+    </nav>
+
+    <div style="flex:1 1 auto;"></div>
+
+    <!-- theme toggle -->
+    <div style="{{ themeWrapStyle }}">
+      <sc-for list="{{ themeOpts }}" as="t" hint-placeholder-count="3">
+        <button onClick="{{ t.onClick }}" title="{{ t.label }}" style="{{ t.style }}">
+          <span style="display:flex;width:16px;height:16px;" data-ticon="{{ t.key }}"></span>
+          <sc-if value="{{ t.showLabel }}"><span style="font-size:12px;font-weight:600;">{{ t.label }}</span></sc-if>
+        </button>
+      </sc-for>
+    </div>
+
+    <!-- account -->
+    <div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding:8px;border-radius:10px;overflow:hidden;">
+      <span style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:var(--surface-hover);border:1px solid var(--border);color:var(--text);font-size:12px;font-weight:700;flex:0 0 auto;">林</span>
+      <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+        <span style="display:flex;flex-direction:column;min-width:0;line-height:1.2;">
+          <span style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">林越</span>
+          <span style="font-size:11px;color:var(--text-3);white-space:nowrap;">管理员</span>
+        </span>
+      </sc-if>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column;height:100vh;overflow:hidden;">
+
+    <!-- page header -->
+    <header style="flex:0 0 auto;padding:22px 32px 0;">
+      <div style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--text-3);margin-bottom:9px;">
+        <button onClick="{{ toggleCollapse }}" title="折叠侧边栏" style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;margin-left:-4px;margin-right:2px;border:none;background:transparent;color:var(--text-2);border-radius:7px;cursor:pointer;" style-hover="background:var(--surface-hover);">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><rect x="3" y="4.5" width="18" height="15" rx="2.4" stroke="currentColor" stroke-width="1.6"/><path d="M9 4.5v15" stroke="currentColor" stroke-width="1.6"/></svg>
+        </button>
+        <span>Acme AI</span>
+        <span style="opacity:.5;">/</span>
+        <span>生产环境</span>
+        <span style="opacity:.5;">/</span>
+        <span style="color:var(--text-2);">链路</span>
+      </div>
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;">
+        <div>
+          <h1 style="margin:0;font-size:23px;font-weight:700;letter-spacing:-.02em;">链路</h1>
+          <p style="margin:5px 0 0;font-size:13px;color:var(--text-2);">agent 每次运行的完整调用链，实时上报与录制回放。</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;flex:0 0 auto;padding-bottom:2px;">
+          <button style="{{ ghostBtnStyle }}" style-hover="background:var(--surface-hover);border-color:var(--border);">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M20 11a8 8 0 10-.6 3M20 5v6h-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            刷新
+          </button>
+          <button style="{{ outlineBtnStyle }}" style-hover="background:var(--accent-subtle);">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M8 6l-5 6 5 6M16 6l5 6-5 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            接入 SDK
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- filter bar -->
+    <div style="flex:0 0 auto;display:flex;align-items:center;gap:12px;padding:18px 32px 16px;">
+      <div style="position:relative;flex:0 1 340px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none;"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.7"/><path d="M20 20l-3.2-3.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <input value="{{ query }}" onInput="{{ onQuery }}" placeholder="按名称搜索链路…" style="width:100%;height:36px;padding:0 12px 0 36px;background:var(--surface);border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:13px;font-family:var(--font-sans);outline:none;" style-focus="border-color:var(--accent-border);" />
+      </div>
+      <div style="display:flex;padding:3px;background:var(--surface);border:1px solid var(--border);border-radius:9px;gap:2px;">
+        <sc-for list="{{ sourceOpts }}" as="s" hint-placeholder-count="3">
+          <button onClick="{{ s.onClick }}" style="{{ s.style }}">
+            <sc-if value="{{ s.dot }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ s.dotColor }};"></span></sc-if>
+            {{ s.label }}
+          </button>
+        </sc-for>
+      </div>
+      <div style="flex:1;"></div>
+      <span style="font-size:12.5px;color:var(--text-3);font-family:var(--font-mono);font-variant-numeric:tabular-nums;">{{ countLabel }}</span>
+    </div>
+
+    <!-- table -->
+    <div style="flex:1;min-height:0;padding:0 32px 32px;display:flex;flex-direction:column;">
+      <div style="flex:1;min-height:0;border:1px solid var(--border);border-radius:13px;background:var(--surface);overflow:hidden;display:flex;flex-direction:column;">
+        <div style="flex:1;min-height:0;overflow:auto;">
+          <div style="min-width:1180px;">
+            <!-- header row -->
+            <div style="display:grid;grid-template-columns:44px minmax(220px,1.7fr) 96px 104px 190px 70px 106px 106px 100px 92px 118px;align-items:center;height:42px;padding:0 16px;position:sticky;top:0;z-index:5;background:var(--surface-2);border-bottom:1px solid var(--border);font-size:11.5px;font-weight:600;color:var(--text-3);letter-spacing:.02em;">
+              <div style="display:flex;align-items:center;">
+                <button onClick="{{ toggleAll }}" style="{{ headBoxStyle }}">
+                  <sc-if value="{{ allSelected }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.2 4.2L19 7" stroke="var(--accent-fg)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></sc-if>
+                  <sc-if value="{{ someSelected }}"><span style="width:9px;height:2px;border-radius:2px;background:var(--accent-fg);"></span></sc-if>
+                </button>
+              </div>
+              <div>名称</div>
+              <div>来源</div>
+              <div>状态</div>
+              <div>模型</div>
+              <div style="text-align:right;">步数</div>
+              <div style="text-align:right;">输入</div>
+              <div style="text-align:right;">输出</div>
+              <div style="text-align:right;">成本</div>
+              <div style="text-align:right;">延迟</div>
+              <div style="text-align:right;">创建时间</div>
+            </div>
+
+            <!-- body -->
+            <sc-for list="{{ rows }}" as="row" hint-placeholder-count="10">
+              <div onClick="{{ row.onOpen }}" style="{{ row.rowStyle }}" style-hover="background:var(--surface-hover);">
+                <div style="display:flex;align-items:center;">
+                  <button onClick="{{ row.onToggle }}" style="{{ row.boxStyle }}">
+                    <sc-if value="{{ row.selected }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.2 4.2L19 7" stroke="var(--accent-fg)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></sc-if>
+                  </button>
+                </div>
+                <div style="display:flex;flex-direction:column;min-width:0;gap:2px;padding-right:12px;">
+                  <span style="font-size:13.5px;font-weight:550;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ row.name }}</span>
+                  <span style="font-size:11px;color:var(--text-3);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ row.traceId }}</span>
+                </div>
+                <div>
+                  <span style="{{ row.sourceBadge }}"><span style="{{ row.sourceDot }}"></span>{{ row.sourceLabel }}</span>
+                </div>
+                <div>
+                  <span style="{{ row.statusBadge }}"><span style="{{ row.statusDot }}"></span>{{ row.statusLabel }}</span>
+                </div>
+                <div style="font-family:var(--font-mono);font-size:12px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:12px;">{{ row.models }}</div>
+                <div style="text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--text-2);">{{ row.steps }}</div>
+                <div style="text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--text);">{{ row.tin }}</div>
+                <div style="text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--text);">{{ row.tout }}</div>
+                <div style="text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--text-2);">{{ row.cost }}</div>
+                <div style="text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:12.5px;color:{{ row.latColor }};">{{ row.lat }}</div>
+                <div style="text-align:right;font-size:12px;color:var(--text-3);white-space:nowrap;">{{ row.created }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===== COMPARE TRAY ===== -->
+  <sc-if value="{{ trayOpen }}">
+    <div style="position:fixed;left:50%;bottom:26px;transform:translateX(-50%);display:flex;align-items:center;gap:16px;padding:10px 10px 10px 20px;background:var(--surface-2);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);z-index:60;animation:ps-tray-in .18s cubic-bezier(.2,.7,.3,1);">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="display:flex;align-items:center;justify-content:center;min-width:24px;height:22px;padding:0 7px;border-radius:7px;background:var(--accent-subtle);color:var(--accent);font-family:var(--font-mono);font-size:12.5px;font-weight:600;">{{ selectedCount }}</span>
+        <span style="font-size:13px;color:var(--text);white-space:nowrap;">已选 <b style="font-weight:600;">{{ selectedCount }}</b> 条链路</span>
+        <span style="font-size:12px;color:var(--text-3);white-space:nowrap;">{{ trayHint }}</span>
+      </div>
+      <div style="width:1px;height:24px;background:var(--border);"></div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button onClick="{{ clearSel }}" style="display:flex;align-items:center;height:34px;padding:0 12px;border:none;background:transparent;color:var(--text-2);font-size:13px;font-weight:500;border-radius:9px;cursor:pointer;font-family:var(--font-sans);" style-hover="background:var(--surface-hover);color:var(--text);">清除</button>
+        <button onClick="{{ startCompare }}" style="{{ compareBtnStyle }}">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 4v16M6 8H4v8h2M18 8h2v8h-2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          开始对比
+        </button>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:840},&quot;defaultTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;,&quot;system&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'dark'|'light'|'system'&quot;,&quot;section&quot;:&quot;主题&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#22D3EE&quot;,&quot;options&quot;:[&quot;#22D3EE&quot;,&quot;#2DD4BF&quot;,&quot;#60A5FA&quot;,&quot;#A78BFA&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;主题&quot;},&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;宽松&quot;,&quot;紧凑&quot;],&quot;default&quot;:&quot;宽松&quot;,&quot;tsType&quot;:&quot;'宽松'|'紧凑'&quot;,&quot;section&quot;:&quot;表格&quot;}}">
+class Component extends DCLogic {
+  state = { theme:'dark', resolved:'dark', collapsed:false, source:'all', query:'', selected:[], wsOpen:false, ws:'acme' };
+
+  componentDidMount(){
+    this._mq = window.matchMedia('(prefers-color-scheme: dark)');
+    this._onMq = ()=>{ if(this.state.theme==='system') this.setState({resolved:this._mq.matches?'dark':'light'}); };
+    this._mq.addEventListener('change', this._onMq);
+    let init = this.props.defaultTheme || 'dark';
+    try{ const saved = localStorage.getItem('ps-theme'); if(saved) init = saved; }catch(e){}
+    this.setTheme(init);
+    this._applyAccent();
+    this._injectIcons();
+  }
+  _go(url){ window.location.href = url; }
+  componentDidUpdate(){ this._applyAccent(); this._injectIcons(); }
+  _injectIcons(){
+    const nav = {
+      traces:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2.4" stroke="currentColor" stroke-width="1.7"/><circle cx="6" cy="18" r="2.4" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="12" r="2.4" stroke="currentColor" stroke-width="1.7"/><path d="M8.4 6H14a2.5 2.5 0 012.5 2.5V10M8.4 18H14a2.5 2.5 0 002.5-2.5V14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+      compare:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="4.5" width="7" height="15" rx="1.6" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="4.5" width="7" height="15" rx="1.6" stroke="currentColor" stroke-width="1.7"/></svg>',
+      prompts:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 5l4 4-4 4M11 15h7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      settings:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 7h10M4 12h16M4 17h7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="17" cy="7" r="2.2" stroke="currentColor" stroke-width="1.7"/><circle cx="14" cy="17" r="2.2" stroke="currentColor" stroke-width="1.7"/></svg>',
+    };
+    const th = {
+      light:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4.4" stroke="currentColor" stroke-width="1.7"/><path d="M12 2.5v2.5M12 19v2.5M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2.5 12H5M19 12h2.5M4.2 19.8L6 18M18 6l1.8-1.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+      dark:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
+      system:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="4.5" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M9 20h6M12 16.5V20" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+    };
+    document.querySelectorAll('[data-icon]').forEach(el=>{ const k=el.getAttribute('data-icon'); if(nav[k]&&el.innerHTML!==nav[k]) el.innerHTML=nav[k]; });
+    document.querySelectorAll('[data-ticon]').forEach(el=>{ const k=el.getAttribute('data-ticon'); if(th[k]&&el.innerHTML!==th[k]) el.innerHTML=th[k]; });
+  }
+  componentWillUnmount(){ this._mq && this._mq.removeEventListener('change', this._onMq); }
+  _applyAccent(){
+    const a = this.props.accent;
+    if(a) document.documentElement.style.setProperty('--accent', a);
+  }
+  setTheme(mode){
+    let r = mode==='system' ? (this._mq && this._mq.matches ? 'dark':'light') : mode;
+    document.documentElement.setAttribute('data-theme', r);
+    try{ localStorage.setItem('ps-theme', mode); }catch(e){}
+    this.setState({theme:mode, resolved:r});
+  }
+  toggleCollapse(){ this.setState(s=>({collapsed:!s.collapsed})); }
+  toggleWs(){ this.setState(s=>({wsOpen:!s.wsOpen})); }
+  setSource(v){ this.setState({source:v}); }
+  onQuery(e){ this.setState({query:e.target.value}); }
+  toggleSel(id){ this.setState(s=>({ selected: s.selected.includes(id) ? s.selected.filter(x=>x!==id) : [...s.selected, id] })); }
+  clearSel(){ this.setState({selected:[]}); }
+  startCompare(){ if(this.state.selected.length===2) this._go('Compare.dc.html?a='+this.state.selected[0]+'&b='+this.state.selected[1]); }
+
+  _data(){
+    return [
+      {id:'t1', name:'结账助手 · 生产', tid:'tr_9f2ac10b', source:'live', status:'running', models:['gpt-4o'], steps:14, tin:8420, tout:1980, cost:0.0642, lat:4120, created:'刚刚'},
+      {id:'t2', name:'支持工单分诊', tid:'tr_7c81de44', source:'live', status:'pass', models:['claude-3.5-sonnet'], steps:9, tin:5210, tout:1340, cost:0.0231, lat:2380, created:'2 分钟前'},
+      {id:'t3', name:'code-review-bot #4821', tid:'tr_1b60fa92', source:'replay', status:'pass', models:['claude-3.5-sonnet','gpt-4o-mini'], steps:22, tin:18940, tout:4210, cost:0.0912, lat:6740, created:'8 分钟前'},
+      {id:'t4', name:'文档问答 RAG', tid:'tr_4ad3c8f1', source:'live', status:'warn', models:['gpt-4o-mini'], steps:6, tin:3120, tout:720, cost:0.0041, lat:1180, created:'12 分钟前'},
+      {id:'t5', name:'结账助手 · 生产', tid:'tr_2e9b7740', source:'replay', status:'fail', models:['gpt-4o'], steps:11, tin:6890, tout:210, cost:0.0388, lat:2010, created:'18 分钟前'},
+      {id:'t6', name:'sql-copilot', tid:'tr_5c04ab19', source:'live', status:'pass', models:['gpt-4o'], steps:7, tin:4450, tout:990, cost:0.0277, lat:1890, created:'24 分钟前'},
+      {id:'t7', name:'邮件起草 agent', tid:'tr_8f71b0c3', source:'replay', status:'pass', models:['gemini-1.5-pro'], steps:5, tin:2980, tout:1520, cost:0.0119, lat:1440, created:'31 分钟前'},
+      {id:'t8', name:'多步研究 agent', tid:'tr_0d3e91aa', source:'live', status:'warn', models:['claude-3.5-sonnet','gpt-4o'], steps:34, tin:42180, tout:9870, cost:0.2410, lat:18920, created:'46 分钟前'},
+      {id:'t9', name:'意图分类', tid:'tr_6b22cf07', source:'live', status:'pass', models:['gpt-4o-mini'], steps:3, tin:980, tout:120, cost:0.0009, lat:420, created:'1 小时前'},
+      {id:'t10', name:'code-review-bot #4820', tid:'tr_3a5719e8', source:'replay', status:'fail', models:['claude-3-haiku'], steps:19, tin:11200, tout:60, cost:0.0074, lat:980, created:'1 小时前'},
+      {id:'t11', name:'语音转工单', tid:'tr_c1f8a230', source:'live', status:'pass', models:['gpt-4o'], steps:8, tin:5640, tout:1310, cost:0.0356, lat:2670, created:'2 小时前'},
+      {id:'t12', name:'合同抽取 agent', tid:'tr_9024de6b', source:'replay', status:'pass', models:['gpt-4o','gpt-4o-mini'], steps:27, tin:23410, tout:5120, cost:0.1180, lat:8330, created:'3 小时前'},
+      {id:'t13', name:'客服总结', tid:'tr_44bb0f15', source:'live', status:'running', models:['claude-3.5-sonnet'], steps:4, tin:2210, tout:0, cost:0.0088, lat:3200, created:'3 小时前'},
+    ];
+  }
+
+  _badge(fg,bg){ return {display:'inline-flex',alignItems:'center',gap:'6px',padding:'2.5px 9px 2.5px 8px',borderRadius:'999px',fontSize:'11.5px',fontWeight:600,lineHeight:'16px',whiteSpace:'nowrap',color:`var(${fg})`,background:`var(${bg})`}; }
+  _dot(c,pulse){ const s={width:'6px',height:'6px',borderRadius:'50%',flex:'0 0 auto',background:`var(${c})`}; if(pulse) s.animation='ps-pulse 1.4s ease-in-out infinite'; return s; }
+
+  renderVals(){
+    const S = this.state;
+    const dense = (this.props.density||'宽松')==='紧凑';
+    const rowPad = dense ? '0 16px' : '0 16px';
+    const rowH = dense ? '46px' : '58px';
+    const GC = '44px minmax(220px,1.7fr) 96px 104px 190px 70px 106px 106px 100px 92px 118px';
+
+    const fmt = n => n.toLocaleString('en-US');
+    const cost = c => c>=0.1 ? '$'+c.toFixed(3) : '$'+c.toFixed(4);
+    const lat = ms => ms<1000 ? ms+'ms' : (ms/1000).toFixed(2)+'s';
+    const srcMap = { live:{fg:'--live-fg',bg:'--live-bg',dot:'--live-dot',label:'实时'}, replay:{fg:'--replay-fg',bg:'--replay-bg',dot:'--replay-dot',label:'回放'} };
+    const stMap = { pass:{fg:'--pass-fg',bg:'--pass-bg',dot:'--pass-dot',label:'通过'}, warn:{fg:'--warn-fg',bg:'--warn-bg',dot:'--warn-dot',label:'偏离'}, fail:{fg:'--fail-fg',bg:'--fail-bg',dot:'--fail-dot',label:'失败'}, running:{fg:'--live-fg',bg:'--live-bg',dot:'--live-dot',label:'运行中'} };
+
+    const q = S.query.trim().toLowerCase();
+    const all = this._data();
+    const filtered = all.filter(r => (S.source==='all'||r.source===S.source) && (!q || r.name.toLowerCase().includes(q) || r.tid.toLowerCase().includes(q)));
+
+    const rows = filtered.map(r => {
+      const sm = srcMap[r.source], st = stMap[r.status];
+      const sel = S.selected.includes(r.id);
+      const rowStyle = { display:'grid', gridTemplateColumns:GC, alignItems:'center', height:rowH, padding:rowPad, borderBottom:'1px solid var(--border-soft)', cursor:'pointer', background: sel ? 'var(--accent-subtle)' : 'transparent', boxShadow: sel ? 'inset 3px 0 0 var(--accent)' : 'none' };
+      const boxStyle = { display:'flex',alignItems:'center',justifyContent:'center',width:'17px',height:'17px',borderRadius:'5px',cursor:'pointer',flex:'0 0 auto', border: sel ? 'none':'1.5px solid var(--border)', background: sel ? 'var(--accent)':'transparent', color: sel?'var(--accent-fg)':'transparent' };
+      return {
+        name:r.name, traceId:r.tid, models:r.models.join(', '), steps:r.steps,
+        tin:fmt(r.tin), tout:fmt(r.tout), cost:cost(r.cost), lat:lat(r.lat), created:r.created,
+        latColor: r.lat>=8000 ? 'var(--warn-fg)' : 'var(--text-2)',
+        sourceLabel:sm.label, statusLabel:st.label,
+        sourceBadge:this._badge(sm.fg,sm.bg), sourceDot:this._dot(sm.dot,false),
+        statusBadge:this._badge(st.fg,st.bg), statusDot:this._dot(st.dot, r.status==='running'),
+        selected:sel, rowStyle, boxStyle,
+        onToggle:(e)=>{ e.stopPropagation(); this.toggleSel(r.id); },
+        onOpen:()=>this._go('TraceDetail.dc.html?trace='+r.id),
+      };
+    });
+
+    const visIds = filtered.map(r=>r.id);
+    const selVis = visIds.filter(id=>S.selected.includes(id));
+    const allSelected = visIds.length>0 && selVis.length===visIds.length;
+    const someSelected = selVis.length>0 && !allSelected;
+
+    // nav
+    const navDef = [ {key:'traces',label:'链路',active:true}, {key:'compare',label:'对比',active:false}, {key:'prompts',label:'提示词',active:false}, {key:'settings',label:'设置',active:false} ];
+    const navFile = { traces:'Traces.dc.html', compare:'Compare.dc.html', prompts:'Prompts.dc.html', settings:'Settings.dc.html' };
+    const navItems = navDef.map(n=>({
+      key:n.key, label:n.label,
+      onClick:(e)=>{ e.preventDefault(); if(!n.active) this._go(navFile[n.key]); },
+      weight: n.active?600:500,
+      iconColor: n.active?'var(--accent)':'var(--text-2)',
+      style:{ position:'relative', display:'flex', alignItems:'center', gap:'11px', height:'38px', padding:S.collapsed?'0':'0 11px', justifyContent:S.collapsed?'center':'flex-start', borderRadius:'9px', textDecoration:'none', background:n.active?'var(--accent-subtle)':'transparent', color:n.active?'var(--accent)':'var(--text-2)', transition:'background .12s' },
+      barStyle:{ position:'absolute', left:'-11px', top:'9px', bottom:'9px', width:'3px', borderRadius:'0 3px 3px 0', background:n.active?'var(--accent)':'transparent', display:S.collapsed?'none':'block' },
+    }));
+
+    // source segmented
+    const srcDefs = [ {v:'all',label:'全部'}, {v:'live',label:'实时',dot:true,dotColor:'var(--live-dot)'}, {v:'replay',label:'回放',dot:true,dotColor:'var(--replay-dot)'} ];
+    const sourceOpts = srcDefs.map(o=>{ const on=S.source===o.v; return {
+      label:o.label, dot:!!o.dot, dotColor:o.dotColor, onClick:()=>this.setSource(o.v),
+      style:{ display:'flex',alignItems:'center',gap:'6px',height:'28px',padding:'0 12px',border:'none',borderRadius:'7px',cursor:'pointer',fontFamily:'var(--font-sans)',fontSize:'12.5px',fontWeight:on?600:500, background:on?'var(--surface-hover)':'transparent', color:on?'var(--text)':'var(--text-3)', boxShadow:on?'inset 0 0 0 1px var(--border)':'none' },
+    };});
+
+    // theme
+    const themeDefs = [ {key:'light',label:'亮'}, {key:'dark',label:'暗'}, {key:'system',label:'系统'} ];
+    const themeOpts = themeDefs.map(t=>{ const on=S.theme===t.key; return {
+      key:t.key, label:t.label, showLabel:!S.collapsed,
+      onClick:()=>this.setTheme(t.key),
+      style:{ display:'flex',alignItems:'center',justifyContent:'center',gap:'6px',flex:S.collapsed?'0 0 auto':'1',height:'30px',padding:S.collapsed?'0':'0 6px',border:'none',borderRadius:'7px',cursor:'pointer',fontFamily:'var(--font-sans)', background:on?'var(--surface-2)':'transparent', color:on?'var(--accent)':'var(--text-3)', boxShadow:on?'inset 0 0 0 1px var(--border)':'none' },
+    };});
+
+    // workspaces
+    const wsDefs = [ {id:'acme',name:'Acme AI',initial:'A',bg:'linear-gradient(140deg,var(--accent),#7C3AED)'}, {id:'labs',name:'Nova Labs',initial:'N',bg:'linear-gradient(140deg,#8B5CF6,#EC4899)'}, {id:'demo',name:'演示空间',initial:'演',bg:'linear-gradient(140deg,#22C55E,#0EA5E9)'} ];
+    const workspaces = wsDefs.map(w=>{ const on=S.ws===w.id; return {
+      name:w.name, initial:w.initial, badgeBg:w.bg, active:on,
+      onPick:()=>this.setState({ws:w.id,wsOpen:false}),
+      style:{ display:'flex',alignItems:'center',gap:'9px',width:'100%',padding:'8px 9px',border:'none',borderRadius:'8px',cursor:'pointer',background:on?'var(--surface-hover)':'transparent',color:'var(--text)',fontFamily:'var(--font-sans)' },
+    };});
+
+    const selectedCount = S.selected.length;
+    const compareReady = selectedCount===2;
+
+    return {
+      expanded:!S.collapsed,
+      resolved:S.resolved,
+      query:S.query, onQuery:(e)=>this.onQuery(e),
+      toggleCollapse:()=>this.toggleCollapse(),
+      toggleWs:()=>this.toggleWs(), wsOpen:S.wsOpen, workspaces,
+      navItems, themeOpts, sourceOpts,
+      rows,
+      countLabel: `${filtered.length} 条 · 共 ${all.length}`,
+      allSelected, someSelected,
+      toggleAll:()=>{ if(allSelected) this.setState({selected:S.selected.filter(id=>!visIds.includes(id))}); else this.setState({selected:[...new Set([...S.selected,...visIds])]}); },
+      trayOpen:selectedCount>0, selectedCount,
+      trayHint: compareReady?'可开始对比':(selectedCount<2?`还需选 ${2-selectedCount} 条`:'对比仅支持 2 条，请取消部分'),
+      clearSel:()=>this.clearSel(), startCompare:()=>this.startCompare(),
+      compareBtnStyle:{ display:'flex',alignItems:'center',gap:'7px',height:'34px',padding:'0 16px',border:'none',borderRadius:'9px',cursor:compareReady?'pointer':'not-allowed',fontFamily:'var(--font-sans)',fontSize:'13px',fontWeight:600, background:compareReady?'var(--accent)':'var(--surface-hover)', color:compareReady?'var(--accent-fg)':'var(--text-3)', opacity:compareReady?1:.9 },
+      sidebarStyle:{ flex:'0 0 auto', width:S.collapsed?'66px':'244px', transition:'width .16s cubic-bezier(.3,.7,.3,1)', display:'flex',flexDirection:'column', padding:'16px 12px', borderRight:'1px solid var(--border)', background:'var(--surface)', height:'100vh', position:'sticky', top:'0' },
+      wsBtnStyle:{ display:'flex',alignItems:'center',gap:'9px',width:'100%',height:'44px',padding:S.collapsed?'0':'0 9px',justifyContent:S.collapsed?'center':'flex-start',border:'1px solid var(--border)',borderRadius:'10px',background:'var(--surface-2)',color:'var(--text)',cursor:'pointer',fontFamily:'var(--font-sans)' },
+      themeWrapStyle:{ display:'flex',flexDirection:S.collapsed?'column':'row',gap:'3px',padding:'3px',background:'var(--bg-grid)',border:'1px solid var(--border-soft)',borderRadius:'9px' },
+      headBoxStyle:{ display:'flex',alignItems:'center',justifyContent:'center',width:'17px',height:'17px',borderRadius:'5px',cursor:'pointer',flex:'0 0 auto', border:(allSelected||someSelected)?'none':'1.5px solid var(--border)', background:(allSelected||someSelected)?'var(--accent)':'transparent' },
+      ghostBtnStyle:{ display:'flex',alignItems:'center',gap:'7px',height:'34px',padding:'0 13px',border:'1px solid var(--border)',borderRadius:'9px',background:'var(--surface)',color:'var(--text-2)',cursor:'pointer',fontFamily:'var(--font-sans)',fontSize:'13px',fontWeight:500 },
+      outlineBtnStyle:{ display:'flex',alignItems:'center',gap:'7px',height:'34px',padding:'0 14px',border:'1px solid var(--accent-border)',borderRadius:'9px',background:'transparent',color:'var(--accent)',cursor:'pointer',fontFamily:'var(--font-sans)',fontSize:'13px',fontWeight:600 },
+    };
+  }
+}
+</script>
+</body>
+</html>

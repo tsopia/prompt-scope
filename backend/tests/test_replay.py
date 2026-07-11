@@ -113,6 +113,7 @@ def test_replay_param_mismatch_recorded_but_continues(db_session, seeded):
     assert len(run.divergences) == 1
     d = run.divergences[0]
     assert d["type"] == "param_mismatch"
+    assert d["step"] == 1
     assert d["recorded_input"] == {"city": "北京"}
     assert d["actual_input"] == {"city": "上海"}
     # 仍返回录制结果
@@ -128,6 +129,7 @@ def test_replay_unrecorded_call_gets_error_result(db_session, seeded):
     run = execute_replay(db_session, make_run(db_session, seeded), client=client)
     assert run.status == "success"
     assert run.divergences[0]["type"] == "unrecorded_call"
+    assert run.divergences[0]["step"] == 1
     result = db_session.get(Trace, run.result_trace_id)
     tool_ob = result.observations[1]
     assert tool_ob.status == "error"
@@ -194,6 +196,8 @@ def test_replay_max_steps_guard(db_session, seeded):
     run = execute_replay(db_session, make_run(db_session, seeded), client=client)
     assert run.status == "failed"
     assert any(d["type"] == "max_steps_exceeded" for d in run.divergences)
+    max_steps_d = next(d for d in run.divergences if d["type"] == "max_steps_exceeded")
+    assert max_steps_d["step"] == MAX_REPLAY_STEPS
     result = db_session.get(Trace, run.result_trace_id)
     assert len([o for o in result.observations if o.type == "llm"]) == MAX_REPLAY_STEPS
 
@@ -262,6 +266,7 @@ def test_single_point_replay_does_not_consume_other_subtree_tools(db_session, se
                                   target_observation_id="ob-llm2"),
                          client=client)
     assert run.divergences[0]["type"] == "unrecorded_call"
+    assert run.divergences[0]["step"] == 1
 
 
 def test_single_point_replay_keeps_upstream_context(db_session, seeded):
@@ -300,3 +305,5 @@ def test_wall_clock_guard(db_session, seeded, monkeypatch):
                          client=client)
     assert run.status == "failed"
     assert any(d["type"] == "wall_clock_exceeded" for d in run.divergences)
+    wall_clock_d = next(d for d in run.divergences if d["type"] == "wall_clock_exceeded")
+    assert wall_clock_d["step"] == 1

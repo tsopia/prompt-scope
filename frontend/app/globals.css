@@ -4,31 +4,49 @@
 
 @layer base {
   :root {
-    --background: 40 20% 98%; --foreground: 222 30% 12%;
-    --card: 0 0% 100%; --card-foreground: 222 30% 12%;
-    --popover: 0 0% 100%; --popover-foreground: 222 30% 12%;
-    --primary: 200 85% 42%; --primary-foreground: 0 0% 100%;
-    --secondary: 220 15% 94%; --secondary-foreground: 222 30% 12%;
-    --muted: 220 15% 94%; --muted-foreground: 220 10% 42%;
-    --accent: 220 15% 92%; --accent-foreground: 222 30% 12%;
-    --destructive: 0 72% 48%; --destructive-foreground: 0 0% 100%;
-    --border: 220 14% 88%; --input: 220 14% 85%; --ring: 200 85% 42%;
-    --radius: 0.5rem;
-    --success: 152 55% 36%; --warning: 32 90% 44%;
-    --replay: 262 60% 52%; --live: 212 85% 48%;
+    /* Light theme — from design source docs/design/*.dc.html, html[data-theme="light"] */
+    --background: 216 45% 98%; --foreground: 222 47% 11%;
+    --card: 0 0% 100%; --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%; --popover-foreground: 222 47% 11%;
+    --primary: 190 86% 39%; --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 100%; --secondary-foreground: 222 47% 11%;
+    --muted: 216 42% 95%; --muted-foreground: 219 15% 39%;
+    --accent: 217 50% 97%; --accent-foreground: 222 47% 11%;
+    --destructive: 0 72% 51%; --destructive-foreground: 0 0% 100%;
+    --border: 216 33% 91%; --input: 216 33% 91%; --ring: 190 86% 39%;
+    --radius: 0.625rem;
+    --success: 142 76% 36%; --warning: 32 95% 44%;
+    --replay: 262 83% 58%; --live: 221 83% 53%;
+    /* design roles without a stock shadcn slot */
+    --surface-2: 0 0% 100%; --bg-grid: 216 42% 95%; --border-soft: 218 38% 94%; --text-3: 219 14% 60%;
+    /* status "fg" variants — lighter/accessible text-on-tint used with the DEFAULT color at low alpha */
+    --live-fg: 213 76% 48%; --replay-fg: 262 83% 58%; --success-fg: 151 83% 34%;
+    --warning-fg: 36 71% 42%; --fail-fg: 0 72% 51%;
+    /* diff add/del (prompt version diff view) */
+    --diff-add-bg: 142 76% 36%; --diff-add-bar: 142 76% 36%;
+    --diff-del-bg: 0 72% 51%; --diff-del-bar: 0 72% 51%;
   }
   .dark {
-    --background: 222 20% 8%; --foreground: 220 14% 90%;
-    --card: 222 18% 11%; --card-foreground: 220 14% 90%;
-    --popover: 222 18% 10%; --popover-foreground: 220 14% 90%;
-    --primary: 199 89% 55%; --primary-foreground: 222 47% 8%;
-    --secondary: 222 14% 16%; --secondary-foreground: 220 14% 90%;
-    --muted: 222 14% 16%; --muted-foreground: 220 10% 60%;
-    --accent: 222 14% 18%; --accent-foreground: 220 14% 90%;
-    --destructive: 0 62% 45%; --destructive-foreground: 220 14% 90%;
-    --border: 222 14% 18%; --input: 222 14% 20%; --ring: 199 89% 55%;
-    --success: 152 60% 42%; --warning: 38 90% 55%;
-    --replay: 262 70% 65%; --live: 210 90% 60%;
+    /* Dark theme (design default) — from design source docs/design/*.dc.html, :root */
+    --background: 222 33% 6%; --foreground: 219 41% 93%;
+    --card: 223 30% 9%; --card-foreground: 219 41% 93%;
+    --popover: 223 30% 9%; --popover-foreground: 219 41% 93%;
+    --primary: 188 86% 53%; --primary-foreground: 198 74% 6%;
+    --secondary: 223 31% 11%; --secondary-foreground: 219 41% 93%;
+    --muted: 223 31% 11%; --muted-foreground: 218 18% 65%;
+    --accent: 221 34% 14%; --accent-foreground: 219 41% 93%;
+    --destructive: 0 84% 60%; --destructive-foreground: 219 41% 93%;
+    --border: 220 26% 18%; --input: 220 26% 18%; --ring: 188 86% 53%;
+    --success: 142 71% 45%; --warning: 38 92% 50%;
+    --replay: 258 90% 66%; --live: 217 91% 60%;
+    /* design roles without a stock shadcn slot */
+    --surface-2: 223 31% 11%; --bg-grid: 222 35% 7%; --border-soft: 221 30% 15%; --text-3: 219 16% 43%;
+    /* status "fg" variants — lighter/accessible text-on-tint used with the DEFAULT color at low alpha */
+    --live-fg: 210 100% 75%; --replay-fg: 252 95% 85%; --success-fg: 149 73% 64%;
+    --warning-fg: 42 91% 63%; --fail-fg: 352 94% 74%;
+    /* diff add/del (prompt version diff view) */
+    --diff-add-bg: 142 71% 45%; --diff-add-bar: 142 71% 45%;
+    --diff-del-bg: 0 84% 60%; --diff-del-bar: 0 84% 60%;
   }
 
   * {
@@ -37,5 +55,58 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+  }
+}
+
+/* Keyframes from docs/design/Traces.dc.html + docs/design/Login.dc.html */
+@keyframes ps-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.72);
+  }
+}
+@keyframes ps-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes ps-fade {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes ps-flow {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes ps-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes ps-blip {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
   }
 }

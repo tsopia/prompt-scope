@@ -36,25 +36,24 @@ PromptScope Frontend (Next.js)
 
 ```bash
 cd backend
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+uv venv
+uv pip install -r requirements.txt
+uv run uvicorn main:app --reload --port 8000
 ```
 
 **2. 启动前端：**
 
 ```bash
 cd frontend
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 **3. 建项目、拿 API Key**：浏览器打开 `http://localhost:3000`（自动跳转 `/traces`），首次使用无需任何 CLI 操作——打开左侧侧边栏底部进入 **Settings → 项目与密钥** 标签页：「新建项目」建一个项目并自动切换为当前项目，「新建 API Key」弹窗展示完整 key（**仅此一次可见**，关闭前请立即复制保存）。旧的命令行方式仍然保留，适合脚本化/CI 场景：
 
 ```bash
 cd backend
-python -m scripts.create_project demo
+uv run python -m scripts.create_project demo
 # 输出:
 # project: demo (<project_id>)
 # api key (save it now, shown only once): ps-xxxxxxxx...
@@ -97,9 +96,8 @@ Phase 6 引入本地账号密码 + 项目成员体系：
 
 ```bash
 cd backend
-source .venv/bin/activate
-python -m scripts.create_user you@example.com <password> "Your Name"
-python -m scripts.backfill_owner you@example.com
+uv run python -m scripts.create_user you@example.com <password> "Your Name"
+uv run python -m scripts.backfill_owner you@example.com
 ```
 
 - `create_user`：创建一个本地密码账号（邮箱已存在则直接复用，不会报错），`display_name` 参数可省略（省略时用邮箱代替）。
@@ -145,7 +143,7 @@ Phase 5 对前端做了整体视觉与交互重设计：`components/ui/` 引入 
 
 ```bash
 cd frontend
-npm run e2e
+bun run e2e
 ```
 
 `playwright.config.ts` 会自起一套完全独立的前后端进程，不依赖你本地已经在跑的 `dev`/`uvicorn`：后端用临时 `backend/db/e2e.db`（`journey` 用例组运行前先 `rm -f`，保证每次全新库）跑在 `:8100`，前端跑在 `:3100`（`API_PROXY_HOST` 指向 `:8100`）。共两组用例，`theme` 依赖 `journey` 先跑完：

@@ -28,6 +28,8 @@ class ReplayRunOut(BaseModel):
     error: str | None
     created_at: datetime
     finished_at: datetime | None
+    result_cost: float | None = None
+    result_latency_ms: int | None = None
 
 
 class BatchReplayRequest(BaseModel):

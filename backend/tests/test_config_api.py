@@ -83,6 +83,34 @@ def test_pricing_crud_and_judge_models(client, project):
     assert client.get(f"/api/judge-models?project_id={project.id}").json() == []
 
 
+def test_provider_kind_and_note_roundtrip(client, project):
+    resp = client.post("/api/providers", json={
+        "project_id": project.id,
+        "name": "openrouter", "base_url": "https://openrouter.ai/api/v1",
+        "api_key": "sk-x", "provider_type": "openai",
+        "kind": "aggregator", "note": "聚合 200+ 模型"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["kind"] == "aggregator"
+    assert body["note"] == "聚合 200+ 模型"
+    pid = body["id"]
+
+    # default kind when omitted
+    default_resp = client.post("/api/providers", json={
+        "project_id": project.id,
+        "name": "openai-official", "base_url": "https://api.openai.com/v1",
+        "api_key": "sk-y", "provider_type": "openai"})
+    assert default_resp.json()["kind"] == "official"
+    assert default_resp.json()["note"] is None
+
+    updated = client.put(f"/api/providers/{pid}", json={
+        "project_id": project.id,
+        "name": "openrouter", "base_url": "https://openrouter.ai/api/v1",
+        "provider_type": "openai", "kind": "official", "note": "改为官方"})
+    assert updated.json()["kind"] == "official"
+    assert updated.json()["note"] == "改为官方"
+
+
 def test_update_provider_name_collision_409(client, project):
     client.post("/api/providers", json={
         "project_id": project.id,

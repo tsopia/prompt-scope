@@ -155,8 +155,9 @@ def execute_replay(db: Session, run: ReplayRun, client=None) -> ReplayRun:
     final_content = None
     try:
         for step in range(MAX_REPLAY_STEPS):
+            step_num = step + 1  # 1-based，展示给用户的“第 N 步”
             if (utcnow() - started_at).total_seconds() > MAX_REPLAY_WALL_SECONDS:
-                divergences.append({"type": "wall_clock_exceeded", "step": step})
+                divergences.append({"type": "wall_clock_exceeded", "step": step_num})
                 break
             t0 = utcnow()
             result = chat_completion(provider, model, messages,
@@ -186,7 +187,7 @@ def execute_replay(db: Session, run: ReplayRun, client=None) -> ReplayRun:
                 if rec is None:
                     divergences.append({
                         "type": "unrecorded_call", "tool": tc["name"],
-                        "step": step, "arguments": tc["arguments"]})
+                        "step": step_num, "arguments": tc["arguments"]})
                     tool_output = {"error": "工具结果不可用：录制中不存在该调用"}
                     status, error_txt, rec_input = "error", "unrecorded tool call", None
                 else:
@@ -194,7 +195,7 @@ def execute_replay(db: Session, run: ReplayRun, client=None) -> ReplayRun:
                     if stable_json(tc["arguments"]) != stable_json(rec.tool_input):
                         divergences.append({
                             "type": "param_mismatch", "tool": tc["name"],
-                            "step": step, "recorded_input": rec.tool_input,
+                            "step": step_num, "recorded_input": rec.tool_input,
                             "actual_input": tc["arguments"]})
                     tool_output = rec.tool_output
                     status, error_txt = "success", None

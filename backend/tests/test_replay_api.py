@@ -50,10 +50,36 @@ def test_get_replays_by_source(client, db_session, seeded):
     resp = client.get("/api/replays?source_trace_id=src-1")
     assert resp.status_code == 200
     assert len(resp.json()) == 1
+    # no result trace → cost/latency null
+    assert resp.json()[0]["result_cost"] is None
+    assert resp.json()[0]["result_latency_ms"] is None
 
     rid = resp.json()[0]["id"]
-    assert client.get(f"/api/replays/{rid}").json()["id"] == rid
+    single = client.get(f"/api/replays/{rid}").json()
+    assert single["id"] == rid
+    assert single["result_cost"] is None
+    assert single["result_latency_ms"] is None
     assert client.get("/api/replays/nope").status_code == 404
+
+
+def test_replay_run_exposes_result_trace_cost_and_latency(client, db_session, seeded):
+    db_session.add(Trace(id="result-1", project_id=seeded.id, name="replayed",
+                         origin="replay", total_cost=0.0042, latency_ms=1234))
+    db_session.add(ReplayRun(project_id=seeded.id, source_trace_id="src-1",
+                             result_trace_id="result-1",
+                             status="success", divergences=[]))
+    db_session.commit()
+
+    list_resp = client.get("/api/replays?source_trace_id=src-1")
+    assert list_resp.status_code == 200
+    item = list_resp.json()[0]
+    assert item["result_cost"] == pytest.approx(0.0042)
+    assert item["result_latency_ms"] == 1234
+
+    rid = item["id"]
+    single = client.get(f"/api/replays/{rid}").json()
+    assert single["result_cost"] == pytest.approx(0.0042)
+    assert single["result_latency_ms"] == 1234
 
 
 def test_post_replay_validation_failure_marks_run_failed(client, db_session, seeded):

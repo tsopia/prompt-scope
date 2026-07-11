@@ -93,14 +93,25 @@ def batch_replay(payload: BatchReplayRequest, db: Session = Depends(get_db),
     return BatchReplayResponse(results=results)
 
 
+def _with_result_trace_stats(run: ReplayRun, result_trace: Trace | None) -> ReplayRunOut:
+    out = ReplayRunOut.model_validate(run)
+    if result_trace is not None:
+        out.result_cost = result_trace.total_cost
+        out.result_latency_ms = result_trace.latency_ms
+    return out
+
+
 @router.get("/replays/{replay_id}", response_model=ReplayRunOut)
 def get_replay(replay_id: str, db: Session = Depends(get_db),
                user: User = Depends(get_current_user)):
-    run = db.get(ReplayRun, replay_id)
-    if run is None:
+    row = (db.query(ReplayRun, Trace)
+           .outerjoin(Trace, Trace.id == ReplayRun.result_trace_id)
+           .filter(ReplayRun.id == replay_id).first())
+    if row is None:
         raise HTTPException(status_code=404, detail="replay run not found")
+    run, result_trace = row
     assert_member(db, user, run.project_id)
-    return run
+    return _with_result_trace_stats(run, result_trace)
 
 
 @router.get("/replays", response_model=list[ReplayRunOut])
@@ -110,6 +121,8 @@ def list_replays(source_trace_id: str, db: Session = Depends(get_db),
     if source is None:
         raise HTTPException(status_code=404, detail="source trace not found")
     assert_member(db, user, source.project_id)
-    return (db.query(ReplayRun)
+    rows = (db.query(ReplayRun, Trace)
+            .outerjoin(Trace, Trace.id == ReplayRun.result_trace_id)
             .filter(ReplayRun.source_trace_id == source_trace_id)
             .order_by(ReplayRun.created_at.desc()).all())
+    return [_with_result_trace_stats(run, result_trace) for run, result_trace in rows]

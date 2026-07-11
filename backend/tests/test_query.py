@@ -1,6 +1,6 @@
 import pytest
 
-from models.entities import Observation, Project, ProjectMember, Trace
+from models.entities import Observation, Project, ProjectMember, ReplayRun, Trace
 
 
 @pytest.fixture()
@@ -50,6 +50,24 @@ def test_list_traces_with_filter(client, seeded):
 
     resp = client.get(f"/api/traces?project_id={seeded.id}&search=run-a")
     assert resp.json()["total"] == 1
+
+
+def test_list_traces_divergence_count(client, db_session, seeded):
+    # live trace with no replay run pointing at it -> 0
+    # tr-2 (replay origin) is the *result* of a replay run with 2 divergences
+    db_session.add(ReplayRun(
+        id="rr-1", project_id=seeded.id, source_trace_id="tr-1",
+        result_trace_id="tr-2", status="success",
+        divergences=[{"type": "param_mismatch", "step": 1},
+                     {"type": "unrecorded_call", "step": 2}]))
+    db_session.commit()
+
+    resp = client.get(f"/api/traces?project_id={seeded.id}")
+    body = resp.json()
+    tr1 = next(i for i in body["items"] if i["id"] == "tr-1")
+    tr2 = next(i for i in body["items"] if i["id"] == "tr-2")
+    assert tr1["divergence_count"] == 0
+    assert tr2["divergence_count"] == 2
 
 
 def test_trace_detail_tree(client, seeded):

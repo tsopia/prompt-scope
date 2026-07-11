@@ -27,17 +27,18 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   await page.getByRole("dialog").getByRole("button", { name: "创建" }).click();
   await expect(page.getByText("项目已创建")).toBeVisible();
 
-  // Newly created project becomes current; wait for its key panel.
-  await expect(page.getByText(`${PROJECT_NAME} · API Key`)).toBeVisible();
-  await page.getByRole("button", { name: "新建 API Key" }).click();
+  // Newly created project becomes current; wait for its info card (name input) to load.
+  await expect(page.getByLabel("项目名称")).toHaveValue(PROJECT_NAME);
+  await page.getByRole("button", { name: "新建密钥" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "创建" }).click();
 
-  const keyDialog = page.getByRole("dialog").filter({ hasText: "API Key 已创建" });
+  const keyDialog = page.getByRole("dialog").filter({ hasText: "密钥已创建" });
   await expect(keyDialog).toBeVisible();
   const codeText = await keyDialog.locator("pre code").innerText();
   const match = codeText.match(/ps-[A-Za-z0-9_-]+/);
   expect(match).toBeTruthy();
   apiKey = match![0];
-  await keyDialog.getByRole("button", { name: "我已保存，关闭" }).click();
+  await keyDialog.getByRole("button", { name: "我已保存，完成" }).click();
 
   // ---- Step 2: ingest fixture traces via the Python SDK ----
   execFileSync(PYTHON_BIN, [INGEST_SCRIPT], {
@@ -47,16 +48,16 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
 
   // ---- Step 3: switch to e2e-proj via sidebar project switcher, verify traces list ----
   await page.goto("/traces");
-  await page.getByRole("combobox").click();
-  await page.getByRole("option", { name: PROJECT_NAME }).click();
+  await page.getByRole("button", { name: "切换项目" }).click();
+  await page.getByRole("button", { name: PROJECT_NAME, exact: true }).click();
 
-  await expect(page.getByText(/共 3 条/)).toBeVisible();
+  await expect(page.getByText(/3 条 · 共 3/)).toBeVisible();
   const rows = page.locator("table tbody tr");
   await expect(rows).toHaveCount(3);
 
   // search filter
-  await page.getByPlaceholder("按名称搜索…").fill("weather");
-  await expect(page.getByText(/共 2 条/)).toBeVisible();
+  await page.getByPlaceholder("按名称搜索链路…").fill("weather");
+  await expect(page.getByText(/2 条 · 共 2/)).toBeVisible();
   await expect(page.locator("table tbody tr")).toHaveCount(2);
 
   // origin filter: every fixture trace is "live" (this journey never produces a
@@ -67,13 +68,13 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   // zero rows plus the origin-specific empty state (not the project-level
   // onboarding card, since the project does have data — just none matching
   // this filter).
-  await page.getByPlaceholder("按名称搜索…").fill("");
+  await page.getByPlaceholder("按名称搜索链路…").fill("");
   await page.getByRole("button", { name: "回放" }).click();
   await expect(page.locator("table tbody tr")).toHaveCount(0);
   await expect(page.getByText("该来源下暂无 trace")).toBeVisible();
 
   await page.getByRole("button", { name: "全部" }).click();
-  await expect(page.getByText(/共 3 条/)).toBeVisible();
+  await expect(page.getByText(/3 条 · 共 3/)).toBeVisible();
   await expect(page.locator("table tbody tr")).toHaveCount(3);
 
   // ---- Step 4: trace detail — click a node, assert detail changes ----
@@ -82,11 +83,11 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   await expect(page).toHaveURL(/\/traces\//);
 
   await page.getByText("get_weather", { exact: true }).first().click();
-  await expect(page.locator("main").getByText("入参")).toBeVisible();
+  await expect(page.locator("main").getByText("input")).toBeVisible();
 
   // ---- Step 5: back to list, select two weather traces, compare tray ----
   await page.goto("/traces");
-  await page.getByPlaceholder("按名称搜索…").fill("weather");
+  await page.getByPlaceholder("按名称搜索链路…").fill("weather");
   await expect(page.locator("table tbody tr")).toHaveCount(2);
   const weatherRows = page.locator("table tbody tr");
   await weatherRows.nth(0).getByRole("checkbox").click();
@@ -104,16 +105,19 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   await expect(page.getByText("Tokens (in)").first()).toBeVisible();
   await expect(page.getByText("步数").first()).toBeVisible();
 
-  // aligned rows with a param mismatch warning badge (different city args)
-  await expect(page.getByText("⚠").first()).toBeVisible();
+  // aligned rows with a param mismatch warning chip (different city args)
+  await expect(page.getByText("参数偏离").first()).toBeVisible();
 
   // ---- Step 6: settings -> fake provider + pricing -> back to compare -> run judge ----
   await page.goto("/settings");
   await page.getByRole("tab", { name: "模型 Provider" }).click();
-  await page.getByPlaceholder("名称").fill("e2e-fake-provider");
-  await page.getByPlaceholder("Base URL（openai 兼容含 /v1；anthropic 填根地址）").fill("https://fake.invalid/v1");
-  await page.getByPlaceholder("API Key").fill("sk-fake");
-  await page.getByRole("button", { name: "添加" }).click();
+  await page.getByRole("button", { name: "新增 Provider" }).click();
+  const providerDialog = page.getByRole("dialog");
+  await providerDialog.locator("button", { hasText: "官方直连" }).click();
+  await providerDialog.getByPlaceholder("如 OpenRouter、自建网关").fill("e2e-fake-provider");
+  await providerDialog.getByPlaceholder("https://api.openai.com/v1").fill("https://fake.invalid/v1");
+  await providerDialog.locator('input[type="password"]').fill("sk-fake");
+  await providerDialog.getByRole("button", { name: "添加 Provider" }).click();
   await expect(page.getByText("Provider 已创建")).toBeVisible();
 
   await page.getByRole("tab", { name: "定价" }).click();
@@ -128,7 +132,7 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   await expect(page.getByText("定价已创建")).toBeVisible();
 
   await page.goto("/traces");
-  await page.getByPlaceholder("按名称搜索…").fill("weather");
+  await page.getByPlaceholder("按名称搜索链路…").fill("weather");
   await expect(page.locator("table tbody tr")).toHaveCount(2);
   const rowsAgain = page.locator("table tbody tr");
   await rowsAgain.nth(0).getByRole("checkbox").click();
@@ -136,43 +140,43 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   await page.getByRole("link", { name: "开始对比" }).click();
   await expect(page).toHaveURL(/\/compare\?a=.+&b=.+/);
 
-  const judgeModelLabel = page.locator("label", { hasText: "gpt-4o" });
-  await judgeModelLabel.getByRole("checkbox").click();
-  await page.getByRole("button", { name: "运行 Judge ▶" }).click();
+  await page.getByRole("button", { name: /已选 \d+ 个模型/ }).click();
+  await page.getByRole("menuitemcheckbox", { name: /gpt-4o/ }).click();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "运行评分" }).click();
   // The fake provider has a bogus base URL, so the judge call must fail with
   // a real error surfaced in the panel — never a fabricated result.
   await expect(page.getByText(/gpt-4o:/)).toBeVisible({ timeout: 20_000 });
 
   // ---- Step 7: replay from trace detail, expect a real failure (fake provider) ----
   await page.goto("/traces");
-  await page.getByPlaceholder("按名称搜索…").fill("weather");
+  await page.getByPlaceholder("按名称搜索链路…").fill("weather");
   await page.locator("table tbody tr").first().click();
-  await page.getByRole("link", { name: "回放 ▶" }).click();
+  await page.getByRole("link", { name: "回放整条" }).click();
   await expect(page).toHaveURL(/\/replay\//);
 
-  const overrideModelSelect = page.locator("label", { hasText: "覆盖模型" }).locator("..").locator("select");
-  await overrideModelSelect.selectOption({ label: "gpt-4o (e2e-fake-provider)" });
-  await page.getByRole("button", { name: "运行回放 ▶" }).click();
+  // 覆盖模型现在是自定义 Select（Radix combobox），main 内第一个 combobox 就是它
+  // （System Prompt 基准选择器是 main 内第二个）。
+  await page.locator("main").getByRole("combobox").first().click();
+  await page.getByRole("option", { name: /gpt-4o/ }).click();
+  await page.getByRole("button", { name: "运行回放" }).click();
 
-  // The fake provider has a bogus base URL, so the run must land in the history
-  // timeline as a failed entry: runStatusKind("failed") -> "error", rendered by
-  // StatusBadge as the literal text "error" (StatusBadge defaults its label to
-  // the `kind` string when no explicit `label` is passed — see
-  // components/StatusBadge.tsx). The run is auto-expanded (defaultExpanded when
-  // r.id === latestRunId, set by runReplay() on failure) so the real error text
-  // from run.error must also be visible, never a fabricated success.
-  const historyCard = page.locator("text=历史回放").locator("..").locator("..");
-  await expect(historyCard.getByText("error", { exact: true }).first()).toBeVisible({ timeout: 30_000 });
-  await expect(historyCard.getByText("Error", { exact: true })).toBeVisible();
+  // The fake provider has a bogus base URL, so the run must land as a failed
+  // result: kind="error" rendered with the explicit Chinese label "失败" (see
+  // ResultCard/HistoryEntry in app/replay/[id]/page.tsx), and the real error is
+  // surfaced unconditionally in the result card's "回放失败" banner (never a
+  // fabricated success) — no click-to-expand needed to see it.
+  await expect(page.getByText("失败", { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("回放失败")).toBeVisible();
 
   // ---- Step 8: prompts — create prompt, fork to v2, diff ----
   await page.goto("/prompts");
-  await page.getByRole("button", { name: "新建 Prompt" }).click();
-  await page.getByPlaceholder("名称").fill("e2e-prompt");
+  await page.getByRole("button", { name: "新建 prompt" }).click();
+  await page.getByPlaceholder("prompt 名称（唯一）").fill("e2e-prompt");
   await page.getByPlaceholder("初始版本内容").fill("You are a helpful assistant.\nBe concise.");
-  await page.getByRole("dialog").getByRole("button", { name: "创建" }).click();
+  await page.getByRole("button", { name: "创建", exact: true }).click();
 
-  await expect(page.getByText("e2e-prompt 版本历史")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "e2e-prompt" })).toBeVisible();
   await page.getByRole("button", { name: "基于此版本新建" }).click();
   const forkTextarea = page.getByRole("dialog").locator("textarea");
   await forkTextarea.fill("You are a helpful assistant.\nBe concise.\nAlways greet the user.");
@@ -184,8 +188,10 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   await checkboxes.nth(0).click();
   await checkboxes.nth(1).click();
 
-  await expect(page.getByText("v1 → v2")).toBeVisible();
-  await expect(page.getByText("+ Always greet the user.")).toBeVisible();
+  const diffHeader = page.getByTestId("diff-version-range");
+  await expect(diffHeader).toContainText("v1");
+  await expect(diffHeader).toContainText("v2");
+  await expect(page.getByTestId("diff-panel").getByText("Always greet the user.")).toBeVisible();
 
   // ---- Step 9: theme toggle in sidebar, verify html class + reload persistence ----
   await page.getByRole("button", { name: "浅色" }).click();

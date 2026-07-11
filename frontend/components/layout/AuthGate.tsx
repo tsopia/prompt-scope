@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import { AppSidebar } from "@/components/layout/AppSidebar";
+import { SidebarProvider } from "@/components/layout/SidebarContext";
 
 /**
  * Gates the app shell behind auth.
@@ -29,10 +30,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   return (
     <ProjectProvider>
-      <div className="flex h-screen bg-background">
-        <AppSidebar />
-        <main className="flex-1 overflow-y-auto">{children}</main>
-      </div>
+      <SidebarProvider>
+        <div className="flex h-screen bg-background">
+          <AppSidebar />
+          <main className="flex-1 overflow-y-auto">{children}</main>
+        </div>
+      </SidebarProvider>
     </ProjectProvider>
   );
 }

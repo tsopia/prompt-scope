@@ -23,6 +23,7 @@ class TraceSummary(BaseModel):
     latency_ms: int | None
     started_at: datetime | None
     created_at: datetime
+    divergence_count: int = 0
 
 
 class TraceListOut(BaseModel):
@@ -74,4 +75,5 @@ class TraceDetail(BaseModel):
     total_cost: float | None
     created_at: datetime
     metadata: dict | None = None
+    divergence_count: int = 0
     observations: list[ObservationNode]

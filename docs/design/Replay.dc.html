@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0D14; --bg-grid:#0C1019; --surface:#10141E; --surface-2:#141926;
+    --surface-hover:#182031; --border:#222A3A; --border-soft:#1A2130;
+    --text:#E7ECF5; --text-2:#94A0B5; --text-3:#5C687E;
+    --accent:#22D3EE; --accent-fg:#04141B;
+    --accent-subtle:color-mix(in srgb, var(--accent) 15%, transparent);
+    --accent-border:color-mix(in srgb, var(--accent) 42%, transparent);
+    --live-fg:#7FC0FF; --live-dot:#3B82F6; --live-bg:color-mix(in srgb,#3B82F6 15%,transparent);
+    --replay-fg:#C4B5FD; --replay-dot:#8B5CF6; --replay-bg:color-mix(in srgb,#8B5CF6 16%,transparent);
+    --replay-border:color-mix(in srgb,#8B5CF6 42%,transparent);
+    --pass-fg:#5FE6A0; --pass-dot:#22C55E; --pass-bg:color-mix(in srgb,#22C55E 14%,transparent);
+    --warn-fg:#F7C24B; --warn-dot:#F59E0B; --warn-bg:color-mix(in srgb,#F59E0B 15%,transparent);
+    --fail-fg:#FB8091; --fail-dot:#EF4444; --fail-bg:color-mix(in srgb,#EF4444 15%,transparent);
+    --shadow:0 12px 40px -12px rgba(0,0,0,.7);
+    --font-sans:'Geist','Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;
+    --font-mono:'Geist Mono','JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  html[data-theme="light"]{
+    --bg:#F7F9FC; --bg-grid:#EEF2F8; --surface:#FFFFFF; --surface-2:#FFFFFF;
+    --surface-hover:#F3F6FB; --border:#E1E7F0; --border-soft:#EBEFF6;
+    --text:#0F172A; --text-2:#556074; --text-3:#8A94A6;
+    --accent:#0E9BB8; --accent-fg:#FFFFFF;
+    --accent-subtle:color-mix(in srgb, var(--accent) 12%, transparent);
+    --accent-border:color-mix(in srgb, var(--accent) 45%, transparent);
+    --live-fg:#1D6FD6; --live-dot:#2563EB; --live-bg:color-mix(in srgb,#2563EB 11%,transparent);
+    --replay-fg:#7C3AED; --replay-dot:#7C3AED; --replay-bg:color-mix(in srgb,#7C3AED 11%,transparent);
+    --replay-border:color-mix(in srgb,#7C3AED 40%,transparent);
+    --pass-fg:#0F9D58; --pass-dot:#16A34A; --pass-bg:color-mix(in srgb,#16A34A 12%,transparent);
+    --warn-fg:#B7791F; --warn-dot:#D97706; --warn-bg:color-mix(in srgb,#D97706 14%,transparent);
+    --fail-fg:#DC2626; --fail-dot:#DC2626; --fail-bg:color-mix(in srgb,#DC2626 11%,transparent);
+    --shadow:0 12px 40px -14px rgba(15,23,42,.18);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans);-webkit-font-smoothing:antialiased;}
+  a{color:var(--accent);text-decoration:none;} a:hover{opacity:.8;}
+  ::selection{background:var(--accent-subtle);}
+  @keyframes ps-pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.35;transform:scale(.72);}}
+  @keyframes ps-spin{to{transform:rotate(360deg);}}
+  pre{margin:0;}
+  ::-webkit-scrollbar{height:10px;width:10px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:6px;border:3px solid transparent;background-clip:padding-box;}
+  ::-webkit-scrollbar-track{background:transparent;}
+</style>
+</helmet>
+
+<div style="display:flex;min-height:100vh;width:100%;background:var(--bg);">
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside style="{{ sidebarStyle }}">
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 8px 4px;height:34px;overflow:hidden;">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;">
+        <circle cx="12" cy="12" r="9.2" stroke="var(--accent)" stroke-width="1.4" opacity="0.9"/>
+        <circle cx="12" cy="12" r="4.4" stroke="var(--accent)" stroke-width="1.4"/>
+        <circle cx="12" cy="12" r="1.7" fill="var(--accent)"/>
+        <path d="M12 0.6V4.2M12 19.8V23.4M0.6 12H4.2M19.8 12H23.4" stroke="var(--accent)" stroke-width="1.3" stroke-linecap="round" opacity="0.55"/>
+      </svg>
+      <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}"><span style="font-size:15px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;">PromptScope</span></sc-if>
+    </div>
+    <button style="{{ wsBtnStyle }}">
+      <span style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;background:linear-gradient(140deg,var(--accent),#7C3AED);color:#04141B;font-size:12px;font-weight:700;flex:0 0 auto;">A</span>
+      <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+        <span style="display:flex;flex-direction:column;align-items:flex-start;min-width:0;flex:1;line-height:1.15;">
+          <span style="font-size:13px;font-weight:600;white-space:nowrap;">Acme AI</span>
+          <span style="font-size:11px;color:var(--text-3);white-space:nowrap;">生产环境</span>
+        </span>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;color:var(--text-3);"><path d="M7 9l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </sc-if>
+    </button>
+    <nav style="display:flex;flex-direction:column;gap:3px;margin-top:18px;">
+      <sc-for list="{{ navItems }}" as="nav" hint-placeholder-count="4">
+        <a href="#" onClick="{{ nav.onClick }}" title="{{ nav.label }}" style="{{ nav.style }}">
+          <span style="{{ nav.barStyle }}"></span>
+          <span style="display:flex;width:20px;height:20px;flex:0 0 auto;color:{{ nav.iconColor }};" data-icon="{{ nav.key }}"></span>
+          <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}"><span style="font-size:13.5px;font-weight:{{ nav.weight }};white-space:nowrap;">{{ nav.label }}</span></sc-if>
+        </a>
+      </sc-for>
+    </nav>
+    <div style="flex:1 1 auto;"></div>
+    <div style="{{ themeWrapStyle }}">
+      <sc-for list="{{ themeOpts }}" as="t" hint-placeholder-count="3">
+        <button onClick="{{ t.onClick }}" title="{{ t.label }}" style="{{ t.style }}">
+          <span style="display:flex;width:16px;height:16px;" data-ticon="{{ t.key }}"></span>
+          <sc-if value="{{ t.showLabel }}"><span style="font-size:12px;font-weight:600;">{{ t.label }}</span></sc-if>
+        </button>
+      </sc-for>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding:8px;border-radius:10px;overflow:hidden;">
+      <span style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:var(--surface-hover);border:1px solid var(--border);font-size:12px;font-weight:700;flex:0 0 auto;">林</span>
+      <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+        <span style="display:flex;flex-direction:column;min-width:0;line-height:1.2;">
+          <span style="font-size:12.5px;font-weight:600;white-space:nowrap;">林越</span>
+          <span style="font-size:11px;color:var(--text-3);white-space:nowrap;">管理员</span>
+        </span>
+      </sc-if>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column;height:100vh;overflow:hidden;">
+
+    <!-- page header -->
+    <header style="flex:0 0 auto;padding:20px 32px 20px;border-bottom:1px solid var(--border);">
+      <div style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--text-3);margin-bottom:11px;">
+        <button onClick="{{ toggleCollapse }}" title="折叠侧边栏" style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;margin-left:-4px;margin-right:2px;border:none;background:transparent;color:var(--text-2);border-radius:7px;cursor:pointer;" style-hover="background:var(--surface-hover);">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><rect x="3" y="4.5" width="18" height="15" rx="2.4" stroke="currentColor" stroke-width="1.6"/><path d="M9 4.5v15" stroke="currentColor" stroke-width="1.6"/></svg>
+        </button>
+        <a href="Traces.dc.html" style="color:var(--text-3);">链路</a>
+        <span style="opacity:.5;">/</span>
+        <a href="{{ traceHref }}" style="color:var(--text-3);font-family:var(--font-mono);">{{ traceId }}</a>
+        <span style="opacity:.5;">/</span>
+        <span style="color:var(--text-2);">回放</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <span style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:10px;background:var(--replay-bg);color:var(--replay-fg);flex:0 0 auto;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+        </span>
+        <div style="min-width:0;">
+          <h1 style="margin:0;font-size:21px;font-weight:700;letter-spacing:-.02em;">回放 · 结账助手 · 生产</h1>
+          <p style="margin:4px 0 0;font-size:12.5px;color:var(--text-2);">
+            源链路 <span style="font-family:var(--font-mono);color:var(--text-2);">{{ traceId }}</span>
+            <sc-if value="{{ isStep }}"><span style="color:var(--warn-fg);"> · 单步回放：{{ stepLabel }}</span></sc-if>
+          </p>
+        </div>
+        <div style="flex:1;"></div>
+        <span style="{{ sourceBadge }}"><span style="{{ sourceDot }}"></span>回放</span>
+      </div>
+    </header>
+
+    <!-- body: config (left) + results/history (right) -->
+    <div style="flex:1;min-height:0;overflow:hidden;">
+      <div style="display:grid;grid-template-columns:minmax(300px,360px) 1fr;gap:0;height:100%;">
+
+        <!-- ===== CONFIG ===== -->
+        <div style="border-right:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;height:100%;overflow:hidden;">
+          <div style="flex:1;min-height:0;overflow-y:auto;">
+          <div style="padding:22px 24px 24px;display:flex;flex-direction:column;gap:18px;">
+          <div>
+            <h2 style="margin:0 0 3px;font-size:14px;font-weight:650;">回放配置</h2>
+            <p style="margin:0;font-size:12px;color:var(--text-3);line-height:1.5;">覆盖以下参数后重跑；工具调用将使用录制结果 mock，不会真正执行。</p>
+          </div>
+
+          <!-- model override -->
+          <div>
+            <label style="{{ labelStyle }}">覆盖模型</label>
+            <div style="position:relative;">
+              <button onClick="{{ toggleModel }}" style="{{ selectStyle }}">
+                <span style="display:flex;align-items:center;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent);"></span><span style="font-family:var(--font-mono);font-size:13px;">{{ model }}</span></span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:var(--text-3);"><path d="M7 9l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <sc-if value="{{ modelOpen }}">
+                <div style="{{ dropStyle }}">
+                  <sc-for list="{{ modelOpts }}" as="m" hint-placeholder-count="4">
+                    <button onClick="{{ m.onPick }}" style="{{ m.style }}">
+                      <span style="font-family:var(--font-mono);font-size:13px;flex:1;text-align:left;">{{ m.name }}</span>
+                      <sc-if value="{{ m.origin }}"><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);">源</span></sc-if>
+                      <sc-if value="{{ m.active }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:var(--accent);"><path d="M5 12.5l4.2 4.2L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></sc-if>
+                    </button>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+
+          <!-- temperature -->
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <label style="{{ labelStyle }}" style-hover="">温度</label>
+              <span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:13px;font-weight:600;color:var(--accent);">{{ temp }}</span>
+            </div>
+            <input type="range" min="0" max="2" step="0.1" value="{{ tempVal }}" onInput="{{ onTemp }}" style="width:100%;accent-color:var(--accent);height:4px;cursor:pointer;" />
+            <div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10.5px;color:var(--text-3);margin-top:5px;"><span>0.0 精确</span><span>2.0 发散</span></div>
+          </div>
+
+          <!-- advanced sampling params -->
+          <div style="border:1px solid var(--border-soft);border-radius:11px;overflow:hidden;">
+            <button onClick="{{ toggleAdv }}" style="{{ advHeadStyle }}">
+              <span style="display:flex;align-items:center;gap:8px;">高级参数<sc-if value="{{ advDirty }}"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent);"></span></sc-if></span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="{{ advChevStyle }}"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <sc-if value="{{ advOpen }}">
+              <div style="padding:4px 14px 16px;display:flex;flex-direction:column;gap:16px;">
+                <sc-for list="{{ advSliders }}" as="a" hint-placeholder-count="3">
+                  <div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">
+                      <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--text-2);">{{ a.label }}<span style="font-family:var(--font-mono);font-size:10.5px;color:var(--text-3);">{{ a.key }}</span></label>
+                      <span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:12.5px;font-weight:600;color:var(--accent);">{{ a.display }}</span>
+                    </div>
+                    <input type="range" min="{{ a.min }}" max="{{ a.max }}" step="{{ a.step }}" value="{{ a.value }}" onInput="{{ a.onInput }}" style="width:100%;accent-color:var(--accent);height:4px;cursor:pointer;" />
+                  </div>
+                </sc-for>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                  <div>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--text-2);margin-bottom:7px;">最大 tokens<span style="font-family:var(--font-mono);font-size:10.5px;color:var(--text-3);">max_tokens</span></label>
+                    <input type="number" min="1" max="128000" value="{{ maxTokens }}" onInput="{{ onMaxTokens }}" style="{{ numInputStyle }}" />
+                  </div>
+                  <div>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--text-2);margin-bottom:7px;">停止序列<span style="font-family:var(--font-mono);font-size:10.5px;color:var(--text-3);">stop</span></label>
+                    <input type="text" value="{{ stopSeq }}" onInput="{{ onStop }}" placeholder="逗号分隔，如 \n\n,END" style="{{ numInputStyle }}" />
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+
+          <!-- system prompt: pick a base (optional) → always editable -->
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <label style="{{ labelStyle }}">System Prompt</label>
+              <sc-if value="{{ promptDirty }}"><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;font-family:var(--font-mono);color:var(--warn-fg);background:var(--warn-bg);padding:1.5px 8px;border-radius:999px;">已修改</span></sc-if>
+            </div>
+            <!-- base selector -->
+            <div style="position:relative;margin-bottom:10px;">
+              <button onClick="{{ toggleVer }}" style="{{ selectStyle }}">
+                <span style="display:flex;align-items:center;gap:9px;min-width:0;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;color:{{ baseIconColor }};"><path d="M4 5.5A1.5 1.5 0 015.5 4H11v16H5.5A1.5 1.5 0 014 18.5v-13zM20 5.5A1.5 1.5 0 0018.5 4H13v16h5.5a1.5 1.5 0 001.5-1.5v-13z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+                  <span style="font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ baseLabel }}</span>
+                </span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:var(--text-3);flex:0 0 auto;"><path d="M7 9l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <sc-if value="{{ verOpen }}">
+                <div style="{{ dropScrollStyle }}">
+                  <sc-for list="{{ baseOpts }}" as="v" hint-placeholder-count="4">
+                    <button onClick="{{ v.onPick }}" style="{{ v.style }}">
+                      <span style="display:flex;flex-direction:column;gap:1px;flex:1;min-width:0;text-align:left;">
+                        <span style="font-family:{{ v.font }};font-size:12.5px;font-weight:{{ v.weight }};color:{{ v.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.title }}</span>
+                        <span style="font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.note }}</span>
+                      </span>
+                      <sc-if value="{{ v.active }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:var(--accent);flex:0 0 auto;"><path d="M5 12.5l4.2 4.2L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></sc-if>
+                    </button>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+            <!-- always-editable textarea -->
+            <textarea value="{{ promptText }}" onInput="{{ onPrompt }}" placeholder="在此撰写 system prompt，或从上方选择一个已有版本作为基准再修改…" style="{{ textareaStyle }}"></textarea>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:7px;min-height:16px;">
+              <span style="font-size:11.5px;color:var(--text-3);line-height:1.5;flex:1;">{{ promptHelper }}</span>
+              <sc-if value="{{ promptDirty }}"><button onClick="{{ resetPrompt }}" style="{{ resetLinkStyle }}" style-hover="color:var(--accent);">还原到 {{ baseVerShort }}</button></sc-if>
+            </div>
+          </div>
+
+          </div>
+          </div>
+
+          <!-- run button (pinned footer) -->
+          <div style="flex:0 0 auto;border-top:1px solid var(--border-soft);background:var(--surface);padding:16px 24px;display:flex;flex-direction:column;gap:9px;">
+            <button onClick="{{ runReplay }}" style="{{ runBtnStyle }}">
+              <sc-if value="{{ running }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="animation:ps-spin .8s linear infinite;"><path d="M12 3a9 9 0 109 9" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></sc-if>
+              <sc-if value="{{ notRunning }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></sc-if>
+              {{ runLabel }}
+            </button>
+            <sc-if value="{{ autoNav }}"><p style="margin:0;font-size:11.5px;color:var(--text-3);text-align:center;">成功后将自动跳转到对比页</p></sc-if>
+          </div>
+        </div>
+
+        <!-- ===== RESULTS + HISTORY ===== -->
+        <div style="height:100%;overflow-y:auto;min-width:0;">
+        <div style="padding:22px 32px 48px;display:flex;flex-direction:column;gap:22px;">
+
+          <!-- placeholder (before run) -->
+          <sc-if value="{{ showPlaceholder }}">
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:56px 24px;border:1px dashed var(--border);border-radius:14px;background:var(--surface);">
+              <span style="display:flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:14px;background:var(--replay-bg);color:var(--replay-fg);margin-bottom:14px;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+              </span>
+              <div style="font-size:14px;font-weight:600;margin-bottom:5px;">配置左侧参数后运行回放</div>
+              <div style="font-size:12.5px;color:var(--text-3);max-width:340px;line-height:1.6;">回放会用录制的工具结果 mock 执行，重跑后在此展示状态、偏离与跳转。</div>
+            </div>
+          </sc-if>
+
+          <!-- result card -->
+          <sc-if value="{{ showResult }}">
+            <div style="border:1px solid var(--border);border-radius:14px;background:var(--surface);overflow:hidden;">
+              <div style="display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--border-soft);">
+                <span style="{{ resultBadge }}"><span style="{{ resultDot }}"></span>{{ resultLabel }}</span>
+                <span style="font-size:13px;color:var(--text-2);">回放完成 · 用时 <span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--text);">3.86s</span></span>
+                <div style="flex:1;"></div>
+                <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-3);">→ <span style="color:var(--replay-fg);">tr_replay_c47a</span></span>
+              </div>
+              <div style="padding:16px 20px;display:flex;flex-direction:column;gap:16px;">
+                <!-- error (fail only) -->
+                <sc-if value="{{ hasError }}">
+                  <div style="display:flex;gap:11px;padding:12px 14px;background:var(--fail-bg);border:1px solid color-mix(in srgb,var(--fail-dot) 35%,transparent);border-radius:10px;">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;color:var(--fail-fg);margin-top:1px;"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/><path d="M12 7v6M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                    <div>
+                      <div style="font-size:12.5px;font-weight:600;color:var(--fail-fg);margin-bottom:3px;">回放失败</div>
+                      <pre style="font-family:var(--font-mono);font-size:12px;color:var(--fail-fg);white-space:pre-wrap;line-height:1.5;">{{ errorMsg }}</pre>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <!-- drift list -->
+                <div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-2);">偏离项</span>
+                    <span style="font-family:var(--font-mono);font-size:11.5px;color:var(--warn-fg);background:var(--warn-bg);padding:1px 7px;border-radius:5px;">{{ driftCount }}</span>
+                  </div>
+                  <sc-if value="{{ noDrift }}"><div style="font-size:12.5px;color:var(--text-3);padding:8px 0;">无偏离，回放与录制完全一致。</div></sc-if>
+                  <div style="display:flex;flex-direction:column;gap:8px;">
+                    <sc-for list="{{ drifts }}" as="d" hint-placeholder-count="2">
+                      <div style="display:flex;align-items:flex-start;gap:11px;padding:11px 13px;background:var(--warn-bg);border-radius:10px;">
+                        <span style="width:7px;height:7px;border-radius:50%;background:var(--warn-dot);flex:0 0 auto;margin-top:5px;"></span>
+                        <div style="min-width:0;flex:1;">
+                          <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
+                            <span style="font-family:var(--font-mono);font-size:11.5px;font-weight:600;color:var(--warn-fg);">{{ d.code }}</span>
+                            <span style="font-size:11px;color:var(--text-3);font-family:var(--font-mono);">步骤 {{ d.step }}</span>
+                          </div>
+                          <div style="font-size:12.5px;color:var(--text-2);line-height:1.5;">{{ d.desc }}</div>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+
+                <!-- jumps -->
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:14px;border-top:1px solid var(--border-soft);">
+                  <span style="font-size:12px;color:var(--text-3);flex:1 0 auto;">下一步</span>
+                  <button onClick="{{ onSeeResult }}" style="{{ ghostJumpStyle }}" style-hover="background:var(--surface-hover);border-color:var(--border);">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2.2" stroke="currentColor" stroke-width="1.7"/><circle cx="6" cy="18" r="2.2" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="12" r="2.2" stroke="currentColor" stroke-width="1.7"/><path d="M8.2 6H14a2.4 2.4 0 012.4 2.4V10M8.2 18H14a2.4 2.4 0 002.4-2.4V14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                    查看结果链路
+                  </button>
+                  <button onClick="{{ onGoCompare }}" style="{{ primaryJumpStyle }}" style-hover="opacity:.9;">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 4v16M6 8H4v8h2M18 8h2v8h-2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    与源链路对比
+                  </button>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- history timeline -->
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+              <h2 style="margin:0;font-size:13px;font-weight:650;color:var(--text-2);">回放历史</h2>
+              <span style="font-family:var(--font-mono);font-size:11.5px;color:var(--text-3);">{{ historyCount }} 次</span>
+            </div>
+            <div style="position:relative;padding-left:22px;">
+              <div style="position:absolute;left:5px;top:6px;bottom:6px;width:1.5px;background:var(--border);"></div>
+              <div style="display:flex;flex-direction:column;gap:12px;">
+                <sc-for list="{{ history }}" as="h" hint-placeholder-count="4">
+                  <div style="position:relative;">
+                    <span style="position:absolute;left:-21px;top:15px;width:11px;height:11px;border-radius:50%;background:var(--bg);border:2px solid {{ h.dotBorder }};box-shadow:0 0 0 3px var(--bg);"></span>
+                    <div style="display:flex;align-items:center;gap:12px;padding:11px 15px;background:var(--surface);border:1px solid var(--border);border-radius:11px;" style-hover="border-color:var(--border);background:var(--surface-hover);">
+                      <span style="{{ h.badge }}"><span style="{{ h.dot }}"></span>{{ h.label }}</span>
+                      <div style="min-width:0;flex:1;">
+                        <div style="font-size:12.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ h.summary }}</div>
+                        <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-3);margin-top:2px;">{{ h.meta }}</div>
+                      </div>
+                      <span style="font-size:11.5px;color:var(--text-3);white-space:nowrap;flex:0 0 auto;">{{ h.time }}</span>
+                      <a href="#" style="font-size:11.5px;font-weight:500;flex:0 0 auto;">查看</a>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1320,&quot;height&quot;:900},&quot;defaultTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;,&quot;system&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'dark'|'light'|'system'&quot;,&quot;section&quot;:&quot;主题&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#22D3EE&quot;,&quot;options&quot;:[&quot;#22D3EE&quot;,&quot;#2DD4BF&quot;,&quot;#60A5FA&quot;,&quot;#A78BFA&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;主题&quot;},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;full&quot;,&quot;step&quot;],&quot;default&quot;:&quot;full&quot;,&quot;tsType&quot;:&quot;'full'|'step'&quot;,&quot;section&quot;:&quot;回放&quot;},&quot;resultKind&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;pass&quot;,&quot;fail&quot;],&quot;default&quot;:&quot;pass&quot;,&quot;tsType&quot;:&quot;'pass'|'fail'&quot;,&quot;section&quot;:&quot;回放&quot;}}">
+class Component extends DCLogic {
+  state = { theme:'dark', resolved:'dark', collapsed:false,
+    model:'gpt-4o', modelOpen:false, temp:0.2, promptMode:'custom', ver:'v4', verOpen:false,
+    advOpen:false, topP:1.0, freqPen:0.0, presPen:0.0, maxTokens:1024, stopSeq:'',
+    promptText:'你是「结账助手」。在任何支付操作前，必须先调用 get_cart 读取购物车内容。若购物车为空则告知用户，不要发起支付。',
+    running:false, resultKind:'pass' };
+
+  componentDidMount(){
+    this._mq = window.matchMedia('(prefers-color-scheme: dark)');
+    this._onMq=()=>{ if(this.state.theme==='system') this.setState({resolved:this._mq.matches?'dark':'light'}); };
+    this._mq.addEventListener('change', this._onMq);
+    this._qs = new URLSearchParams(location.search);
+    let init = this.props.defaultTheme||'dark';
+    try{ const saved = localStorage.getItem('ps-theme'); if(saved) init = saved; }catch(e){}
+    this.setTheme(init);
+    if(this.props.accent) document.documentElement.style.setProperty('--accent', this.props.accent);
+    this._injectIcons();
+  }
+  componentDidUpdate(){ if(this.props.accent) document.documentElement.style.setProperty('--accent', this.props.accent); this._injectIcons(); }
+  componentWillUnmount(){ this._mq && this._mq.removeEventListener('change', this._onMq); if(this._t) clearTimeout(this._t); }
+  setTheme(mode){ let r=mode==='system'?(this._mq&&this._mq.matches?'dark':'light'):mode; document.documentElement.setAttribute('data-theme',r); try{ localStorage.setItem('ps-theme', mode); }catch(e){} this.setState({theme:mode,resolved:r}); }
+  _go(url){ window.location.href = url; }
+  toggleCollapse(){ this.setState(s=>({collapsed:!s.collapsed})); }
+  _injectIcons(){
+    const nav={
+      traces:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2.4" stroke="currentColor" stroke-width="1.7"/><circle cx="6" cy="18" r="2.4" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="12" r="2.4" stroke="currentColor" stroke-width="1.7"/><path d="M8.4 6H14a2.5 2.5 0 012.5 2.5V10M8.4 18H14a2.5 2.5 0 002.5-2.5V14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+      compare:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="4.5" width="7" height="15" rx="1.6" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="4.5" width="7" height="15" rx="1.6" stroke="currentColor" stroke-width="1.7"/></svg>',
+      prompts:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 5l4 4-4 4M11 15h7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      settings:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 7h10M4 12h16M4 17h7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="17" cy="7" r="2.2" stroke="currentColor" stroke-width="1.7"/><circle cx="14" cy="17" r="2.2" stroke="currentColor" stroke-width="1.7"/></svg>',
+    };
+    const th={
+      light:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4.4" stroke="currentColor" stroke-width="1.7"/><path d="M12 2.5v2.5M12 19v2.5M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2.5 12H5M19 12h2.5M4.2 19.8L6 18M18 6l1.8-1.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+      dark:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
+      system:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="4.5" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M9 20h6M12 16.5V20" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+    };
+    document.querySelectorAll('[data-icon]').forEach(el=>{const k=el.getAttribute('data-icon'); if(nav[k]&&el.innerHTML!==nav[k]) el.innerHTML=nav[k];});
+    document.querySelectorAll('[data-ticon]').forEach(el=>{const k=el.getAttribute('data-ticon'); if(th[k]&&el.innerHTML!==th[k]) el.innerHTML=th[k];});
+  }
+  runReplay(){
+    if(this.state.running) return;
+    this.setState({running:true});
+    this._t=setTimeout(()=>this.setState({running:false, scored:true}), 1600);
+  }
+  _baseTexts(){ return {
+    v4:'你是「结账助手」。在任何支付操作前，必须先调用 get_cart 读取购物车内容。若购物车为空则告知用户，不要发起支付。',
+    v3:'你是「结账助手」。发起支付前必须先调用 get_cart 读取购物车。',
+    v2:'你是「结账助手」。完成结算后，向用户说明预计送达时间。',
+  }; }
+  pickBase(id){
+    if(id==='custom'){ this.setState({promptBase:'custom', verOpen:false}); return; }
+    const t=this._baseTexts()[id]||'';
+    this.setState({promptBase:id, promptText:t, verOpen:false});
+  }
+  resetPrompt(){ const t=this._baseTexts()[this.state.promptBase]; if(t!=null) this.setState({promptText:t}); }
+
+  _badge(fg,bg,tie){ return {display:'inline-flex',alignItems:'center',gap:'6px',padding:'2.5px 10px',borderRadius:'999px',fontSize:'11.5px',fontWeight:600,lineHeight:'16px',whiteSpace:'nowrap',color:`var(${fg})`,background:`var(${bg})`,border:tie?'1px solid var(--border-soft)':'none'}; }
+  _dot(c,pulse){ const s={width:'6px',height:'6px',borderRadius:'50%',flex:'0 0 auto',background:`var(${c})`}; if(pulse) s.animation='ps-pulse 1.4s ease-in-out infinite'; return s; }
+
+  renderVals(){
+    const S=this.state;
+    const qs = this._qs || new URLSearchParams('');
+    const qMode = qs.get('mode');
+    const isStep = (qMode || this.props.mode || 'full')==='step';
+    const traceId = qs.get('trace') || 'tr_9f2ac10b';
+    const stepLabel = qs.get('step') ? ('步骤 · '+qs.get('step')) : '步骤 3「决定发起支付」';
+    const resultKind = this.props.resultKind || S.resultKind;
+
+    // model dropdown
+    const models=[{n:'gpt-4o',o:true},{n:'gpt-4o-mini'},{n:'claude-3.5-sonnet'},{n:'gemini-1.5-pro'},{n:'o1-mini'}];
+    const modelOpts=models.map(m=>({name:m.n,origin:!!m.o,active:S.model===m.n,onPick:()=>this.setState({model:m.n,modelOpen:false}),
+      style:{display:'flex',alignItems:'center',gap:'9px',width:'100%',padding:'8px 10px',border:'none',borderRadius:'8px',cursor:'pointer',background:S.model===m.n?'var(--surface-hover)':'transparent',color:'var(--text)',fontFamily:'var(--font-sans)'}}));
+
+    // (prompt base texts defined in _baseTexts)
+
+    // advanced sampling params
+    const advSliders=[
+      {label:'Top P', key:'top_p', min:0, max:1, step:0.05, value:S.topP, display:S.topP.toFixed(2), set:'topP'},
+      {label:'频率惩罚', key:'frequency_penalty', min:-2, max:2, step:0.1, value:S.freqPen, display:(S.freqPen>0?'+':'')+S.freqPen.toFixed(1), set:'freqPen'},
+      {label:'存在惩罚', key:'presence_penalty', min:-2, max:2, step:0.1, value:S.presPen, display:(S.presPen>0?'+':'')+S.presPen.toFixed(1), set:'presPen'},
+    ].map(a=>({...a, onInput:(e)=>this.setState({[a.set]:parseFloat(e.target.value)})}));
+    const advDirty = S.topP!==1.0 || S.freqPen!==0.0 || S.presPen!==0.0 || S.maxTokens!==1024 || S.stopSeq.trim()!=='';
+
+    // prompt base selector (custom or a library version → editable)
+    const baseTexts=this._baseTexts();
+    const verDefs=[{v:'v4',note:'加入空购物车校验'},{v:'v3',note:'强制先读购物车'},{v:'v2',note:'补充送达时间说明'}];
+    const baseSans='var(--font-sans)', baseMono='var(--font-mono)';
+    const baseDefs=[{v:'custom',title:'自定义（不基于版本）',note:'自由撰写，不关联提示词库',mono:false},
+      ...verDefs.map(v=>({v:v.v,title:'checkout-system '+v.v,note:v.note,mono:true}))];
+    const baseOpts=baseDefs.map(b=>{const on=S.promptBase===b.v;return{title:b.title,note:b.note,active:on,
+      font:b.mono?baseMono:baseSans, weight:on?600:500, titleColor:on?'var(--accent)':'var(--text)',
+      onPick:()=>this.pickBase(b.v),
+      style:{display:'flex',alignItems:'center',gap:'10px',width:'100%',padding:'9px 10px',border:'none',borderRadius:'8px',cursor:'pointer',background:on?'var(--surface-hover)':'transparent',color:'var(--text)',fontFamily:'var(--font-sans)'}};});
+    const curBase=baseDefs.find(b=>b.v===S.promptBase)||baseDefs[0];
+    const isVersionBase=S.promptBase!=='custom';
+    const promptDirty=isVersionBase && S.promptText!==(baseTexts[S.promptBase]||'');
+    const baseVerShort=isVersionBase?S.promptBase:'';
+    const promptHelper = !isVersionBase
+      ? '自由撰写的 system prompt，不关联任何版本。'
+      : (promptDirty ? ('已在 checkout-system '+S.promptBase+' 基础上修改（不会改动原版本）。')
+                     : ('已载入 checkout-system '+S.promptBase+'，可直接编辑。'));
+
+    // result data
+    const resMap={
+      pass:{fg:'--pass-fg',bg:'--pass-bg',dot:'--pass-dot',label:'成功'},
+      fail:{fg:'--fail-fg',bg:'--fail-bg',dot:'--fail-dot',label:'失败'},
+    };
+    const rc=resMap[resultKind]||resMap.pass;
+    const driftsAll = resultKind==='fail'
+      ? [{code:'unrecorded_call',step:'4',desc:'模型尝试调用未录制的工具 send_receipt_email，回放无对应 mock 结果，执行中断。'},
+         {code:'param_mismatch',step:'3',desc:'charge_payment 的 method 参数与录制值不一致（saved_card ≠ default_card）。'}]
+      : [{code:'param_mismatch',step:'3',desc:'charge_payment 的 method 参数与录制值不一致（saved_card ≠ default_card），已使用录制结果继续。'}];
+
+    // history
+    const histDefs=[
+      {k:'pass',summary:'gpt-4o · temp 0.2 · system v4', meta:'1 偏离 · $0.0389 · 3.86s', time:'刚刚'},
+      {k:'fail',summary:'gpt-4o-mini · temp 0.7 · system v4', meta:'unrecorded_call · 中断于步骤 4', time:'12 分钟前'},
+      {k:'pass',summary:'claude-3.5-sonnet · temp 0.2 · system v3', meta:'0 偏离 · $0.0412 · 4.01s', time:'1 小时前'},
+      {k:'pass',summary:'gpt-4o · temp 0.0 · system v3', meta:'2 偏离 · $0.0644 · 4.20s', time:'昨天 18:32'},
+    ];
+    const history=histDefs.map(h=>{const m=resMap[h.k];return{label:m.label,summary:h.summary,meta:h.meta,time:h.time,
+      badge:this._badge(m.fg,m.bg),dot:this._dot(m.dot,false),dotBorder:`var(${m.dot})`};});
+
+    // nav
+    const navDef=[{key:'traces',label:'链路',active:true},{key:'compare',label:'对比'},{key:'prompts',label:'提示词'},{key:'settings',label:'设置'}];
+    const navFile = { traces:'Traces.dc.html', compare:'Compare.dc.html', prompts:'Prompts.dc.html', settings:'Settings.dc.html' };
+    const navItems=navDef.map(n=>({key:n.key,label:n.label,onClick:(e)=>{ e.preventDefault(); if(!n.active) this._go(navFile[n.key]); },weight:n.active?600:500,iconColor:n.active?'var(--accent)':'var(--text-2)',
+      style:{position:'relative',display:'flex',alignItems:'center',gap:'11px',height:'38px',padding:S.collapsed?'0':'0 11px',justifyContent:S.collapsed?'center':'flex-start',borderRadius:'9px',textDecoration:'none',background:n.active?'var(--accent-subtle)':'transparent',color:n.active?'var(--accent)':'var(--text-2)'},
+      barStyle:{position:'absolute',left:'-11px',top:'9px',bottom:'9px',width:'3px',borderRadius:'0 3px 3px 0',background:n.active?'var(--accent)':'transparent',display:S.collapsed?'none':'block'}}));
+    const themeDefs=[{key:'light',label:'亮'},{key:'dark',label:'暗'},{key:'system',label:'系统'}];
+    const themeOpts=themeDefs.map(t=>{const on=S.theme===t.key;return{key:t.key,label:t.label,showLabel:!S.collapsed,onClick:()=>this.setTheme(t.key),
+      style:{display:'flex',alignItems:'center',justifyContent:'center',gap:'6px',flex:S.collapsed?'0 0 auto':'1',height:'30px',padding:S.collapsed?'0':'0 6px',border:'none',borderRadius:'7px',cursor:'pointer',fontFamily:'var(--font-sans)',background:on?'var(--surface-2)':'transparent',color:on?'var(--accent)':'var(--text-3)',boxShadow:on?'inset 0 0 0 1px var(--border)':'none'}};});
+
+    const running=S.running;
+    const showResult = !!S.scored && !running;
+
+    return {
+      expanded:!S.collapsed, toggleCollapse:()=>this.toggleCollapse(),
+      navItems, themeOpts,
+      isStep, stepLabel, traceId, traceHref:'TraceDetail.dc.html?trace='+traceId,
+      onGoCompare:()=>this._go('Compare.dc.html?a='+traceId+'&b=tr_replay_c47a'),
+      onSeeResult:()=>this._go('TraceDetail.dc.html?trace=tr_replay_c47a&source=replay'),
+      sourceBadge:this._badge('--replay-fg','--replay-bg'), sourceDot:this._dot('--replay-dot',false),
+      // config
+      model:S.model, modelOpen:S.modelOpen, toggleModel:()=>this.setState(s=>({modelOpen:!s.modelOpen,verOpen:false})), modelOpts,
+      temp:S.temp.toFixed(1), tempVal:S.temp, onTemp:(e)=>this.setState({temp:parseFloat(e.target.value)}),
+      advOpen:S.advOpen, toggleAdv:()=>this.setState(s=>({advOpen:!s.advOpen})), advSliders, advDirty,
+      advChevStyle:{transform:S.advOpen?'rotate(90deg)':'rotate(0deg)',transition:'transform .12s',color:'var(--text-3)',flex:'0 0 auto'},
+      advHeadStyle:{display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%',height:'42px',padding:'0 14px',border:'none',background:S.advOpen?'var(--bg-grid)':'transparent',cursor:'pointer',fontFamily:'var(--font-sans)',fontSize:'12.5px',fontWeight:600,color:'var(--text-2)'},
+      numInputStyle:{width:'100%',height:'36px',padding:'0 11px',background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:'8px',color:'var(--text)',fontSize:'13px',fontFamily:'var(--font-mono)',outline:'none'},
+      maxTokens:S.maxTokens, onMaxTokens:(e)=>this.setState({maxTokens:parseInt(e.target.value||'0',10)}),
+      stopSeq:S.stopSeq, onStop:(e)=>this.setState({stopSeq:e.target.value}),
+      promptText:S.promptText, onPrompt:(e)=>this.setState({promptText:e.target.value}),
+      baseOpts, baseLabel:curBase.title, baseIconColor:isVersionBase?'var(--accent)':'var(--text-3)',
+      promptDirty, promptHelper, baseVerShort, resetPrompt:()=>this.resetPrompt(),
+      verOpen:S.verOpen, toggleVer:()=>this.setState(s=>({verOpen:!s.verOpen,modelOpen:false})),
+      running, notRunning:!running, runLabel: running?'回放中…':'运行回放',
+      runReplay:()=>this.runReplay(), autoNav:!S.scored,
+      // results
+      showPlaceholder: !S.scored && !running,
+      showResult,
+      resultBadge:this._badge(rc.fg,rc.bg), resultDot:this._dot(rc.dot,false), resultLabel:rc.label,
+      hasError: resultKind==='fail',
+      errorMsg:'ReplayError: unrecorded tool call "send_receipt_email" at step 4\n  no recorded output to mock — replay aborted',
+      drifts:driftsAll, driftCount:driftsAll.length, noDrift:false,
+      history, historyCount:history.length,
+      // styles
+      labelStyle:{display:'block',fontSize:'12px',fontWeight:600,color:'var(--text-2)',marginBottom:'8px'},
+      selectStyle:{display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%',height:'40px',padding:'0 13px',background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:'9px',cursor:'pointer',color:'var(--text)',fontFamily:'var(--font-sans)'},
+      dropStyle:{position:'absolute',top:'calc(100% + 6px)',left:0,right:0,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:'11px',boxShadow:'var(--shadow)',padding:'5px',zIndex:40},
+      dropScrollStyle:{position:'absolute',top:'calc(100% + 6px)',left:0,right:0,maxHeight:'216px',overflowY:'auto',background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:'11px',boxShadow:'var(--shadow)',padding:'5px',zIndex:40},
+      resetLinkStyle:{border:'none',background:'transparent',color:'var(--text-3)',fontSize:'11.5px',fontWeight:500,cursor:'pointer',fontFamily:'var(--font-sans)',padding:0,whiteSpace:'nowrap',flex:'0 0 auto'},
+      textareaStyle:{width:'100%',minHeight:'110px',padding:'11px 13px',background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:'9px',color:'var(--text)',fontSize:'12.5px',fontFamily:'var(--font-mono)',lineHeight:'1.6',resize:'vertical',outline:'none'},
+      runBtnStyle:{display:'flex',alignItems:'center',justifyContent:'center',gap:'9px',width:'100%',height:'44px',border:'none',borderRadius:'11px',cursor:running?'wait':'pointer',fontFamily:'var(--font-sans)',fontSize:'14px',fontWeight:650,background:'var(--accent)',color:'var(--accent-fg)',opacity:running?.85:1},
+      primaryJumpStyle:{display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',height:'38px',padding:'0 16px',border:'1px solid var(--accent)',borderRadius:'9px',background:'var(--accent)',color:'var(--accent-fg)',cursor:'pointer',fontFamily:'var(--font-sans)',fontSize:'13px',fontWeight:600,flex:'0 0 auto'},
+      ghostJumpStyle:{display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',height:'38px',padding:'0 16px',border:'1px solid var(--border)',borderRadius:'9px',background:'var(--surface)',color:'var(--text-2)',cursor:'pointer',fontFamily:'var(--font-sans)',fontSize:'13px',fontWeight:600,flex:'0 0 auto'},
+      sidebarStyle:{flex:'0 0 auto',width:S.collapsed?'66px':'244px',transition:'width .16s cubic-bezier(.3,.7,.3,1)',display:'flex',flexDirection:'column',padding:'16px 12px',borderRight:'1px solid var(--border)',background:'var(--surface)',height:'100vh',position:'sticky',top:'0'},
+      wsBtnStyle:{display:'flex',alignItems:'center',gap:'9px',width:'100%',height:'44px',marginTop:'14px',padding:S.collapsed?'0':'0 9px',justifyContent:S.collapsed?'center':'flex-start',border:'1px solid var(--border)',borderRadius:'10px',background:'var(--surface-2)',color:'var(--text)',cursor:'pointer',fontFamily:'var(--font-sans)'},
+      themeWrapStyle:{display:'flex',flexDirection:S.collapsed?'column':'row',gap:'3px',padding:'3px',background:'var(--bg-grid)',border:'1px solid var(--border-soft)',borderRadius:'9px'},
+    };
+  }
+}
+</script>
+</body>
+</html>

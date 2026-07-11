@@ -5,7 +5,7 @@ from fastapi import Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from db import get_db
-from models.entities import ApiKey, Project
+from models.entities import ApiKey, Project, utcnow
 
 
 def hash_key(raw: str) -> str:
@@ -21,6 +21,8 @@ def resolve_api_key(db: Session, raw: str) -> Project:
     row = db.query(ApiKey).filter(ApiKey.key_hash == hash_key(raw)).first()
     if row is None or row.revoked_at is not None:
         raise HTTPException(status_code=401, detail="invalid or revoked API key")
+    row.last_used_at = utcnow()
+    db.commit()
     return row.project
 
 

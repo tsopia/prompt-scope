@@ -38,6 +38,12 @@ def _row_to_dict(row, columns) -> dict:
 def migrate_provider_project(db: Session, owner_email: str) -> int:
     project_id = _resolve_project_id(db, owner_email)
 
+    # 旧库的 model_providers/model_pricings 还没有 project_id 列；先用 ensure_columns
+    # 补上（可空列），否则下面的 ORM 查询会 SELECT project_id 而报 no such column。
+    # 这些临时列随后会被 drop + create_all 重建为带 FK/UNIQUE 的正式列。
+    from db_migrate import ensure_columns
+    ensure_columns(db.get_bind())
+
     provider_cols = ModelProvider.__table__.columns
     pricing_cols = ModelPricing.__table__.columns
     providers = [_row_to_dict(p, provider_cols)

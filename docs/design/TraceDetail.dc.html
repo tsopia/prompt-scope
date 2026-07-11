@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0D14; --bg-grid:#0C1019; --surface:#10141E; --surface-2:#141926;
+    --surface-hover:#182031; --border:#222A3A; --border-soft:#1A2130;
+    --text:#E7ECF5; --text-2:#94A0B5; --text-3:#5C687E;
+    --accent:#22D3EE; --accent-fg:#04141B;
+    --accent-subtle:color-mix(in srgb, var(--accent) 15%, transparent);
+    --accent-border:color-mix(in srgb, var(--accent) 42%, transparent);
+    --live-fg:#7FC0FF; --live-dot:#3B82F6; --live-bg:color-mix(in srgb,#3B82F6 15%,transparent);
+    --replay-fg:#C4B5FD; --replay-dot:#8B5CF6; --replay-bg:color-mix(in srgb,#8B5CF6 16%,transparent);
+    --pass-fg:#5FE6A0; --pass-dot:#22C55E; --pass-bg:color-mix(in srgb,#22C55E 14%,transparent);
+    --warn-fg:#F7C24B; --warn-dot:#F59E0B; --warn-bg:color-mix(in srgb,#F59E0B 15%,transparent);
+    --fail-fg:#FB8091; --fail-dot:#EF4444; --fail-bg:color-mix(in srgb,#EF4444 15%,transparent);
+    --shadow:0 12px 40px -12px rgba(0,0,0,.7);
+    --font-sans:'Geist','Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;
+    --font-mono:'Geist Mono','JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  html[data-theme="light"]{
+    --bg:#F7F9FC; --bg-grid:#EEF2F8; --surface:#FFFFFF; --surface-2:#FFFFFF;
+    --surface-hover:#F3F6FB; --border:#E1E7F0; --border-soft:#EBEFF6;
+    --text:#0F172A; --text-2:#556074; --text-3:#8A94A6;
+    --accent:#0E9BB8; --accent-fg:#FFFFFF;
+    --accent-subtle:color-mix(in srgb, var(--accent) 12%, transparent);
+    --accent-border:color-mix(in srgb, var(--accent) 45%, transparent);
+    --live-fg:#1D6FD6; --live-dot:#2563EB; --live-bg:color-mix(in srgb,#2563EB 11%,transparent);
+    --replay-fg:#7C3AED; --replay-dot:#7C3AED; --replay-bg:color-mix(in srgb,#7C3AED 11%,transparent);
+    --pass-fg:#0F9D58; --pass-dot:#16A34A; --pass-bg:color-mix(in srgb,#16A34A 12%,transparent);
+    --warn-fg:#B7791F; --warn-dot:#D97706; --warn-bg:color-mix(in srgb,#D97706 14%,transparent);
+    --fail-fg:#DC2626; --fail-dot:#DC2626; --fail-bg:color-mix(in srgb,#DC2626 11%,transparent);
+    --shadow:0 12px 40px -14px rgba(15,23,42,.18);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans);-webkit-font-smoothing:antialiased;}
+  a{color:var(--accent);text-decoration:none;} a:hover{opacity:.8;}
+  ::selection{background:var(--accent-subtle);}
+  @keyframes ps-pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.35;transform:scale(.72);}}
+  pre{margin:0;}
+  ::-webkit-scrollbar{height:10px;width:10px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:6px;border:3px solid transparent;background-clip:padding-box;}
+  ::-webkit-scrollbar-track{background:transparent;}
+</style>
+</helmet>
+
+<div style="display:flex;min-height:100vh;width:100%;background:var(--bg);">
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside style="{{ sidebarStyle }}">
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 8px 4px;height:34px;overflow:hidden;">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;">
+        <circle cx="12" cy="12" r="9.2" stroke="var(--accent)" stroke-width="1.4" opacity="0.9"/>
+        <circle cx="12" cy="12" r="4.4" stroke="var(--accent)" stroke-width="1.4"/>
+        <circle cx="12" cy="12" r="1.7" fill="var(--accent)"/>
+        <path d="M12 0.6V4.2M12 19.8V23.4M0.6 12H4.2M19.8 12H23.4" stroke="var(--accent)" stroke-width="1.3" stroke-linecap="round" opacity="0.55"/>
+      </svg>
+      <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}"><span style="font-size:15px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;">PromptScope</span></sc-if>
+    </div>
+    <button style="{{ wsBtnStyle }}">
+      <span style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;background:linear-gradient(140deg,var(--accent),#7C3AED);color:#04141B;font-size:12px;font-weight:700;flex:0 0 auto;">A</span>
+      <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+        <span style="display:flex;flex-direction:column;align-items:flex-start;min-width:0;flex:1;line-height:1.15;">
+          <span style="font-size:13px;font-weight:600;white-space:nowrap;">Acme AI</span>
+          <span style="font-size:11px;color:var(--text-3);white-space:nowrap;">生产环境</span>
+        </span>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;color:var(--text-3);"><path d="M7 9l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </sc-if>
+    </button>
+    <nav style="display:flex;flex-direction:column;gap:3px;margin-top:18px;">
+      <sc-for list="{{ navItems }}" as="nav" hint-placeholder-count="4">
+        <a href="#" onClick="{{ nav.onClick }}" title="{{ nav.label }}" style="{{ nav.style }}">
+          <span style="{{ nav.barStyle }}"></span>
+          <span style="display:flex;width:20px;height:20px;flex:0 0 auto;color:{{ nav.iconColor }};" data-icon="{{ nav.key }}"></span>
+          <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}"><span style="font-size:13.5px;font-weight:{{ nav.weight }};white-space:nowrap;">{{ nav.label }}</span></sc-if>
+        </a>
+      </sc-for>
+    </nav>
+    <div style="flex:1 1 auto;"></div>
+    <div style="{{ themeWrapStyle }}">
+      <sc-for list="{{ themeOpts }}" as="t" hint-placeholder-count="3">
+        <button onClick="{{ t.onClick }}" title="{{ t.label }}" style="{{ t.style }}">
+          <span style="display:flex;width:16px;height:16px;" data-ticon="{{ t.key }}"></span>
+          <sc-if value="{{ t.showLabel }}"><span style="font-size:12px;font-weight:600;">{{ t.label }}</span></sc-if>
+        </button>
+      </sc-for>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding:8px;border-radius:10px;overflow:hidden;">
+      <span style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:var(--surface-hover);border:1px solid var(--border);font-size:12px;font-weight:700;flex:0 0 auto;">林</span>
+      <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+        <span style="display:flex;flex-direction:column;min-width:0;line-height:1.2;">
+          <span style="font-size:12.5px;font-weight:600;white-space:nowrap;">林越</span>
+          <span style="font-size:11px;color:var(--text-3);white-space:nowrap;">管理员</span>
+        </span>
+      </sc-if>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column;height:100vh;overflow:hidden;">
+
+    <!-- page header -->
+    <header style="flex:0 0 auto;padding:20px 28px 18px;border-bottom:1px solid var(--border);">
+      <div style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--text-3);margin-bottom:11px;">
+        <button onClick="{{ toggleCollapse }}" title="折叠侧边栏" style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;margin-left:-4px;margin-right:2px;border:none;background:transparent;color:var(--text-2);border-radius:7px;cursor:pointer;" style-hover="background:var(--surface-hover);">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><rect x="3" y="4.5" width="18" height="15" rx="2.4" stroke="currentColor" stroke-width="1.6"/><path d="M9 4.5v15" stroke="currentColor" stroke-width="1.6"/></svg>
+        </button>
+        <a href="Traces.dc.html" style="color:var(--text-3);display:inline-flex;align-items:center;gap:5px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M14 6l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>链路</a>
+        <span style="opacity:.5;">/</span>
+        <span style="color:var(--text-2);font-family:var(--font-mono);">{{ traceId }}</span>
+      </div>
+
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap;">
+        <div style="min-width:0;">
+          <div style="display:flex;align-items:center;gap:11px;flex-wrap:wrap;">
+            <h1 style="margin:0;font-size:22px;font-weight:700;letter-spacing:-.02em;">{{ traceName }}</h1>
+            <span style="{{ sourceBadge }}"><span style="{{ sourceDot }}"></span>{{ sourceLabel }}</span>
+            <span style="{{ statusBadge }}"><span style="{{ statusDot }}"></span>{{ statusLabel }}</span>
+          </div>
+          <!-- metrics -->
+          <div style="display:flex;align-items:center;gap:26px;margin-top:14px;">
+            <sc-for list="{{ metrics }}" as="m" hint-placeholder-count="4">
+              <div style="display:flex;flex-direction:column;gap:3px;">
+                <span style="font-size:11px;color:var(--text-3);font-weight:500;">{{ m.label }}</span>
+                <span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:17px;font-weight:600;color:{{ m.color }};letter-spacing:-.01em;">{{ m.value }}<span style="font-size:11px;color:var(--text-3);font-weight:400;margin-left:5px;">{{ m.sub }}</span></span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;flex:0 0 auto;">
+          <div style="display:flex;padding:3px;background:var(--surface);border:1px solid var(--border);border-radius:9px;gap:2px;">
+            <sc-for list="{{ modeOpts }}" as="mo" hint-placeholder-count="2">
+              <button onClick="{{ mo.onClick }}" style="{{ mo.style }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ mo.dot }};"></span>{{ mo.label }}</button>
+            </sc-for>
+          </div>
+          <sc-if value="{{ isLive }}">
+            <button onClick="{{ onFullReplay }}" style="{{ replayBtnStyle }}" style-hover="opacity:.9;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+              回放整条
+            </button>
+          </sc-if>
+          <sc-if value="{{ isReplay }}">
+            <button style="{{ rerunBtnStyle }}" style-hover="background:var(--surface-hover);">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M20 11a8 8 0 10-.6 3M20 5v6h-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              重跑
+            </button>
+          </sc-if>
+        </div>
+      </div>
+    </header>
+
+    <!-- two-column body -->
+    <div style="flex:1;min-height:0;display:flex;">
+
+      <!-- LEFT: call tree -->
+      <div style="flex:0 0 400px;min-width:0;border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--surface);">
+        <div style="flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;height:42px;padding:0 16px;border-bottom:1px solid var(--border-soft);">
+          <span style="font-size:12px;font-weight:600;color:var(--text-2);letter-spacing:.02em;">调用链</span>
+          <span style="font-size:11.5px;color:var(--text-3);font-family:var(--font-mono);">{{ nodeCount }} 步</span>
+        </div>
+        <div style="flex:1;min-height:0;overflow:auto;padding:8px 8px 20px;">
+          <sc-for list="{{ tree }}" as="n" hint-placeholder-count="6">
+            <div onClick="{{ n.onSelect }}" style="{{ n.rowStyle }}" style-hover="background:var(--surface-hover);">
+              <div style="width:{{ n.indent }}px;flex:0 0 auto;"></div>
+              <button onClick="{{ n.onToggle }}" style="{{ n.chevBtnStyle }}">
+                <sc-if value="{{ n.hasChildren }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="{{ n.chevStyle }}"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></sc-if>
+              </button>
+              <span style="{{ n.dotStyle }}"></span>
+              <span style="{{ n.tagStyle }}">{{ n.tag }}</span>
+              <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">
+                <span style="font-size:12.5px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ n.label }}</span>
+                <sc-if value="{{ n.sub }}"><span style="font-size:11px;font-family:var(--font-mono);color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ n.sub }}</span></sc-if>
+              </span>
+              <sc-if value="{{ n.mocked }}"><span style="font-size:9.5px;font-weight:600;font-family:var(--font-mono);color:var(--replay-fg);background:var(--replay-bg);padding:1px 5px;border-radius:5px;flex:0 0 auto;">MOCK</span></sc-if>
+              <span style="font-size:11px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--text-3);flex:0 0 auto;white-space:nowrap;">{{ n.lat }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- RIGHT: node detail -->
+      <div style="flex:1;min-width:0;overflow:auto;">
+        <div style="max-width:900px;padding:22px 28px 60px;">
+
+          <!-- detail header -->
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:20px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:11px;min-width:0;flex-wrap:wrap;">
+              <span style="{{ detail.tagStyle }}">{{ detail.tag }}</span>
+              <h2 style="margin:0;font-size:17px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ detail.title }}</h2>
+              <span style="{{ detail.statusBadge }}"><span style="{{ detail.statusDot }}"></span>{{ detail.statusLabel }}</span>
+              <sc-if value="{{ detail.mocked }}">
+                <span title="回放模式下，该工具调用不会真正执行，返回的是录制时保存的结果。" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;font-family:var(--font-mono);color:var(--replay-fg);background:var(--replay-bg);padding:2.5px 9px;border-radius:999px;cursor:help;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2v20M2 12h20" stroke="currentColor" stroke-width="1.6" opacity="0"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v5M12 16h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                  mocked · 录制结果
+                </span>
+              </sc-if>
+            </div>
+            <sc-if value="{{ detail.showStepReplay }}">
+              <button onClick="{{ detail.onStepReplay }}" style="{{ stepReplayBtnStyle }}" style-hover="background:var(--accent-subtle);">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+                单步回放此步
+              </button>
+            </sc-if>
+          </div>
+
+          <!-- ===== LLM DETAIL ===== -->
+          <sc-if value="{{ detail.isLlm }}">
+            <div style="display:flex;flex-direction:column;gap:16px;">
+              <!-- model + params + tokens row -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div style="{{ cardStyle }}">
+                  <div style="{{ cardHeadStyle }}">模型与参数</div>
+                  <div style="padding:14px 16px;">
+                    <div style="display:inline-flex;align-items:center;gap:7px;padding:4px 10px;background:var(--bg-grid);border:1px solid var(--border-soft);border-radius:8px;margin-bottom:12px;">
+                      <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);"></span>
+                      <span style="font-family:var(--font-mono);font-size:13px;font-weight:600;">{{ detail.model }}</span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 18px;">
+                      <sc-for list="{{ detail.params }}" as="p" hint-placeholder-count="3">
+                        <span style="font-size:12px;color:var(--text-3);">{{ p.k }}</span>
+                        <span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--text);text-align:right;">{{ p.v }}</span>
+                      </sc-for>
+                    </div>
+                  </div>
+                </div>
+                <div style="{{ cardStyle }}">
+                  <div style="{{ cardHeadStyle }}">用量</div>
+                  <div style="padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                    <div><div style="font-size:11px;color:var(--text-3);margin-bottom:4px;">输入 token</div><div style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:18px;font-weight:600;">{{ detail.tokenIn }}</div></div>
+                    <div><div style="font-size:11px;color:var(--text-3);margin-bottom:4px;">输出 token</div><div style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:18px;font-weight:600;">{{ detail.tokenOut }}</div></div>
+                    <div><div style="font-size:11px;color:var(--text-3);margin-bottom:4px;">成本</div><div style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:18px;font-weight:600;">{{ detail.cost }}</div></div>
+                    <div><div style="font-size:11px;color:var(--text-3);margin-bottom:4px;">延迟</div><div style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:18px;font-weight:600;">{{ detail.latency }}</div></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- messages -->
+              <div style="{{ cardStyle }}">
+                <div style="{{ cardHeadStyle }}">消息序列 <span style="color:var(--text-3);font-weight:400;font-family:var(--font-mono);">{{ detail.msgCount }}</span></div>
+                <div style="padding:14px 16px;display:flex;flex-direction:column;gap:12px;">
+                  <sc-for list="{{ detail.messages }}" as="m" hint-placeholder-count="3">
+                    <div style="display:flex;gap:12px;">
+                      <span style="{{ m.roleStyle }}">{{ m.role }}</span>
+                      <div style="flex:1;min-width:0;">
+                        <sc-if value="{{ m.content }}"><div style="font-size:13px;line-height:1.6;color:var(--text);white-space:pre-wrap;">{{ m.content }}</div></sc-if>
+                        <sc-if value="{{ m.toolCall }}">
+                          <div style="margin-top:{{ m.gap }};display:flex;align-items:flex-start;gap:8px;padding:9px 11px;background:var(--bg-grid);border:1px solid var(--border-soft);border-radius:8px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;margin-top:2px;color:var(--accent);"><path d="M5 5l4 4-4 4M11 15h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            <pre style="font-family:var(--font-mono);font-size:12px;color:var(--text-2);white-space:pre-wrap;word-break:break-word;flex:1;">{{ m.toolCall }}</pre>
+                          </div>
+                        </sc-if>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <!-- tool definitions -->
+              <div style="{{ cardStyle }}">
+                <button onClick="{{ toggleDefs }}" style="{{ cardHeadBtnStyle }}">
+                  <span style="display:flex;align-items:center;gap:8px;">工具定义 <span style="color:var(--text-3);font-weight:400;font-family:var(--font-mono);">{{ detail.toolDefCount }}</span></span>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="{{ defsChevStyle }}"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <sc-if value="{{ defsOpen }}">
+                  <div style="padding:6px 16px 16px;display:flex;flex-direction:column;gap:10px;">
+                    <sc-for list="{{ detail.toolDefs }}" as="td" hint-placeholder-count="2">
+                      <div style="border:1px solid var(--border-soft);border-radius:9px;padding:11px 13px;">
+                        <div style="display:flex;align-items:center;gap:9px;margin-bottom:5px;">
+                          <span style="font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--accent);">{{ td.name }}</span>
+                          <span style="font-size:12px;color:var(--text-2);">{{ td.desc }}</span>
+                        </div>
+                        <pre style="font-family:var(--font-mono);font-size:12px;line-height:1.55;color:var(--text-2);white-space:pre;overflow-x:auto;">{{ td.schema }}</pre>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- ===== TOOL DETAIL ===== -->
+          <sc-if value="{{ detail.isTool }}">
+            <div style="display:flex;flex-direction:column;gap:16px;">
+              <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:11px;">
+                <span style="font-size:11px;color:var(--text-3);">工具</span>
+                <span style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--accent);">{{ detail.toolName }}</span>
+                <div style="flex:1;"></div>
+                <span style="font-size:11px;color:var(--text-3);">延迟</span>
+                <span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:13px;font-weight:600;">{{ detail.latency }}</span>
+              </div>
+
+              <div style="{{ cardStyle }}">
+                <button onClick="{{ toggleInput }}" style="{{ cardHeadBtnStyle }}">
+                  <span style="display:flex;align-items:center;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:var(--live-dot);"></span>input</span>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="{{ inputChevStyle }}"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <sc-if value="{{ inputOpen }}"><div style="padding:2px 16px 16px;"><pre style="font-family:var(--font-mono);font-size:12.5px;line-height:1.6;color:var(--text-2);white-space:pre;overflow-x:auto;background:var(--bg-grid);border:1px solid var(--border-soft);border-radius:9px;padding:13px 15px;">{{ detail.inputStr }}</pre></div></sc-if>
+              </div>
+
+              <div style="{{ cardStyle }}">
+                <button onClick="{{ toggleOutput }}" style="{{ cardHeadBtnStyle }}">
+                  <span style="display:flex;align-items:center;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:var(--pass-dot);"></span>output</span>
+                  <span style="display:flex;align-items:center;gap:10px;">
+                    <sc-if value="{{ detail.mocked }}"><span style="font-size:10px;font-weight:600;font-family:var(--font-mono);color:var(--replay-fg);background:var(--replay-bg);padding:1.5px 7px;border-radius:5px;">来自录制</span></sc-if>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="{{ outputChevStyle }}"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </span>
+                </button>
+                <sc-if value="{{ outputOpen }}"><div style="padding:2px 16px 16px;"><pre style="font-family:var(--font-mono);font-size:12.5px;line-height:1.6;color:var(--text-2);white-space:pre;overflow-x:auto;background:var(--bg-grid);border:1px solid var(--border-soft);border-radius:9px;padding:13px 15px;">{{ detail.outputStr }}</pre></div></sc-if>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- ===== SPAN DETAIL ===== -->
+          <sc-if value="{{ detail.isSpan }}">
+            <div style="{{ cardStyle }}">
+              <div style="{{ cardHeadStyle }}">区块概要</div>
+              <div style="padding:14px 16px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
+                <div><div style="font-size:11px;color:var(--text-3);margin-bottom:4px;">子节点</div><div style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:18px;font-weight:600;">{{ detail.childCount }}</div></div>
+                <div><div style="font-size:11px;color:var(--text-3);margin-bottom:4px;">耗时</div><div style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:18px;font-weight:600;">{{ detail.latency }}</div></div>
+                <div><div style="font-size:11px;color:var(--text-3);margin-bottom:4px;">token 合计</div><div style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:18px;font-weight:600;">{{ detail.spanTokens }}</div></div>
+              </div>
+            </div>
+          </sc-if>
+
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1320,&quot;height&quot;:880},&quot;defaultTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;,&quot;system&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'dark'|'light'|'system'&quot;,&quot;section&quot;:&quot;主题&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#22D3EE&quot;,&quot;options&quot;:[&quot;#22D3EE&quot;,&quot;#2DD4BF&quot;,&quot;#60A5FA&quot;,&quot;#A78BFA&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;主题&quot;}}">
+class Component extends DCLogic {
+  state = { theme:'dark', resolved:'dark', collapsed:false, mode:'live', selectedId:'n1', expandedSpans:{s0:true,s1:true}, sec:{defs:false,input:true,output:true} };
+
+  componentDidMount(){
+    this._mq = window.matchMedia('(prefers-color-scheme: dark)');
+    this._onMq = ()=>{ if(this.state.theme==='system') this.setState({resolved:this._mq.matches?'dark':'light'}); };
+    this._mq.addEventListener('change', this._onMq);
+    this._qs = new URLSearchParams(location.search);
+    let init = this.props.defaultTheme || 'dark';
+    try{ const saved = localStorage.getItem('ps-theme'); if(saved) init = saved; }catch(e){}
+    this.setTheme(init);
+    if(this._qs.get('source')==='replay') this.setState({mode:'replay'});
+    if(this.props.accent) document.documentElement.style.setProperty('--accent', this.props.accent);
+    this._injectIcons();
+  }
+  componentDidUpdate(){ if(this.props.accent) document.documentElement.style.setProperty('--accent', this.props.accent); this._injectIcons(); }
+  componentWillUnmount(){ this._mq && this._mq.removeEventListener('change', this._onMq); }
+  setTheme(mode){ let r = mode==='system' ? (this._mq && this._mq.matches?'dark':'light') : mode; document.documentElement.setAttribute('data-theme', r); try{ localStorage.setItem('ps-theme', mode); }catch(e){} this.setState({theme:mode, resolved:r}); }
+  _go(url){ window.location.href = url; }
+  toggleCollapse(){ this.setState(s=>({collapsed:!s.collapsed})); }
+  _injectIcons(){
+    const nav = {
+      traces:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2.4" stroke="currentColor" stroke-width="1.7"/><circle cx="6" cy="18" r="2.4" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="12" r="2.4" stroke="currentColor" stroke-width="1.7"/><path d="M8.4 6H14a2.5 2.5 0 012.5 2.5V10M8.4 18H14a2.5 2.5 0 002.5-2.5V14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+      compare:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="4.5" width="7" height="15" rx="1.6" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="4.5" width="7" height="15" rx="1.6" stroke="currentColor" stroke-width="1.7"/></svg>',
+      prompts:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 5l4 4-4 4M11 15h7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      settings:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 7h10M4 12h16M4 17h7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="17" cy="7" r="2.2" stroke="currentColor" stroke-width="1.7"/><circle cx="14" cy="17" r="2.2" stroke="currentColor" stroke-width="1.7"/></svg>',
+    };
+    const th = {
+      light:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4.4" stroke="currentColor" stroke-width="1.7"/><path d="M12 2.5v2.5M12 19v2.5M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2.5 12H5M19 12h2.5M4.2 19.8L6 18M18 6l1.8-1.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+      dark:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
+      system:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="4.5" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M9 20h6M12 16.5V20" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+    };
+    document.querySelectorAll('[data-icon]').forEach(el=>{ const k=el.getAttribute('data-icon'); if(nav[k]&&el.innerHTML!==nav[k]) el.innerHTML=nav[k]; });
+    document.querySelectorAll('[data-ticon]').forEach(el=>{ const k=el.getAttribute('data-ticon'); if(th[k]&&el.innerHTML!==th[k]) el.innerHTML=th[k]; });
+  }
+
+  _tree(){
+    return { id:'s0', type:'span', label:'agent.run', sub:'结账助手 · 生产', status:'pass', lat:4120, children:[
+      { id:'n1', type:'llm', label:'规划：读取购物车', model:'gpt-4o', status:'pass', lat:820, tin:1240, tout:180, cost:0.0089,
+        params:[{k:'temperature',v:'0.2'},{k:'top_p',v:'1.0'},{k:'max_tokens',v:'1024'}],
+        messages:[
+          {role:'system', content:'你是「结账助手」。在任何支付操作前，必须先调用 get_cart 读取购物车内容。'},
+          {role:'user', content:'帮我用默认地址结算购物车。'},
+          {role:'assistant', toolCall:'get_cart({\n  "user_id": "u_8842"\n})'},
+        ]},
+      { id:'s1', type:'span', label:'结账流程', sub:'2 工具 · 1 模型', status:'pass', lat:2530, children:[
+        { id:'n2', type:'tool', label:'get_cart', toolName:'get_cart', status:'pass', lat:240,
+          input:{user_id:'u_8842'},
+          output:{items:[{sku:'SKU-114',name:'无线耳机',qty:1,price:299.0},{sku:'SKU-902',name:'充电线',qty:1,price:49.0}],subtotal:348.0,currency:'CNY'}},
+        { id:'n3', type:'llm', label:'决定发起支付', model:'gpt-4o', status:'pass', lat:910, tin:2100, tout:320, cost:0.0141,
+          params:[{k:'temperature',v:'0.2'},{k:'top_p',v:'1.0'},{k:'max_tokens',v:'1024'}],
+          messages:[
+            {role:'tool', content:'get_cart → 2 件商品，合计 ¥348.00'},
+            {role:'assistant', content:'购物车已确认，发起支付。', toolCall:'charge_payment({\n  "amount": 348.0,\n  "currency": "CNY",\n  "method": "default_card"\n})'},
+          ]},
+        { id:'n4', type:'tool', label:'charge_payment', toolName:'charge_payment', status:'pass', lat:1380,
+          input:{amount:348.0,currency:'CNY',method:'default_card'},
+          output:{status:'succeeded',transaction_id:'txn_5f9c21a7',amount:348.0,currency:'CNY'}},
+      ]},
+      { id:'n5', type:'llm', label:'生成确认回复', model:'gpt-4o', status:'pass', lat:770, tin:5080, tout:1480, cost:0.0412,
+        params:[{k:'temperature',v:'0.4'},{k:'top_p',v:'1.0'},{k:'max_tokens',v:'1024'}],
+        messages:[
+          {role:'tool', content:'charge_payment → succeeded (txn_5f9c21a7)'},
+          {role:'assistant', content:'已为你完成结算：无线耳机 ×1、充电线 ×1，共 ¥348.00，支付成功。预计 3–5 个工作日送达。'},
+        ]},
+    ]};
+  }
+  _toolDefs(){ return [
+    {name:'get_cart', desc:'读取指定用户的购物车', schema:'{\n  "user_id": string   // 目标用户 ID\n}'},
+    {name:'charge_payment', desc:'对用户默认支付方式发起扣款', schema:'{\n  "amount":   number,\n  "currency": string,\n  "method":   string\n}'},
+  ]; }
+  _flatten(node, depth, out){ out.push({node, depth}); if(node.children && this.state.expandedSpans[node.id]!==false){ node.children.forEach(c=>this._flatten(c, depth+1, out)); } }
+  _find(node, id){ if(node.id===id) return node; if(node.children){ for(const c of node.children){ const r=this._find(c,id); if(r) return r; } } return null; }
+  _count(node){ let c=0; const walk=n=>{ c++; (n.children||[]).forEach(walk); }; walk(node); return c-1; }
+  _spanAgg(node){ let lat=0,tok=0,ct=0; const walk=n=>{ if(n!==node){ ct++; if(n.type==='llm'){ tok+=(n.tin||0)+(n.tout||0);} } (n.children||[]).forEach(walk); }; walk(node); return {lat:node.lat, tok, ct}; }
+
+  fmt(n){ return n.toLocaleString('en-US'); }
+  latF(ms){ return ms<1000 ? ms+'ms' : (ms/1000).toFixed(2)+'s'; }
+  costF(c){ return c>=0.1 ? '$'+c.toFixed(3) : '$'+c.toFixed(4); }
+
+  _badge(fg,bg){ return {display:'inline-flex',alignItems:'center',gap:'6px',padding:'2.5px 9px 2.5px 8px',borderRadius:'999px',fontSize:'11.5px',fontWeight:600,lineHeight:'16px',whiteSpace:'nowrap',color:`var(${fg})`,background:`var(${bg})`}; }
+  _dot(c,pulse){ const s={width:'6px',height:'6px',borderRadius:'50%',flex:'0 0 auto',background:`var(${c})`}; if(pulse) s.animation='ps-pulse 1.4s ease-in-out infinite'; return s; }
+  _tag(type){
+    const map={llm:{t:'LLM',c:'var(--accent)'},tool:{t:'TOOL',c:'var(--text-2)'},span:{t:'SPAN',c:'var(--text-3)'}};
+    const m=map[type];
+    return {label:m.t, style:{display:'inline-flex',alignItems:'center',padding:'1.5px 7px',borderRadius:'6px',fontSize:'10px',fontWeight:600,fontFamily:'var(--font-mono)',letterSpacing:'.05em',background:'var(--bg-grid)',border:'1px solid var(--border-soft)',color:m.c,flex:'0 0 auto'}};
+  }
+  stMap(){ return { pass:{fg:'--pass-fg',bg:'--pass-bg',dot:'--pass-dot',label:'通过'}, warn:{fg:'--warn-fg',bg:'--warn-bg',dot:'--warn-dot',label:'偏离'}, fail:{fg:'--fail-fg',bg:'--fail-bg',dot:'--fail-dot',label:'失败'}, running:{fg:'--live-fg',bg:'--live-bg',dot:'--live-dot',label:'运行中'} }; }
+
+  renderVals(){
+    const S=this.state;
+    const root=this._tree();
+    const isLive = S.mode==='live', isReplay = S.mode==='replay';
+    const st=this.stMap();
+
+    // metrics
+    const metrics=[
+      {label:'总成本', value:'$0.0642', sub:'', color:'var(--text)'},
+      {label:'总延迟', value:'4.12s', sub:'', color:'var(--text)'},
+      {label:'总 token', value:'10,400', sub:'↑8,420 ↓1,980', color:'var(--text)'},
+      {label:'步数', value:'6', sub:'', color:'var(--text)'},
+    ];
+
+    // flatten tree
+    const flat=[]; this._flatten(root,0,flat);
+    const tree=flat.map(({node,depth})=>{
+      const tag=this._tag(node.type);
+      const sm=st[node.status]||st.pass;
+      const sel=S.selectedId===node.id;
+      const hasCh=!!(node.children&&node.children.length);
+      const exp=S.expandedSpans[node.id]!==false;
+      const mocked = isReplay && node.type==='tool';
+      return {
+        indent: 6+depth*18,
+        hasChildren:hasCh,
+        chevStyle:{transform: exp?'rotate(90deg)':'rotate(0deg)', transition:'transform .12s', color:'var(--text-3)'},
+        chevBtnStyle:{display:'flex',alignItems:'center',justifyContent:'center',width:'18px',height:'18px',border:'none',background:'transparent',cursor:hasCh?'pointer':'default',padding:0,flex:'0 0 auto'},
+        onToggle:(e)=>{ e.stopPropagation(); if(hasCh) this.setState(s=>({expandedSpans:{...s.expandedSpans,[node.id]:!(s.expandedSpans[node.id]!==false)}})); },
+        onSelect:()=>this.setState({selectedId:node.id, sec:{defs:false,input:true,output:true}}),
+        dotStyle:this._dot(sm.dot, node.status==='running'),
+        tag:tag.label, tagStyle:tag.style,
+        label:node.label,
+        sub: node.type==='llm'?node.model : (node.type==='tool'?node.toolName : node.sub),
+        mocked,
+        lat:this.latF(node.lat),
+        rowStyle:{display:'flex',alignItems:'center',gap:'8px',minHeight:'42px',padding:'5px 8px',borderRadius:'8px',cursor:'pointer',marginBottom:'1px', background:sel?'var(--accent-subtle)':'transparent', boxShadow:sel?'inset 3px 0 0 var(--accent)':'none'},
+      };
+    });
+
+    // selected detail
+    const node=this._find(root, S.selectedId)||root;
+    const tag=this._tag(node.type);
+    const sm=st[node.status]||st.pass;
+    const detail={
+      tag:tag.label, tagStyle:tag.style,
+      title: node.type==='llm'? node.label : (node.type==='tool'? node.toolName : (node.label+ (node.sub?' · '+node.sub:''))),
+      statusBadge:this._badge(sm.fg,sm.bg), statusDot:this._dot(sm.dot, node.status==='running'), statusLabel:sm.label,
+      latency:this.latF(node.lat),
+      isLlm:node.type==='llm', isTool:node.type==='tool', isSpan:node.type==='span',
+      mocked: isReplay && node.type==='tool',
+      showStepReplay: isLive && node.type==='llm',
+      onStepReplay:()=>this._go('Replay.dc.html?trace='+(this._qs?this._qs.get('trace')||'tr_9f2ac10b':'tr_9f2ac10b')+'&mode=step&step='+encodeURIComponent(node.label)),
+    };
+    if(node.type==='llm'){
+      detail.model=node.model;
+      detail.params=node.params;
+      detail.tokenIn=this.fmt(node.tin); detail.tokenOut=this.fmt(node.tout);
+      detail.cost=this.costF(node.cost);
+      detail.msgCount=node.messages.length+' 条';
+      detail.messages=node.messages.map(m=>{
+        const rc={system:'var(--text-3)',user:'var(--accent)',assistant:'var(--text)',tool:'var(--pass-fg)'}[m.role]||'var(--text-2)';
+        return { role:m.role, content:m.content||'', toolCall:m.toolCall||'', gap: m.content?'8px':'0px',
+          roleStyle:{flex:'0 0 68px',fontFamily:'var(--font-mono)',fontSize:'11px',fontWeight:600,letterSpacing:'.02em',color:rc,textTransform:'uppercase',paddingTop:'2px'} };
+      });
+      const defs=this._toolDefs();
+      detail.toolDefCount=defs.length; detail.toolDefs=defs;
+    } else if(node.type==='tool'){
+      detail.toolName=node.toolName;
+      detail.inputStr=JSON.stringify(node.input,null,2);
+      detail.outputStr=JSON.stringify(node.output,null,2);
+    } else {
+      const agg=this._spanAgg(node);
+      detail.childCount=agg.ct; detail.spanTokens=this.fmt(agg.tok);
+    }
+
+    // nav
+    const navDef=[{key:'traces',label:'链路',active:true},{key:'compare',label:'对比'},{key:'prompts',label:'提示词'},{key:'settings',label:'设置'}];
+    const navFile = { traces:'Traces.dc.html', compare:'Compare.dc.html', prompts:'Prompts.dc.html', settings:'Settings.dc.html' };
+    const navItems=navDef.map(n=>({key:n.key,label:n.label,onClick:(e)=>{ e.preventDefault(); if(!n.active) this._go(navFile[n.key]); },weight:n.active?600:500,iconColor:n.active?'var(--accent)':'var(--text-2)',
+      style:{position:'relative',display:'flex',alignItems:'center',gap:'11px',height:'38px',padding:S.collapsed?'0':'0 11px',justifyContent:S.collapsed?'center':'flex-start',borderRadius:'9px',textDecoration:'none',background:n.active?'var(--accent-subtle)':'transparent',color:n.active?'var(--accent)':'var(--text-2)'},
+      barStyle:{position:'absolute',left:'-11px',top:'9px',bottom:'9px',width:'3px',borderRadius:'0 3px 3px 0',background:n.active?'var(--accent)':'transparent',display:S.collapsed?'none':'block'}}));
+
+    const themeDefs=[{key:'light',label:'亮'},{key:'dark',label:'暗'},{key:'system',label:'系统'}];
+    const themeOpts=themeDefs.map(t=>{const on=S.theme===t.key;return{key:t.key,label:t.label,showLabel:!S.collapsed,onClick:()=>this.setTheme(t.key),
+      style:{display:'flex',alignItems:'center',justifyContent:'center',gap:'6px',flex:S.collapsed?'0 0 auto':'1',height:'30px',padding:S.collapsed?'0':'0 6px',border:'none',borderRadius:'7px',cursor:'pointer',fontFamily:'var(--font-sans)',background:on?'var(--surface-2)':'transparent',color:on?'var(--accent)':'var(--text-3)',boxShadow:on?'inset 0 0 0 1px var(--border)':'none'}};});
+
+    const modeDefs=[{v:'live',label:'实时',dot:'var(--live-dot)'},{v:'replay',label:'回放',dot:'var(--replay-dot)'}];
+    const modeOpts=modeDefs.map(o=>{const on=S.mode===o.v;return{label:o.label,dot:o.dot,onClick:()=>this.setState({mode:o.v}),
+      style:{display:'flex',alignItems:'center',gap:'6px',height:'28px',padding:'0 12px',border:'none',borderRadius:'7px',cursor:'pointer',fontFamily:'var(--font-sans)',fontSize:'12.5px',fontWeight:on?600:500,background:on?'var(--surface-hover)':'transparent',color:on?'var(--text)':'var(--text-3)',boxShadow:on?'inset 0 0 0 1px var(--border)':'none'}};});
+
+    const srcSel = isLive?{fg:'--live-fg',bg:'--live-bg',dot:'--live-dot',label:'实时'}:{fg:'--replay-fg',bg:'--replay-bg',dot:'--replay-dot',label:'回放'};
+
+    return {
+      expanded:!S.collapsed, toggleCollapse:()=>this.toggleCollapse(),
+      navItems, themeOpts, modeOpts,
+      traceId: (this._qs && this._qs.get('trace')) ? this._qs.get('trace') : 'tr_9f2ac10b', traceName:'结账助手 · 生产',
+      onFullReplay:()=>this._go('Replay.dc.html?trace='+(this._qs?this._qs.get('trace')||'tr_9f2ac10b':'tr_9f2ac10b')+'&mode=full'),
+      isLive, isReplay,
+      sourceBadge:this._badge(srcSel.fg,srcSel.bg), sourceDot:this._dot(srcSel.dot,false), sourceLabel:srcSel.label,
+      statusBadge:this._badge('--pass-fg','--pass-bg'), statusDot:this._dot('--pass-dot',false), statusLabel:'通过',
+      metrics,
+      tree, nodeCount:this._count(root),
+      detail,
+      defsOpen:S.sec.defs, inputOpen:S.sec.input, outputOpen:S.sec.output,
+      toggleDefs:()=>this.setState(s=>({sec:{...s.sec,defs:!s.sec.defs}})),
+      toggleInput:()=>this.setState(s=>({sec:{...s.sec,input:!s.sec.input}})),
+      toggleOutput:()=>this.setState(s=>({sec:{...s.sec,output:!s.sec.output}})),
+      defsChevStyle:{transform:S.sec.defs?'rotate(90deg)':'rotate(0deg)',transition:'transform .12s',color:'var(--text-3)'},
+      inputChevStyle:{transform:S.sec.input?'rotate(90deg)':'rotate(0deg)',transition:'transform .12s',color:'var(--text-3)'},
+      outputChevStyle:{transform:S.sec.output?'rotate(90deg)':'rotate(0deg)',transition:'transform .12s',color:'var(--text-3)'},
+      // shared styles
+      sidebarStyle:{flex:'0 0 auto',width:S.collapsed?'66px':'244px',transition:'width .16s cubic-bezier(.3,.7,.3,1)',display:'flex',flexDirection:'column',padding:'16px 12px',borderRight:'1px solid var(--border)',background:'var(--surface)',height:'100vh',position:'sticky',top:'0'},
+      wsBtnStyle:{display:'flex',alignItems:'center',gap:'9px',width:'100%',height:'44px',marginTop:'14px',padding:S.collapsed?'0':'0 9px',justifyContent:S.collapsed?'center':'flex-start',border:'1px solid var(--border)',borderRadius:'10px',background:'var(--surface-2)',color:'var(--text)',cursor:'pointer',fontFamily:'var(--font-sans)'},
+      themeWrapStyle:{display:'flex',flexDirection:S.collapsed?'column':'row',gap:'3px',padding:'3px',background:'var(--bg-grid)',border:'1px solid var(--border-soft)',borderRadius:'9px'},
+      cardStyle:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'12px',overflow:'hidden'},
+      cardHeadStyle:{display:'flex',alignItems:'center',gap:'8px',height:'40px',padding:'0 16px',borderBottom:'1px solid var(--border-soft)',fontSize:'12px',fontWeight:600,color:'var(--text-2)',letterSpacing:'.02em'},
+      cardHeadBtnStyle:{display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%',height:'44px',padding:'0 16px',border:'none',background:'transparent',cursor:'pointer',fontSize:'12.5px',fontWeight:600,color:'var(--text-2)',letterSpacing:'.02em',fontFamily:'var(--font-mono)'},
+      replayBtnStyle:{display:'flex',alignItems:'center',gap:'7px',height:'36px',padding:'0 16px',border:'none',borderRadius:'9px',background:'var(--accent)',color:'var(--accent-fg)',cursor:'pointer',fontFamily:'var(--font-sans)',fontSize:'13px',fontWeight:600},
+      rerunBtnStyle:{display:'flex',alignItems:'center',gap:'7px',height:'36px',padding:'0 14px',border:'1px solid var(--border)',borderRadius:'9px',background:'var(--surface)',color:'var(--text-2)',cursor:'pointer',fontFamily:'var(--font-sans)',fontSize:'13px',fontWeight:500},
+      stepReplayBtnStyle:{display:'flex',alignItems:'center',gap:'7px',height:'32px',padding:'0 13px',border:'1px solid var(--accent-border)',borderRadius:'8px',background:'transparent',color:'var(--accent)',cursor:'pointer',fontFamily:'var(--font-sans)',fontSize:'12.5px',fontWeight:600,flex:'0 0 auto'},
+    };
+  }
+}
+</script>
+</body>
+</html>

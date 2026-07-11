@@ -12,6 +12,7 @@ router = APIRouter(tags=["config"])
 def _provider_out(p: ModelProvider) -> ProviderOut:
     return ProviderOut(id=p.id, project_id=p.project_id, name=p.name,
                        base_url=p.base_url, provider_type=p.provider_type,
+                       kind=p.kind, note=p.note,
                        api_key_set=bool(p.api_key), created_at=p.created_at)
 
 
@@ -42,7 +43,8 @@ def create_provider(payload: ProviderIn, db: Session = Depends(get_db),
     p = ModelProvider(project_id=payload.project_id, name=payload.name,
                       base_url=payload.base_url,
                       api_key=payload.api_key or "",
-                      provider_type=payload.provider_type)
+                      provider_type=payload.provider_type,
+                      kind=payload.kind, note=payload.note)
     db.add(p)
     db.commit()
     return _provider_out(p)
@@ -63,6 +65,8 @@ def update_provider(provider_id: str, payload: ProviderIn,
     p.name = payload.name
     p.base_url = payload.base_url
     p.provider_type = payload.provider_type
+    p.kind = payload.kind
+    p.note = payload.note
     if payload.api_key:
         p.api_key = payload.api_key
     db.commit()

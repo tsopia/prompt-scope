@@ -26,6 +26,7 @@ export interface TraceSummary {
   latency_ms: number | null;
   started_at: string | null;
   created_at: string;
+  divergence_count: number;
 }
 
 export interface TraceListResult {
@@ -75,6 +76,7 @@ export interface TraceDetail {
   total_cost: number | null;
   created_at: string;
   metadata: Record<string, unknown> | null;
+  divergence_count: number;
   observations: ObservationNode[];
 }
 
@@ -107,6 +109,8 @@ export interface Provider {
   name: string;
   base_url: string;
   provider_type: "openai" | "anthropic";
+  kind: "official" | "aggregator" | null;
+  note: string | null;
   api_key_set: boolean;
   created_at: string;
   project_id: string | null;
@@ -169,6 +173,8 @@ export interface ReplayRun {
   error: string | null;
   created_at: string;
   finished_at: string | null;
+  result_cost: number | null;
+  result_latency_ms: number | null;
 }
 
 export interface PromptSummary {
@@ -204,13 +210,16 @@ export interface VersionTrace {
 export interface ApiKeyInfo {
   id: string;
   prefix: string;
+  name: string | null;
   created_at: string;
   revoked_at: string | null;
+  last_used_at: string | null;
 }
 
 export interface ApiKeyCreated {
   id: string;
   prefix: string;
+  name: string | null;
   key: string;
 }
 
@@ -253,10 +262,27 @@ export const api = {
   getTrace: (id: string) => get<TraceDetail>(`/api/traces/${id}`),
   getProviders: (projectId: string) =>
     get<Provider[]>(`/api/providers?project_id=${encodeURIComponent(projectId)}`),
-  createProvider: (body: { name: string; base_url: string; api_key: string; provider_type: string; project_id: string }) =>
-    send<Provider>("POST", "/api/providers", body),
-  updateProvider: (id: string, body: { name: string; base_url: string; api_key?: string; provider_type: string }) =>
-    send<Provider>("PUT", `/api/providers/${id}`, body),
+  createProvider: (body: {
+    name: string;
+    base_url: string;
+    api_key: string;
+    provider_type: string;
+    kind?: string;
+    note?: string | null;
+    project_id: string;
+  }) => send<Provider>("POST", "/api/providers", body),
+  updateProvider: (
+    id: string,
+    body: {
+      name: string;
+      base_url: string;
+      api_key?: string;
+      provider_type: string;
+      kind?: string;
+      note?: string | null;
+      project_id: string;
+    }
+  ) => send<Provider>("PUT", `/api/providers/${id}`, body),
   deleteProvider: (id: string) => send<{ deleted: boolean }>("DELETE", `/api/providers/${id}`),
   getPricing: (projectId: string) =>
     get<Pricing[]>(`/api/pricing?project_id=${encodeURIComponent(projectId)}`),
@@ -272,7 +298,7 @@ export const api = {
     if (compareId) q.set("compare_trace_id", compareId);
     return get<Evaluation[]>(`/api/evaluations?${q.toString()}`);
   },
-  evaluate: (body: { subject_trace_id: string; compare_trace_id?: string; judge_models: string[]; force?: boolean }) =>
+  evaluate: (body: { subject_trace_id: string; compare_trace_id?: string; judge_models: string[]; context_mode?: string; force?: boolean }) =>
     send<{ results: JudgeRunResult[] }>("POST", "/api/evaluations", body),
   createReplay: (body: {
     source_trace_id: string;
@@ -282,6 +308,7 @@ export const api = {
     override_prompt_text?: string;
     override_prompt_version_id?: string;
   }) => send<ReplayRun>("POST", "/api/replays", body),
+  getReplay: (id: string) => get<ReplayRun>(`/api/replays/${id}`),
   getReplays: (sourceTraceId: string) =>
     get<ReplayRun[]>(`/api/replays?source_trace_id=${encodeURIComponent(sourceTraceId)}`),
   getPrompts: (projectId: string) =>
@@ -295,10 +322,12 @@ export const api = {
     get<VersionTrace[]>(`/api/prompt-versions/${versionId}/traces`),
   createProject: (body: { name: string }) =>
     send<Project & { created_at: string }>("POST", "/api/projects", body),
+  renameProject: (id: string, name: string) =>
+    send<Project & { created_at: string }>("PUT", `/api/projects/${id}`, { name }),
   getProjectKeys: (projectId: string) =>
     get<ApiKeyInfo[]>(`/api/projects/${projectId}/keys`),
-  createProjectKey: (projectId: string) =>
-    send<ApiKeyCreated>("POST", `/api/projects/${projectId}/keys`),
+  createProjectKey: (projectId: string, name?: string) =>
+    send<ApiKeyCreated>("POST", `/api/projects/${projectId}/keys`, name ? { name } : undefined),
   revokeKey: (keyId: string) =>
     send<{ revoked: boolean }>("DELETE", `/api/keys/${keyId}`),
 
