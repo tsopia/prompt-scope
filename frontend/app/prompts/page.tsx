@@ -10,92 +10,14 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ReplayWithVersionDialog } from "@/components/ReplayWithVersionDialog";
+import { PromptEditorDialog } from "@/components/PromptEditorDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 const COLLAPSE_LINES = 8;
-
-// ---------- 左列表：新建 prompt 内联表单 ----------
-
-function CreatePromptInlineForm({
-  existingNames,
-  projectId,
-  onCreated,
-  onCancel,
-}: {
-  existingNames: string[];
-  projectId: string;
-  onCreated: (id: string) => void;
-  onCancel: () => void;
-}) {
-  const [name, setName] = useState("");
-  const [content, setContent] = useState("");
-  const [serverError, setServerError] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-
-  const trimmed = name.trim();
-  const nameError =
-    trimmed !== "" && existingNames.some((n) => n.toLowerCase() === trimmed.toLowerCase());
-
-  const submit = async () => {
-    if (trimmed === "" || nameError || !content.trim()) return;
-    setCreating(true);
-    setServerError(null);
-    try {
-      const created = await api.createPrompt({ project_id: projectId, name: trimmed, content });
-      onCreated(created.id);
-    } catch (e) {
-      setServerError(String(e));
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  return (
-    <div className="mt-2.5 space-y-2 rounded-lg border border-border bg-bg-grid p-2.5">
-      <Input
-        autoFocus
-        placeholder="prompt 名称（唯一）"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        className="h-9 font-mono text-xs"
-      />
-      {nameError && <p className="text-[11px] text-fail-fg">已存在同名 prompt</p>}
-      <Textarea
-        placeholder="初始版本内容"
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        className="h-24 font-mono text-xs"
-      />
-      {serverError && <p className="text-[11px] text-destructive">{serverError}</p>}
-      <div className="flex gap-2">
-        <Button
-          size="sm"
-          className="h-7 flex-1 text-xs"
-          disabled={creating || trimmed === "" || nameError || !content.trim()}
-          onClick={submit}
-        >
-          创建
-        </Button>
-        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onCancel}>
-          取消
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 // ---------- 右侧：版本 diff 面板 ----------
 
@@ -216,6 +138,7 @@ function VersionCard({
   version,
   isLatest,
   promptId,
+  promptName,
   projectId,
   checked,
   onToggleCheck,
@@ -224,15 +147,13 @@ function VersionCard({
   version: PromptVersionInfo;
   isLatest: boolean;
   promptId: string;
+  promptName: string;
   projectId: string;
   checked: boolean;
   onToggleCheck: () => void;
   onForkSubmit: () => void;
 }) {
   const [forkOpen, setForkOpen] = useState(false);
-  const [content, setContent] = useState(version.content);
-  const [forkError, setForkError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [replayOpen, setReplayOpen] = useState(false);
 
@@ -240,31 +161,11 @@ function VersionCard({
   const isLong = lines.length > COLLAPSE_LINES;
   const displayContent = expanded || !isLong ? version.content : lines.slice(0, COLLAPSE_LINES).join("\n");
 
-  const startFork = () => {
-    setContent(version.content);
-    setForkError(null);
-    setForkOpen(true);
-  };
-
-  const submitFork = async () => {
-    setSubmitting(true);
-    setForkError(null);
-    try {
-      await api.addPromptVersion(promptId, content);
-      setForkOpen(false);
-      onForkSubmit();
-    } catch (e) {
-      setForkError(String(e));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   return (
     <Card
       className={cn(
         "overflow-hidden transition-colors",
-        checked ? "border-accent-border shadow-[0_0_0_1px_hsl(var(--accent-border))]" : "border-border",
+        checked ? "border-accent-border shadow-[0_0_0_1px_hsl(var(--primary)/0.4)]" : "border-border",
       )}
     >
       <div className="flex items-center gap-3 border-b border-border-soft px-4 py-3">
@@ -298,7 +199,13 @@ function VersionCard({
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2 border-t border-border-soft px-4 py-2.5">
-        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={startFork}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5 text-xs"
+          onClick={() => setForkOpen(true)}
+        >
           <GitFork className="h-3.5 w-3.5" />
           基于此版本新建
         </Button>
@@ -315,27 +222,18 @@ function VersionCard({
       </div>
       <VersionTracesSection versionId={version.id} />
 
-      <Dialog open={forkOpen} onOpenChange={setForkOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>基于 v{version.version} 新建版本</DialogTitle>
-          </DialogHeader>
-          <Textarea
-            className="h-40 font-mono text-sm"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-          />
-          {forkError && <p className="text-sm text-destructive">{forkError}</p>}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setForkOpen(false)}>
-              取消
-            </Button>
-            <Button onClick={submitFork} disabled={submitting || !content}>
-              提交新版本
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PromptEditorDialog
+        open={forkOpen}
+        onOpenChange={setForkOpen}
+        mode={{
+          kind: "fork",
+          promptId,
+          promptName,
+          sourceVersion: version.version,
+          sourceContent: version.content,
+          onForked: onForkSubmit,
+        }}
+      />
 
       <ReplayWithVersionDialog
         versionId={version.id}
@@ -357,7 +255,7 @@ export default function PromptsPage() {
   const [listError, setListError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [compareVersions, setCompareVersions] = useState<string[]>([]);
-  const [creatingNew, setCreatingNew] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const reloadPrompts = () => {
     if (!currentProject) return;
@@ -368,7 +266,7 @@ export default function PromptsPage() {
     setPrompts([]);
     setSelectedId(null);
     setDetail(null);
-    setCreatingNew(false);
+    setCreateOpen(false);
     reloadPrompts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProject]);
@@ -390,7 +288,6 @@ export default function PromptsPage() {
   };
 
   const handleCreated = (id: string) => {
-    setCreatingNew(false);
     reloadPrompts();
     setSelectedId(id);
   };
@@ -427,56 +324,59 @@ export default function PromptsPage() {
 
       <main className="flex min-h-0 flex-1">
         <div className="flex w-[288px] shrink-0 flex-col border-r border-border">
-          <div className="border-b border-border-soft p-3.5">
+          <div className="border-b border-border-soft px-3.5 pb-3 pt-3.5">
             <Button
-              className="w-full gap-1.5"
-              onClick={() => setCreatingNew(true)}
-              disabled={!currentProject || creatingNew}
+              className="h-[38px] w-full gap-2 rounded-[9px] text-[13px] font-semibold"
+              onClick={() => setCreateOpen(true)}
+              disabled={!currentProject}
             >
               <Plus className="h-4 w-4" />
               新建 prompt
             </Button>
-            {creatingNew && currentProject && (
-              <CreatePromptInlineForm
-                existingNames={prompts.map((p) => p.name)}
-                projectId={currentProject.id}
-                onCreated={handleCreated}
-                onCancel={() => setCreatingNew(false)}
-              />
-            )}
           </div>
           <div className="flex-1 space-y-0.5 overflow-y-auto p-2">
             {listError && <p className="p-2 text-sm text-destructive">加载失败：{listError}</p>}
-            {!listError && prompts.length === 0 && !creatingNew && (
+            {!listError && prompts.length === 0 && (
               <EmptyState icon={Inbox} title="暂无 Prompt" description="创建一个 prompt 开始管理版本吧。" />
             )}
-            {prompts.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => setSelectedId(p.id)}
-                className={cn(
-                  "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left transition-colors",
-                  selectedId === p.id ? "bg-accent-subtle" : "hover:bg-surface-hover",
-                )}
-              >
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            {prompts.map((p) => {
+              const active = selectedId === p.id;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => setSelectedId(p.id)}
+                  className={cn(
+                    "relative flex w-full items-center gap-2.5 rounded-[9px] px-[11px] py-2.5 text-left transition-colors hover:bg-surface-hover",
+                    active && "bg-accent-subtle",
+                  )}
+                >
                   <span
                     className={cn(
-                      "truncate text-[13px] font-semibold",
-                      selectedId === p.id ? "text-foreground" : "text-muted-foreground",
+                      "absolute inset-y-2 left-0 w-[3px] rounded-r-[3px]",
+                      active ? "bg-primary" : "bg-transparent",
                     )}
-                  >
-                    {p.name}
+                  />
+                  <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
+                    <span
+                      className={cn(
+                        "truncate text-[13px] font-semibold",
+                        active ? "text-foreground" : "text-muted-foreground",
+                      )}
+                    >
+                      {p.name}
+                    </span>
+                    {/* PromptSummary has no updated_at field (see backend/schemas/prompts.py) —
+                        created_at is the only timestamp available, so it stands in for "更新时间". */}
+                    <span className="font-mono text-[11px] text-text-3">
+                      {p.version_count} 版本 · {formatRelativeTime(p.created_at)}
+                    </span>
                   </span>
-                  <span className="font-mono text-[11px] text-text-3">
-                    {p.version_count} 版本 · {formatRelativeTime(p.created_at)}
+                  <span className="shrink-0 rounded-[6px] border border-border-soft bg-bg-grid px-[7px] py-0.5 font-mono text-[11px] text-text-3">
+                    v{p.latest_version}
                   </span>
-                </span>
-                <span className="shrink-0 rounded-md border border-border-soft bg-bg-grid px-1.5 py-0.5 font-mono text-[11px] text-text-3">
-                  v{p.latest_version}
-                </span>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -525,6 +425,7 @@ export default function PromptsPage() {
                       version={v}
                       isLatest={v.version === latestVersionNumber}
                       promptId={detail.id}
+                      promptName={detail.name}
                       projectId={detail.project_id}
                       checked={compareVersions.includes(v.id)}
                       onToggleCheck={() => toggleCompareVersion(v.id)}
@@ -537,6 +438,19 @@ export default function PromptsPage() {
           </div>
         </div>
       </main>
+
+      {currentProject && (
+        <PromptEditorDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          mode={{
+            kind: "create",
+            projectId: currentProject.id,
+            existingNames: prompts.map((p) => p.name),
+            onCreated: handleCreated,
+          }}
+        />
+      )}
     </div>
   );
 }

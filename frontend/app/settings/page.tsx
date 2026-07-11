@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Inbox, KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
-import { api, ApiKeyInfo, JudgeModel, Member, Pricing, Project, Provider } from "@/lib/api";
+import { api, ApiError, ApiKeyInfo, JudgeModel, Member, Pricing, Project, Provider } from "@/lib/api";
 import { useProject } from "@/contexts/ProjectContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatRelativeTime } from "@/lib/format";
@@ -53,9 +53,11 @@ const NO_SUMMARY_MODEL = "__none__";
 function ProjectInfoCard({
   project,
   refreshProjects,
+  isOwner,
 }: {
   project: Project;
   refreshProjects: () => Promise<void>;
+  isOwner: boolean;
 }) {
   const [name, setName] = useState(project.name);
   const [saving, setSaving] = useState(false);
@@ -73,6 +75,7 @@ function ProjectInfoCard({
   }, [project.id]);
 
   const save = async () => {
+    if (!isOwner) return;
     const trimmed = name.trim();
     if (!trimmed || trimmed === project.name) {
       setName(project.name);
@@ -92,6 +95,7 @@ function ProjectInfoCard({
   };
 
   const saveSummaryModel = async (value: string) => {
+    if (!isOwner) return;
     const prev = summaryModel;
     setSummaryModel(value);
     setSavingSummaryModel(true);
@@ -119,7 +123,7 @@ function ProjectInfoCard({
         <label className="text-[12.5px] font-medium text-muted-foreground">项目名称</label>
         <Input
           value={name}
-          disabled={saving}
+          disabled={saving || !isOwner}
           aria-label="项目名称"
           onChange={(e) => setName(e.target.value)}
           onBlur={save}
@@ -137,7 +141,7 @@ function ProjectInfoCard({
         <div className="space-y-1.5">
           <Select
             value={summaryModel}
-            disabled={savingSummaryModel}
+            disabled={savingSummaryModel || !isOwner}
             onValueChange={saveSummaryModel}
           >
             <SelectTrigger aria-label="摘要模型" className="max-w-[320px]">
@@ -156,6 +160,9 @@ function ProjectInfoCard({
             配置后，新上报的链路会用该模型自动生成一句话摘要（消耗少量 tokens）；不配置则使用输入内容截断。
           </p>
         </div>
+        {!isOwner && (
+          <p className="col-span-2 text-xs text-text-3">仅 owner 可修改</p>
+        )}
       </CardContent>
     </Card>
   );
@@ -273,19 +280,42 @@ function RevokeKeyDialog({
   );
 }
 
-function ApiKeysCard({ project }: { project: Project }) {
+function ApiKeysCard({ project, isOwner }: { project: Project; isOwner: boolean }) {
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [forbidden, setForbidden] = useState(false);
   const [nameDialogOpen, setNameDialogOpen] = useState(false);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<ApiKeyInfo | null>(null);
 
   const reload = useCallback(() => {
     setError(null);
-    api.getProjectKeys(project.id).then(setKeys).catch((e) => setError(String(e)));
+    api
+      .getProjectKeys(project.id)
+      .then((r) => {
+        setKeys(r);
+        setForbidden(false);
+      })
+      .catch((e) => {
+        // GET /api/projects/{id}/keys is owner-only server-side (assert_owner) — a
+        // member always gets a 403 here regardless of what the frontend's isOwner
+        // guess believes, so this catch is the authoritative source of truth.
+        if (e instanceof ApiError && e.status === 403) {
+          setForbidden(true);
+        } else {
+          setError(String(e));
+        }
+      });
   }, [project.id]);
 
-  useEffect(reload, [reload]);
+  useEffect(() => {
+    // Known non-owner: skip the doomed request entirely instead of waiting on a 403.
+    if (!isOwner) {
+      setForbidden(true);
+      return;
+    }
+    reload();
+  }, [isOwner, reload]);
 
   const revoke = async () => {
     if (!revokeTarget) return;
@@ -299,6 +329,24 @@ function ApiKeysCard({ project }: { project: Project }) {
       setRevokeTarget(null);
     }
   };
+
+  // GET /api/projects/{id}/keys is owner-only server-side, so a member always
+  // 403s there — show a friendly empty-state instead of surfacing a raw error.
+  if (forbidden) {
+    return (
+      <Card>
+        <CardHeader className="border-b py-3.5">
+          <CardTitle className="text-sm font-semibold">API 密钥</CardTitle>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            用于 SDK 上报链路数据。密钥仅在创建时完整显示一次。
+          </p>
+        </CardHeader>
+        <CardContent className="p-5">
+          <EmptyState icon={KeyRound} title="仅 owner 可管理 API 密钥" description="密钥管理仅 owner 可见，请联系项目 owner。" />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -417,7 +465,11 @@ function CreateProjectDialog({
       toast.success("项目已创建");
       onCreated(created);
     } catch (e) {
-      setError(String(e));
+      if (e instanceof ApiError && e.status === 409) {
+        setError("项目名称已存在");
+      } else {
+        setError(String(e));
+      }
     } finally {
       setCreating(false);
     }
@@ -429,8 +481,15 @@ function CreateProjectDialog({
         <DialogHeader>
           <DialogTitle>新建项目</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
-          <Input placeholder="项目名称" value={name} onChange={(e) => setName(e.target.value)} />
+        <div className="space-y-2">
+          <Input
+            autoFocus
+            placeholder="项目名称"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="font-mono"
+          />
+          <p className="text-xs text-text-3">创建后你将成为该项目的 owner</p>
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter>
@@ -451,11 +510,13 @@ function ProjectsAndKeysTab({
   currentProject,
   setCurrentProject,
   refreshProjects,
+  isOwner,
 }: {
   projects: Project[];
   currentProject: Project | null;
   setCurrentProject: (p: Project) => void;
   refreshProjects: () => Promise<void>;
+  isOwner: boolean;
 }) {
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -469,7 +530,8 @@ function ProjectsAndKeysTab({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">项目</h3>
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-3.5 w-3.5" />
             新建项目
           </Button>
         </div>
@@ -498,8 +560,8 @@ function ProjectsAndKeysTab({
         )}
         {currentProject && (
           <>
-            <ProjectInfoCard project={currentProject} refreshProjects={refreshProjects} />
-            <ApiKeysCard project={currentProject} />
+            <ProjectInfoCard project={currentProject} refreshProjects={refreshProjects} isOwner={isOwner} />
+            <ApiKeysCard project={currentProject} isOwner={isOwner} />
           </>
         )}
       </div>
@@ -1181,23 +1243,22 @@ function avatarGradient(seed: string): string {
   return AVATAR_GRADIENTS[hash % AVATAR_GRADIENTS.length];
 }
 
-function MembersTab() {
+function MembersTab({
+  members,
+  setMembers,
+  reloadMembers,
+  isOwner,
+}: {
+  members: Member[];
+  setMembers: (members: Member[]) => void;
+  reloadMembers: () => void;
+  isOwner: boolean;
+}) {
   const { currentProject } = useProject();
   const { user } = useAuth();
-  const [members, setMembers] = useState<Member[]>([]);
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(() => {
-    if (!currentProject) return;
-    api.getMembers(currentProject.id).then(setMembers).catch(() => setMembers([]));
-  }, [currentProject]);
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const myRole = members.find((m) => m.user_id === user?.id)?.role;
-  const isOwner = myRole === "owner";
   const ownerCount = members.filter((m) => m.role === "owner").length;
 
   const add = async (e: React.FormEvent) => {
@@ -1216,7 +1277,7 @@ function MembersTab() {
     if (!currentProject) return;
     try {
       await api.removeMember(currentProject.id, userId);
-      load();
+      reloadMembers();
     } catch (err) {
       setError(err instanceof Error ? err.message : "移除失败");
     }
@@ -1328,8 +1389,10 @@ function MembersTab() {
 
 export default function SettingsPage() {
   const { projects, currentProject, setCurrentProject, refreshProjects } = useProject();
+  const { user } = useAuth();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [pricing, setPricing] = useState<Pricing[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(() => {
@@ -1344,6 +1407,24 @@ export default function SettingsPage() {
   }, [currentProject]);
 
   useEffect(reload, [reload]);
+
+  // Role lookup lifted here (was previously duplicated inside MembersTab) and shared
+  // by every tab that needs to know owner-vs-member: 项目信息 fields, the API 密钥
+  // tab, and 成员 itself. A failed/not-yet-loaded lookup defaults isOwner to true —
+  // the backend still enforces the real permission on every mutating/owner-only
+  // endpoint, so the worst case here is a control that's shown but then 403s.
+  const reloadMembers = useCallback(() => {
+    if (!currentProject) {
+      setMembers([]);
+      return;
+    }
+    api.getMembers(currentProject.id).then(setMembers).catch(() => setMembers([]));
+  }, [currentProject]);
+
+  useEffect(reloadMembers, [reloadMembers]);
+
+  const myRole = members.find((m) => m.user_id === user?.id)?.role;
+  const isOwner = myRole ? myRole === "owner" : true;
 
   return (
     <div>
@@ -1366,6 +1447,7 @@ export default function SettingsPage() {
               currentProject={currentProject}
               setCurrentProject={setCurrentProject}
               refreshProjects={refreshProjects}
+              isOwner={isOwner}
             />
           </TabsContent>
 
@@ -1378,7 +1460,7 @@ export default function SettingsPage() {
           </TabsContent>
 
           <TabsContent value="members">
-            <MembersTab />
+            <MembersTab members={members} setMembers={setMembers} reloadMembers={reloadMembers} isOwner={isOwner} />
           </TabsContent>
         </Tabs>
       </main>

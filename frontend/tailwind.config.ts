@@ -72,6 +72,15 @@ const config: Config = {
         "diff-add-bar": "hsl(var(--diff-add-bar) / <alpha-value>)",
         "diff-del-bg": "hsl(var(--diff-del-bg) / <alpha-value>)",
         "diff-del-bar": "hsl(var(--diff-del-bar) / <alpha-value>)",
+        // Design tokens (docs/design/*.dc.html) --accent-subtle / --accent-border are a
+        // fixed-alpha tint/border of the brand accent, which maps to --primary in this
+        // app's token system (see CLAUDE.md). Several pages already referenced these as
+        // bare Tailwind classes (bg-accent-subtle / border-accent-border) with no
+        // matching definition anywhere, so they silently rendered as no-ops — defining
+        // them here fixes every existing call site (prompts + settings pages) without
+        // introducing new CSS custom properties or any hex literal.
+        "accent-subtle": "hsl(var(--primary) / 0.15)",
+        "accent-border": "hsl(var(--primary) / 0.4)",
       },
       borderRadius: {
         lg: "var(--radius)",
