@@ -81,7 +81,7 @@ docker-compose up -d
 docker-compose exec backend python -m scripts.create_project demo
 ```
 
-**安全注意**：查询、配置、Prompt、评分、回放等接口现在要求登录 + 项目成员身份（见下「认证与用户体系」一节）；ingestion 接口不变，仍使用 API Key 鉴权。评分与回放会实际调用模型 API、消耗模型配额，请勿暴露到公网。
+**安全注意**：查询、配置、Prompt、评分、回放等接口现在要求登录 + 项目成员身份（见下「认证与用户体系」一节）；ingestion 接口不变，仍使用 API Key 鉴权。评分与回放会实际调用模型 API、消耗模型配额，请勿暴露到公网。第三方 provider（如 DeepSeek）的 `api_key` 落库前会用 Fernet 加密（见 `backend/.env.example` 的 `PROMPTSCOPE_ENCRYPTION_KEY`），防的是数据库文件/备份/SQL 注入泄露；宿主机或进程环境被攻破不在此防护范围内，生产环境请显式设置该环境变量而非依赖自动生成的本地密钥文件。
 
 ## 认证与用户体系
 

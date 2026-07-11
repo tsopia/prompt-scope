@@ -2,6 +2,7 @@ import httpx
 import pytest
 
 from models.entities import ModelProvider
+from services.crypto import encrypt_secret
 from services.llm_client import LLMClientError, chat_completion
 
 
@@ -28,6 +29,38 @@ def test_openai_compatible_success():
     assert out == {"content": "hello", "tool_calls": None, "raw_message": {"content": "hello"},
                    "reasoning_content": None,
                    "input_tokens": 10, "output_tokens": 5}
+
+
+def test_openai_call_decrypts_encrypted_provider_key():
+    """provider 行落库的是加密值；出站请求头里必须是解密后的明文 key。"""
+    provider = ModelProvider(name="oai-enc", base_url="https://api.test.com/v1",
+                             api_key=encrypt_secret("sk-real-secret"),
+                             provider_type="openai")
+    assert provider.api_key != "sk-real-secret"  # 确认落库值确实是加密态
+
+    def handler(request):
+        assert request.headers["authorization"] == "Bearer sk-real-secret"
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": "hello"}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1}})
+
+    chat_completion(provider, "gpt-4o", [{"role": "user", "content": "hi"}],
+                    client=make_client(handler))
+
+
+def test_anthropic_call_decrypts_encrypted_provider_key():
+    provider = ModelProvider(name="ant-enc", base_url="https://api.anthropic.test",
+                             api_key=encrypt_secret("ak-real-secret"),
+                             provider_type="anthropic")
+
+    def handler(request):
+        assert request.headers["x-api-key"] == "ak-real-secret"
+        return httpx.Response(200, json={
+            "content": [{"type": "text", "text": "hey"}],
+            "usage": {"input_tokens": 1, "output_tokens": 1}})
+
+    chat_completion(provider, "claude-x", [{"role": "user", "content": "hi"}],
+                    client=make_client(handler))
 
 
 def test_anthropic_success():

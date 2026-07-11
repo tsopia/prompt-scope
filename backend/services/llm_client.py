@@ -2,6 +2,7 @@ import json
 import httpx
 
 from models.entities import ModelProvider
+from services.crypto import decrypt_secret
 
 ANTHROPIC_VERSION = "2023-06-01"
 DEFAULT_TIMEOUT = 120.0
@@ -32,14 +33,14 @@ def _normalize_tool_calls(message: dict) -> list | None:
     return normalized
 
 
-def _openai_call(client: httpx.Client, provider: ModelProvider, model: str,
+def _openai_call(client: httpx.Client, provider: ModelProvider, api_key: str, model: str,
                  messages: list, model_params: dict | None, tools: list | None) -> dict:
     payload = {"model": model, "messages": messages, **(model_params or {})}
     if tools:
         payload["tools"] = tools
     resp = client.post(
         f"{provider.base_url.rstrip('/')}/chat/completions",
-        headers={"Authorization": f"Bearer {provider.api_key}"},
+        headers={"Authorization": f"Bearer {api_key}"},
         json=payload,
         timeout=DEFAULT_TIMEOUT,
     )
@@ -59,7 +60,7 @@ def _openai_call(client: httpx.Client, provider: ModelProvider, model: str,
     }
 
 
-def _anthropic_call(client: httpx.Client, provider: ModelProvider, model: str,
+def _anthropic_call(client: httpx.Client, provider: ModelProvider, api_key: str, model: str,
                     messages: list, model_params: dict | None, tools: list | None) -> dict:
     if tools:
         raise LLMClientError("anthropic provider 暂不支持工具回放（Phase 4 计划）")
@@ -70,7 +71,7 @@ def _anthropic_call(client: httpx.Client, provider: ModelProvider, model: str,
         base = base[:-3]
     resp = client.post(
         f"{base}/v1/messages",
-        headers={"x-api-key": provider.api_key,
+        headers={"x-api-key": api_key,
                  "anthropic-version": ANTHROPIC_VERSION},
         json={"model": model, "max_tokens": max_tokens,
               "messages": messages, **params},
@@ -95,10 +96,12 @@ def chat_completion(provider: ModelProvider, model: str, messages: list,
                     client: httpx.Client | None = None) -> dict:
     own_client = client is None
     client = client or httpx.Client()
+    # 唯一解密点：明文 key 只在这里短暂持有，随即传给出站调用，不落回 provider 对象
+    api_key = decrypt_secret(provider.api_key)
     try:
         if provider.provider_type == "anthropic":
-            return _anthropic_call(client, provider, model, messages, model_params, tools)
-        return _openai_call(client, provider, model, messages, model_params, tools)
+            return _anthropic_call(client, provider, api_key, model, messages, model_params, tools)
+        return _openai_call(client, provider, api_key, model, messages, model_params, tools)
     except httpx.HTTPStatusError as e:
         raise LLMClientError(
             f"provider returned {e.response.status_code}: {e.response.text[:500]}",

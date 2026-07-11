@@ -1,6 +1,7 @@
 import pytest
 
-from models.entities import Project, ProjectMember
+from models.entities import ModelProvider, Project, ProjectMember
+from services.crypto import decrypt_secret, is_encrypted
 
 
 @pytest.fixture()
@@ -229,3 +230,55 @@ def test_pricing_rejects_cross_project_provider_id(db_session, client, project):
         "provider_id": pid_a})
     assert resp.status_code == 400
     assert "provider_id 不属于该 project" in resp.json()["detail"]
+
+
+def test_create_provider_stores_encrypted_api_key(db_session, client, project):
+    resp = client.post("/api/providers", json={
+        "project_id": project.id,
+        "name": "openai", "base_url": "https://api.openai.com/v1",
+        "api_key": "sk-secret", "provider_type": "openai"})
+    pid = resp.json()["id"]
+    assert resp.json()["api_key_set"] is True
+    assert "sk-secret" not in resp.text
+
+    row = db_session.get(ModelProvider, pid)
+    assert is_encrypted(row.api_key)
+    assert row.api_key != "sk-secret"
+    assert decrypt_secret(row.api_key) == "sk-secret"
+
+
+def test_update_provider_stores_encrypted_api_key(db_session, client, project):
+    pid = client.post("/api/providers", json={
+        "project_id": project.id,
+        "name": "openai", "base_url": "https://api.openai.com/v1",
+        "api_key": "sk-old", "provider_type": "openai"}).json()["id"]
+
+    resp = client.put(f"/api/providers/{pid}", json={
+        "project_id": project.id,
+        "name": "openai", "base_url": "https://api.openai.com/v1",
+        "provider_type": "openai", "api_key": "sk-new"})
+    assert resp.json()["api_key_set"] is True
+    assert "sk-new" not in resp.text
+
+    row = db_session.get(ModelProvider, pid)
+    assert is_encrypted(row.api_key)
+    assert decrypt_secret(row.api_key) == "sk-new"
+
+
+def test_update_provider_omitting_api_key_preserves_encrypted_value(db_session, client, project):
+    pid = client.post("/api/providers", json={
+        "project_id": project.id,
+        "name": "openai", "base_url": "https://api.openai.com/v1",
+        "api_key": "sk-keep", "provider_type": "openai"}).json()["id"]
+    row = db_session.get(ModelProvider, pid)
+    stored_before = row.api_key
+
+    resp = client.put(f"/api/providers/{pid}", json={
+        "project_id": project.id,
+        "name": "openai", "base_url": "https://api.openai.com/v1",
+        "provider_type": "openai"})
+    assert resp.json()["api_key_set"] is True
+
+    db_session.refresh(row)
+    assert row.api_key == stored_before
+    assert decrypt_secret(row.api_key) == "sk-keep"

@@ -21,6 +21,7 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql+psycopg://promptscope:promptscope@postgres:5432/promptscope
+      PROMPTSCOPE_ENCRYPTION_KEY: ${PROMPTSCOPE_ENCRYPTION_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy

@@ -1,10 +1,11 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from db import Base, engine
+from db import Base, SessionLocal, engine
 import models.entities  # noqa: F401  确保建表元数据注册
 from routers import ingest as ingest_router
 from routers import query as query_router
@@ -23,6 +24,14 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     from db_migrate import ensure_columns
     ensure_columns()
+    from services.crypto import migrate_plaintext_provider_keys
+    db = SessionLocal()
+    try:
+        n = migrate_plaintext_provider_keys(db)
+        if n:
+            logging.info("encrypted %d legacy provider keys", n)
+    finally:
+        db.close()
     yield
 
 

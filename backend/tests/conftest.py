@@ -4,6 +4,11 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ["DATABASE_URL"] = "sqlite://"  # in-memory，必须在 import config 之前
 
+from cryptography.fernet import Fernet
+
+# 测试用稳定加密 key：避免自动生成流程在仓库里写出 backend/db/.encryption_key
+os.environ.setdefault("PROMPTSCOPE_ENCRYPTION_KEY", Fernet.generate_key().decode())
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

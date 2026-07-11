@@ -5,6 +5,7 @@ from db import get_db
 from models.entities import ModelPricing, ModelProvider, User
 from schemas.config import JudgeModelOut, PricingIn, PricingOut, ProviderIn, ProviderOut
 from services.authz import assert_member, get_current_user
+from services.crypto import encrypt_secret
 
 router = APIRouter(tags=["config"])
 
@@ -42,7 +43,7 @@ def create_provider(payload: ProviderIn, db: Session = Depends(get_db),
         raise HTTPException(status_code=409, detail="provider name already exists")
     p = ModelProvider(project_id=payload.project_id, name=payload.name,
                       base_url=payload.base_url,
-                      api_key=payload.api_key or "",
+                      api_key=encrypt_secret(payload.api_key or ""),
                       provider_type=payload.provider_type,
                       kind=payload.kind, note=payload.note)
     db.add(p)
@@ -68,7 +69,7 @@ def update_provider(provider_id: str, payload: ProviderIn,
     p.kind = payload.kind
     p.note = payload.note
     if payload.api_key:
-        p.api_key = payload.api_key
+        p.api_key = encrypt_secret(payload.api_key)
     db.commit()
     return _provider_out(p)
 

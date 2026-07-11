@@ -183,7 +183,10 @@ class ModelProvider(Base):
         ForeignKey("projects.id"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(128))
     base_url: Mapped[str] = mapped_column(String(512))
-    api_key: Mapped[str] = mapped_column(String(512))  # 内部平台，明文存储
+    api_key: Mapped[str] = mapped_column(String(512))
+    # 第三方 provider 密钥（如 DeepSeek），落库前经 services.crypto.encrypt_secret
+    # 加密（enc: 前缀），出站调用时在 services.llm_client 单点解密；
+    # 历史明文行在 main.py 启动迁移中自动加密
     provider_type: Mapped[str] = mapped_column(String(16), default="openai")
     # openai | anthropic
     kind: Mapped[str | None] = mapped_column(String(16), nullable=True)

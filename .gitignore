@@ -11,7 +11,7 @@ __pycache__/
 venv/
 
 # runtime data
-backend/db/*.db
+backend/db/
 *.sqlite
 
 # env & local config
