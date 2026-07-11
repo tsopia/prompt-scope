@@ -80,14 +80,67 @@ function VerdictBadge({ ev }: { ev: Evaluation }) {
   return <StatusBadge kind="warning" label={text} />;
 }
 
-function ScoreBar({ label, score }: { label: string; score: number | null }) {
+// context_mode 展示 chip：复用 CONTEXT_OPTIONS 的中文文案，未知取值原样展示（防御性兜底）。
+function ContextModeChip({ mode }: { mode: string }) {
+  const label = CONTEXT_OPTIONS.find((o) => o.value === mode)?.label ?? mode;
   return (
-    <div className="flex items-center gap-2 text-sm">
-      <span className="w-4 text-muted-foreground">{label}</span>
-      <div className="h-2 flex-1 overflow-hidden rounded bg-secondary">
-        <div className="h-full bg-primary" style={{ width: `${((score ?? 0) / 10) * 100}%` }} />
+    <span className="rounded-md border border-border-soft bg-bg-grid px-1.5 py-0.5 font-mono text-[10.5px] text-text-3">
+      {label}
+    </span>
+  );
+}
+
+const scoreText = (score: number | null): string => (score !== null ? score.toFixed(1) : "—");
+
+// pair 模式紧凑展示「A 8.2 · B 8.6」，分高的一侧加粗强调；single 模式只有一个分数。
+function ScoreDisplay({ ev }: { ev: Evaluation }) {
+  if (ev.score_b === null) {
+    return (
+      <span className="font-mono text-sm font-semibold tabular-nums text-foreground">
+        {scoreText(ev.score)}
+        <span className="ml-1 font-sans text-xs font-normal text-muted-foreground">/ 10</span>
+      </span>
+    );
+  }
+  const aHigher = (ev.score ?? -Infinity) >= (ev.score_b ?? -Infinity);
+  return (
+    <span className="font-mono text-sm tabular-nums">
+      <span className={cn(aHigher ? "font-semibold text-foreground" : "text-muted-foreground")}>
+        A {scoreText(ev.score)}
+      </span>
+      <span className="mx-1.5 text-text-3">·</span>
+      <span className={cn(!aHigher ? "font-semibold text-foreground" : "text-muted-foreground")}>
+        B {scoreText(ev.score_b)}
+      </span>
+    </span>
+  );
+}
+
+const REASONING_COLLAPSE_THRESHOLD = 280;
+
+function ReasoningPanel({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = text.length > REASONING_COLLAPSE_THRESHOLD;
+  return (
+    <div className="space-y-1">
+      <p className="text-[11.5px] text-text-3">评审理由</p>
+      <div
+        className={cn(
+          "whitespace-pre-wrap rounded-md bg-bg-grid p-3 text-[13px] leading-relaxed text-foreground",
+          isLong && !expanded && "line-clamp-4",
+        )}
+      >
+        {text}
       </div>
-      <MetricText value={score !== null ? String(score) : "—"} className="w-6 text-right font-semibold" />
+      {isLong && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="text-xs font-medium text-primary hover:underline"
+        >
+          {expanded ? "收起" : "展开"}
+        </button>
+      )}
     </div>
   );
 }
@@ -104,13 +157,14 @@ function EvalCard({
     <Card>
       <CardContent className="space-y-3 p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold font-mono">{ev.judge_model}</span>
+          <span className="font-mono text-[12.5px] font-semibold">{ev.judge_model}</span>
           <VerdictBadge ev={ev} />
           {cached && (
             <span className="rounded-md border border-border px-1.5 py-0.5 font-mono text-[10.5px] text-text-3">
               已缓存
             </span>
           )}
+          <ContextModeChip mode={ev.context_mode} />
           <Button
             variant="ghost"
             size="sm"
@@ -121,16 +175,27 @@ function EvalCard({
             重新评分
           </Button>
         </div>
-        <div className="space-y-1.5">
-          <ScoreBar label="A" score={ev.score} />
-          {ev.score_b !== null && <ScoreBar label="B" score={ev.score_b} />}
-        </div>
-        {ev.reasoning && (
-          <p className="whitespace-pre-wrap text-sm text-muted-foreground">{ev.reasoning}</p>
-        )}
+        <ScoreDisplay ev={ev} />
+        {ev.reasoning && <ReasoningPanel text={ev.reasoning} />}
         <p className="text-xs text-muted-foreground">
           <MetricText value={formatCost(ev.cost)} /> · {new Date(ev.created_at).toLocaleString("zh-CN")}
         </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// 批量/单条评分调用中某个 judge 失败时（results[].status === "error"），不再降级成裸文字，
+// 而是复用与 EvalCard 相同的 Card 外框，保持"目的性破坏"（destructive）语义一致。
+function ErrorCard({ judgeModel, error }: { judgeModel: string; error: string }) {
+  return (
+    <Card className="border-destructive/40">
+      <CardContent className="space-y-2 p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-mono text-[12.5px] font-semibold">{judgeModel}</span>
+          <StatusBadge kind="error" label="评分失败" />
+        </div>
+        <p className="text-sm text-destructive">{error}</p>
       </CardContent>
     </Card>
   );
@@ -298,7 +363,7 @@ export function JudgePanel({
 
         {errors._global && <p className="text-sm text-destructive">{errors._global}</p>}
         {Object.entries(errors).filter(([k]) => k !== "_global").map(([model, err]) => (
-          <p key={model} className="text-sm text-destructive">{model}: {err}</p>
+          <ErrorCard key={model} judgeModel={model} error={err} />
         ))}
 
         <div className={cn("space-y-3", visibleEvaluations.length === 0 && !running && "hidden")}>

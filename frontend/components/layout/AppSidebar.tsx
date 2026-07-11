@@ -10,6 +10,7 @@ import { useProject } from "@/contexts/ProjectContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSidebar } from "@/components/layout/SidebarContext";
 import { CreateProjectDialog } from "@/components/CreateProjectDialog";
+import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { api, type Project } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
@@ -17,6 +18,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // Icons below are copied verbatim (viewBox/paths) from docs/design/Traces.dc.html's
 // _injectIcons() nav + theme SVG maps, with stroke colors swapped from the design's
@@ -296,6 +303,7 @@ function AccountRow({ collapsed }: { collapsed: boolean }) {
   const { user, logout } = useAuth();
   const { currentProject } = useProject();
   const [role, setRole] = useState<string | null>(null);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -326,36 +334,49 @@ function AccountRow({ collapsed }: { collapsed: boolean }) {
     </span>
   );
 
-  if (collapsed) {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className="flex items-center justify-center overflow-hidden rounded-[10px] p-2">{avatar}</div>
-        </TooltipTrigger>
-        <TooltipContent side="right">{name}</TooltipContent>
-      </Tooltip>
-    );
-  }
+  // 折叠态下用 title 承载账户名提示（原先的 Tooltip 组合触发器会与 DropdownMenuTrigger
+  // 的 asChild 叠加，属于不必要的复杂化——原生 title 已经足够覆盖折叠态的可发现性）。
+  const trigger = (
+    <button
+      type="button"
+      aria-label="账户菜单"
+      title={collapsed ? name : undefined}
+      className={cn(
+        "mt-2.5 flex items-center gap-2.5 overflow-hidden rounded-[10px] p-2 text-left hover:bg-accent",
+        collapsed ? "w-full justify-center" : "w-full"
+      )}
+    >
+      {avatar}
+      {!collapsed && (
+        <span className="flex min-w-0 flex-1 flex-col leading-tight">
+          <span className="truncate text-[12.5px] font-semibold text-foreground" title={user?.email}>
+            {name}
+          </span>
+          {role && <span className="truncate text-[11px] text-text-3">{role}</span>}
+        </span>
+      )}
+    </button>
+  );
 
   return (
-    <div className="mt-2.5 flex items-center gap-2.5 overflow-hidden rounded-[10px] p-2">
-      {avatar}
-      <span className="flex min-w-0 flex-1 flex-col leading-tight">
-        <span className="truncate text-[12.5px] font-semibold text-foreground" title={user?.email}>
-          {name}
-        </span>
-        {role && <span className="truncate text-[11px] text-text-3">{role}</span>}
-      </span>
-      <button
-        type="button"
-        onClick={() => logout()}
-        title="退出登录"
-        aria-label="退出登录"
-        className="shrink-0 text-text-3 hover:text-foreground"
-      >
-        <LogOut className="h-3.5 w-3.5" />
-      </button>
-    </div>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+        <DropdownMenuContent align="start" side={collapsed ? "right" : "top"} className="min-w-[160px]">
+          <DropdownMenuItem onSelect={() => setChangePasswordOpen(true)}>
+            修改密码
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => logout()}
+            className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+          >
+            <LogOut className="mr-2 h-3.5 w-3.5" />
+            退出登录
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
+    </>
   );
 }
 

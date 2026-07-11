@@ -68,11 +68,11 @@ export function OnboardingCard({
         </div>
 
         <div className="space-y-5">
-          <div className="flex gap-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.5rem_1fr] sm:gap-3">
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
               {STEPS[0].n}
             </span>
-            <div className="flex-1 space-y-2">
+            <div className="min-w-0 space-y-2">
               <p className="text-sm font-medium">{STEPS[0].title}</p>
               <p className="text-sm text-muted-foreground">{STEPS[0].description}</p>
               <Button asChild size="sm" variant="secondary">
@@ -81,22 +81,22 @@ export function OnboardingCard({
             </div>
           </div>
 
-          <div className="flex gap-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.5rem_1fr] sm:gap-3">
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
               {STEPS[1].n}
             </span>
-            <div className="flex-1 space-y-2">
+            <div className="min-w-0 space-y-2">
               <p className="text-sm font-medium">{STEPS[1].title}</p>
               <p className="text-sm text-muted-foreground">{STEPS[1].description}</p>
-              <CodeBlock code={SDK_SNIPPET} language="python" />
+              <CodeBlock code={SDK_SNIPPET} language="python" className="min-w-0" />
             </div>
           </div>
 
-          <div className="flex gap-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.5rem_1fr] sm:gap-3">
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
               {STEPS[2].n}
             </span>
-            <div className="flex-1 space-y-2">
+            <div className="min-w-0 space-y-2">
               <p className="text-sm font-medium">{STEPS[2].title}</p>
               <p className="text-sm text-muted-foreground">{STEPS[2].description}</p>
               <Button size="sm" onClick={onRefresh}>

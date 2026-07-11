@@ -360,6 +360,8 @@ export const api = {
   register: (body: { email: string; password: string; display_name: string }) =>
     send<CurrentUser>("POST", "/api/auth/register", body),
   logout: () => send<{ logged_out: boolean }>("POST", "/api/auth/logout"),
+  changePassword: (body: { current_password: string; new_password: string }) =>
+    send<{ changed: boolean }>("POST", "/api/auth/change-password", body),
 
   // Members
   getMembers: (projectId: string) =>

@@ -166,7 +166,7 @@ export default function TracesPage() {
       />
 
       <Dialog open={sdkDialogOpen} onOpenChange={setSdkDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-2xl sm:max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>接入 SDK</DialogTitle>
           </DialogHeader>
