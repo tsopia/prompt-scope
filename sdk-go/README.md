@@ -141,3 +141,7 @@ SDK **不做任何客户端校验**（与 Python SDK 一致）：例如 `llm` �
 - **模块路径是占位符**：`go.mod` 的 `github.com/promptscope/sdk-go` 会在 SDK 拆分为独立开源仓库时变更，届时现有 import path 需要迁移。
 - **无 replay 相关辅助方法**：只覆盖上报（ingest）路径；查询/回放 API 目前没有 Go 客户端封装。
 - **`Span` 是 Go SDK 独有的便捷方法**：Python SDK 目前没有对应的 `span(...)` 方法（span 观测目前只能通过直接构造字典上报）；两侧最终发送的 JSON 形状一致。
+
+## eino 集成
+
+需要自动上报 [cloudwego/eino](https://github.com/cloudwego/eino) 的 ChatModel/Tool 调用？见 [`eino/README.md`](eino/README.md)。
