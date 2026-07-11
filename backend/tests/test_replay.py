@@ -216,6 +216,40 @@ def test_replay_source_without_llm_fails_cleanly(db_session, seeded):
     assert exc.value.status_code == 400
 
 
+def test_replay_result_metadata_records_lineage(db_session, seeded):
+    client, calls = scripted_client([final_response("ok")])
+    run = execute_replay(
+        db_session,
+        make_run(db_session, seeded,
+                 override_model_params={"thinking": {"type": "enabled"}}),
+        client=client)
+    assert run.status == "success"
+    result = db_session.get(Trace, run.result_trace_id)
+    assert result.meta["source_trace_id"] == "src-1"
+    assert result.meta["source_trace_name"] == "weather-run"
+    assert result.meta["override_model"] == "cheap-model"
+    assert result.meta["thinking"] == "enabled"
+
+
+def test_replay_result_metadata_omits_override_model_and_thinking_when_absent(
+        db_session, seeded):
+    # run 未设置 override_model、未设置 thinking 参数 -> 两个 key 都不应写入 metadata
+    from services.replay_service import _persist_result
+
+    source = db_session.get(Trace, "src-1")
+    run = ReplayRun(project_id=seeded.id, source_trace_id="src-1", status="pending")
+    db_session.add(run)
+    db_session.commit()
+    _persist_result(db_session, run, source, "result-empty-override", [],
+                    "ok", None)
+    db_session.commit()
+    result = db_session.get(Trace, "result-empty-override")
+    assert result.meta["source_trace_id"] == "src-1"
+    assert result.meta["source_trace_name"] == "weather-run"
+    assert "override_model" not in result.meta
+    assert "thinking" not in result.meta
+
+
 def test_single_point_replay_uses_target_subtree(db_session, seeded):
     # 给源 trace 加第二个 llm 节点（多阶段）及其子 tool
     db_session.add_all([

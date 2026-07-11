@@ -30,6 +30,36 @@ def test_ensure_columns_noop_on_current_schema():
     assert "score_b" in cols
 
 
+def test_ensure_columns_adds_trace_summary_column():
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
+                           poolclass=StaticPool)
+    # 手工建一个缺 summary 列的 traces 表（模拟旧库）
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE traces (id VARCHAR(64) PRIMARY KEY, project_id VARCHAR(32), "
+            "name VARCHAR(255), origin VARCHAR(16), status VARCHAR(16), "
+            "input JSON, output JSON, metadata JSON, started_at DATETIME, "
+            "ended_at DATETIME, latency_ms INTEGER, total_input_tokens INTEGER, "
+            "total_output_tokens INTEGER, total_cost FLOAT, prompt_version_id VARCHAR(32), "
+            "created_at DATETIME, updated_at DATETIME)"))
+    ensure_columns(bind=engine)
+    cols = {c["name"] for c in inspect(engine).get_columns("traces")}
+    assert "summary" in cols
+
+
+def test_ensure_columns_adds_project_summary_model_column():
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
+                           poolclass=StaticPool)
+    # 手工建一个缺 summary_model 列的 projects 表（模拟旧库）
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE projects (id VARCHAR(32) PRIMARY KEY, name VARCHAR(255), "
+            "owner_id VARCHAR(32), created_at DATETIME)"))
+    ensure_columns(bind=engine)
+    cols = {c["name"] for c in inspect(engine).get_columns("projects")}
+    assert "summary_model" in cols
+
+
 def test_ensure_columns_rejects_not_null_column_without_default():
     import pytest
     from sqlalchemy import Column, Integer, MetaData, Table, create_engine, text

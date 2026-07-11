@@ -22,6 +22,7 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(255), unique=True)
     owner_id: Mapped[str | None] = mapped_column(
         ForeignKey("users.id"), nullable=True)
+    summary_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     api_keys: Mapped[list["ApiKey"]] = relationship(back_populates="project")
@@ -61,6 +62,7 @@ class Trace(Base):
     total_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
     prompt_version_id: Mapped[str | None] = mapped_column(
         ForeignKey("prompt_versions.id"), nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow)

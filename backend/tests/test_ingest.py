@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from db import get_db
-from models.entities import ApiKey, ModelPricing, Observation, Project, Trace
+from models.entities import ApiKey, ModelPricing, ModelProvider, Observation, Project, Trace
 from services.auth import generate_api_key
 
 
@@ -147,6 +147,71 @@ def test_ingest_cannot_move_observation_across_traces(client, db_session, api_ke
              "observations": [{"id": "ob-1", "type": "span", "name": "steal"}]}
     resp = client.post("/api/ingest", json=other, headers=h)
     assert resp.status_code == 409
+
+
+def _bind_ingest_background_session_to_test_engine(monkeypatch, db_session):
+    """后台任务用 SessionLocal() 开自己的会话（生产环境下指向同一个全局
+    engine）；测试里 db_session 走的是每个测试独立的内存 sqlite engine，
+    这里把 routers.ingest.SessionLocal 重新绑定到同一个 engine 上，让后台
+    任务在测试里也能看到通过 db_session 落库的数据。"""
+    from sqlalchemy.orm import sessionmaker
+
+    import routers.ingest as ingest_router
+    monkeypatch.setattr(
+        ingest_router, "SessionLocal",
+        sessionmaker(bind=db_session.get_bind(), expire_on_commit=False))
+
+
+def test_ingest_with_summary_model_triggers_background_summary(
+        client, db_session, api_key, monkeypatch):
+    raw, project = api_key
+    provider = ModelProvider(project_id=project.id, name="oai",
+                             base_url="https://api.test.com/v1",
+                             api_key="sk-x", provider_type="openai")
+    db_session.add(provider)
+    db_session.flush()
+    db_session.query(ModelPricing).filter(
+        ModelPricing.project_id == project.id, ModelPricing.model == "gpt-4o"
+    ).update({"provider_id": provider.id})
+    project.summary_model = "gpt-4o"
+    db_session.commit()
+    _bind_ingest_background_session_to_test_engine(monkeypatch, db_session)
+
+    import services.summary_service as summary_service
+
+    def fake_chat_completion(provider, model, messages, model_params=None, client=None):
+        return {"content": "总结：一次问答式调用。", "input_tokens": 5, "output_tokens": 5}
+
+    monkeypatch.setattr(summary_service, "chat_completion", fake_chat_completion)
+
+    resp = client.post("/api/ingest", json=PAYLOAD,
+                       headers={"Authorization": f"Bearer {raw}"})
+    assert resp.status_code == 200, resp.text
+
+    # TestClient 会同步跑完 BackgroundTasks 再返回，因此响应返回时摘要应已写入
+    t = db_session.get(Trace, "tr-1")
+    assert t.summary == "总结：一次问答式调用。"
+
+
+def test_ingest_without_summary_model_skips_background_task(
+        client, db_session, api_key, monkeypatch):
+    raw, project = api_key  # summary_model unset by default
+    _bind_ingest_background_session_to_test_engine(monkeypatch, db_session)
+
+    import services.summary_service as summary_service
+    called = {"n": 0}
+
+    def fake_chat_completion(*a, **kw):
+        called["n"] += 1
+        return {"content": "x", "input_tokens": 1, "output_tokens": 1}
+
+    monkeypatch.setattr(summary_service, "chat_completion", fake_chat_completion)
+
+    resp = client.post("/api/ingest", json=PAYLOAD,
+                       headers={"Authorization": f"Bearer {raw}"})
+    assert resp.status_code == 200
+    assert called["n"] == 0
+    assert db_session.get(Trace, "tr-1").summary is None
 
 
 def test_unknown_model_cost_is_null(client, db_session, api_key):

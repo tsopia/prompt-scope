@@ -7,6 +7,7 @@ from schemas.projects import (KeyCreated, KeyCreateIn, KeyOut, ProjectCreate,
                               ProjectOut2, ProjectRename)
 from services.auth import generate_api_key
 from services.authz import assert_owner, get_current_user
+from services.providers import resolve_provider
 
 router = APIRouter(tags=["projects"])
 
@@ -34,6 +35,13 @@ def rename_project(project_id: str, payload: ProjectRename,
             Project.name == payload.name).first():
         raise HTTPException(status_code=409, detail="project name already exists")
     p.name = payload.name
+    if "summary_model" in payload.model_fields_set:
+        if payload.summary_model:
+            # 复用 GET /api/judge-models 的解析逻辑：必须有带 provider 的 pricing 行
+            resolve_provider(db, payload.summary_model, project_id)
+            p.summary_model = payload.summary_model
+        else:
+            p.summary_model = None
     db.commit()
     return ProjectOut2.model_validate(p)
 

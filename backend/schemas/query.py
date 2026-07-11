@@ -8,6 +8,7 @@ class ProjectOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
     name: str
+    summary_model: str | None = None
 
 
 class TraceSummary(BaseModel):
@@ -24,6 +25,9 @@ class TraceSummary(BaseModel):
     started_at: datetime | None
     created_at: datetime
     divergence_count: int = 0
+    summary: str | None = None
+    input_preview: str | None = None
+    replay_source: dict | None = None
 
 
 class TraceListOut(BaseModel):
@@ -76,4 +80,5 @@ class TraceDetail(BaseModel):
     created_at: datetime
     metadata: dict | None = None
     divergence_count: int = 0
+    summary: str | None = None
     observations: list[ObservationNode]

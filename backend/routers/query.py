@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session, selectinload
 
@@ -9,6 +11,46 @@ from services.authz import (assert_member, assert_trace_access,
                             get_current_user, member_project_ids)
 
 router = APIRouter(tags=["query"])
+
+INPUT_PREVIEW_MAX_CHARS = 120
+_INPUT_PREVIEW_KEYS = ("query", "question", "input", "text")
+
+
+def derive_input_preview(value) -> str | None:
+    """工程兜底：从 trace.input 派生一句话预览（非 LLM 摘要）。"""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value
+    elif isinstance(value, dict):
+        text = None
+        for key in _INPUT_PREVIEW_KEYS:
+            candidate = value.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                text = candidate
+                break
+        if text is None:
+            text = json.dumps(value, ensure_ascii=False, separators=(",", ":"),
+                              default=str)
+    else:
+        text = json.dumps(value, ensure_ascii=False, separators=(",", ":"),
+                          default=str)
+    text = text.strip()
+    return text[:INPUT_PREVIEW_MAX_CHARS] if text else None
+
+
+_REPLAY_SOURCE_OPTIONAL_KEYS = ("source_trace_name", "override_model", "thinking")
+
+
+def derive_replay_source(meta: dict | None) -> dict | None:
+    """从 trace.meta 中抽取回放血缘的展示子集，非回放结果 trace 返回 None。"""
+    if not meta or "source_trace_id" not in meta:
+        return None
+    result = {"source_trace_id": meta["source_trace_id"]}
+    for key in _REPLAY_SOURCE_OPTIONAL_KEYS:
+        if key in meta:
+            result[key] = meta[key]
+    return result
 
 
 @router.get("/projects", response_model=list[ProjectOut])
@@ -66,6 +108,9 @@ def list_traces(
             total_cost=t.total_cost, latency_ms=t.latency_ms,
             started_at=t.started_at, created_at=t.created_at,
             divergence_count=divergence_counts.get(t.id, 0),
+            summary=t.summary,
+            input_preview=derive_input_preview(t.input),
+            replay_source=derive_replay_source(t.meta),
         ))
     return TraceListOut(items=items, total=total)
 
@@ -95,5 +140,6 @@ def get_trace(trace_id: str, db: Session = Depends(get_db),
             "total_output_tokens", "total_cost", "created_at")},
         "metadata": t.meta,
         "divergence_count": len(replay_run.divergences or []) if replay_run else 0,
+        "summary": t.summary,
         "observations": build_tree(list(t.observations)),
     })

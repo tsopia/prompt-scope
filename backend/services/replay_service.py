@@ -92,7 +92,13 @@ def _persist_result(db, run, source, result_trace_id, observations,
                     final_content, started_at, entry=None) -> None:
     """先落 trace 再把 result_trace_id 写回 run——顺序不能反：
     ReplayRun.result_trace_id 有 FK，trace 不存在时提前 commit 会在 Postgres 上外键违约。"""
-    metadata = {"replay_run_id": run.id, "source_trace_id": source.id}
+    metadata = {"replay_run_id": run.id, "source_trace_id": source.id,
+               "source_trace_name": source.name}
+    if run.override_model:
+        metadata["override_model"] = run.override_model
+    thinking_type = ((run.override_model_params or {}).get("thinking") or {}).get("type")
+    if thinking_type:
+        metadata["thinking"] = thinking_type
     if run.target_observation_id:
         name_suffix = f"(replay:step-{entry.seq})"
         metadata["target_observation_id"] = run.target_observation_id
@@ -110,6 +116,10 @@ def _persist_result(db, run, source, result_trace_id, observations,
         started_at=started_at,
         ended_at=utcnow(),
     )
+    # 直接调用 ingest() service（不走 HTTP /api/ingest），因此不会触发
+    # routers/ingest.py 里挂的模型摘要 BackgroundTasks 钩子——回放结果 trace
+    # 已经有上面这份 metadata 血缘信息（source_trace_id/override_model/
+    # thinking 等）指明它是谁、怎么跑出来的，不需要再额外花一次 LLM 调用去生成摘要。
     ingest(db, source.project_id,
            IngestRequest(trace=trace_in, observations=observations))
     run.result_trace_id = result_trace_id

@@ -125,3 +125,78 @@ def test_rename_project_requires_owner(client, project):
 
 def test_rename_project_missing_404(client):
     assert client.put("/api/projects/nope", json={"name": "x"}).status_code == 404
+
+
+def _add_judge_model(db_session, project_id, model="summary-model"):
+    from models.entities import ModelPricing, ModelProvider
+
+    provider = ModelProvider(project_id=project_id, name="oai",
+                             base_url="https://api.test.com/v1",
+                             api_key="sk-x", provider_type="openai")
+    db_session.add(provider)
+    db_session.flush()
+    db_session.add(ModelPricing(project_id=project_id, model=model,
+                                input_price_per_1k=0.001,
+                                output_price_per_1k=0.002,
+                                provider_id=provider.id))
+    db_session.commit()
+
+
+def test_set_summary_model_requires_resolvable_judge_model(client, project, db_session):
+    _add_judge_model(db_session, project["id"], model="summary-model")
+    resp = client.put(f"/api/projects/{project['id']}", json={
+        "name": project["name"], "summary_model": "summary-model"})
+    assert resp.status_code == 200, resp.text
+
+    listed = client.get("/api/projects").json()
+    entry = next(p for p in listed if p["id"] == project["id"])
+    assert entry["summary_model"] == "summary-model"
+
+
+def test_set_summary_model_invalid_model_400(client, project):
+    resp = client.put(f"/api/projects/{project['id']}", json={
+        "name": project["name"], "summary_model": "no-such-model"})
+    assert resp.status_code == 400
+    listed = client.get("/api/projects").json()
+    entry = next(p for p in listed if p["id"] == project["id"])
+    assert entry["summary_model"] is None
+
+
+def test_clear_summary_model_with_explicit_null(client, project, db_session):
+    _add_judge_model(db_session, project["id"], model="summary-model")
+    client.put(f"/api/projects/{project['id']}", json={
+        "name": project["name"], "summary_model": "summary-model"})
+
+    resp = client.put(f"/api/projects/{project['id']}", json={
+        "name": project["name"], "summary_model": None})
+    assert resp.status_code == 200
+    listed = client.get("/api/projects").json()
+    entry = next(p for p in listed if p["id"] == project["id"])
+    assert entry["summary_model"] is None
+
+
+def test_omitting_summary_model_leaves_it_unchanged(client, project, db_session):
+    _add_judge_model(db_session, project["id"], model="summary-model")
+    client.put(f"/api/projects/{project['id']}", json={
+        "name": project["name"], "summary_model": "summary-model"})
+
+    resp = client.put(f"/api/projects/{project['id']}", json={"name": "renamed-again"})
+    assert resp.status_code == 200
+    listed = client.get("/api/projects").json()
+    entry = next(p for p in listed if p["id"] == project["id"])
+    assert entry["summary_model"] == "summary-model"
+
+
+def test_set_summary_model_requires_owner(client, project, db_session):
+    _add_judge_model(db_session, project["id"], model="summary-model")
+    client.post("/api/auth/register", json={
+        "email": "member3@x.com", "password": "pw123456", "display_name": "M3"})
+    client.post("/api/auth/logout")
+    client.post("/api/auth/login", json={"email": "owner@x.com", "password": "pw123456"})
+    client.post(f"/api/projects/{project['id']}/members", json={"email": "member3@x.com"})
+
+    client.post("/api/auth/logout")
+    client.post("/api/auth/login", json={"email": "member3@x.com", "password": "pw123456"})
+    resp = client.put(f"/api/projects/{project['id']}", json={
+        "name": project["name"], "summary_model": "summary-model"})
+    assert resp.status_code == 403

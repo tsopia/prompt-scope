@@ -9,12 +9,15 @@ class ProjectCreate(BaseModel):
 
 class ProjectRename(BaseModel):
     name: str = Field(max_length=255)
+    # 未出现在请求体中 -> 保持不变；显式传 null -> 清空（见 model_fields_set 用法）
+    summary_model: str | None = Field(default=None, max_length=128)
 
 
 class ProjectOut2(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
     name: str
+    summary_model: str | None = None
     created_at: datetime
 
 
