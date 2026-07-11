@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
-import { api, ApiError, ApiKeyInfo, JudgeModel, Member, Pricing, Project, Provider } from "@/lib/api";
+import { api, ApiError, ApiKeyInfo, JudgeModel, JudgeTemplate, Member, Pricing, Project, Provider } from "@/lib/api";
 import { useProject } from "@/contexts/ProjectContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatRelativeTime } from "@/lib/format";
@@ -40,6 +40,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { canManageResource } from "@/lib/resourceAccess";
+import { JudgeTemplateEditorDialog } from "@/components/JudgeTemplateEditorDialog";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("zh-CN");
@@ -1179,6 +1180,171 @@ function PricingTab({
   );
 }
 
+// ---------- 评分模板 ----------
+
+// 「系统默认」不是一条数据库记录，而是后端内置的通用评审标准（省略 judge_template_id
+// 时 run_judge() 使用的兜底 rubric，见 backend/services/judge_service.py）。这里只是
+// 在列表最前面渲染一个伪造的、样式明显不同（虚线边框+静音配色+不可编辑 chip）的行，
+// 让用户理解「不选模板」也有一个具体、可解释的标准，而不是空白。
+const SYSTEM_DEFAULT_TEMPLATE_DESC = "内置通用评审标准（正确性/完整性/遵循指令/简洁性）";
+
+function SystemDefaultTemplateRow() {
+  return (
+    <Card className="border-dashed bg-muted/40 shadow-none">
+      <CardContent className="flex items-start justify-between gap-4 p-4">
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-center gap-2">
+            <p className="text-[13px] font-semibold text-muted-foreground">系统默认</p>
+            <span className="rounded-full border border-border-soft bg-bg-grid px-2 py-0.5 text-[10.5px] font-medium text-text-3">
+              不可编辑
+            </span>
+          </div>
+          <p className="line-clamp-2 text-[12px] leading-relaxed text-text-3">{SYSTEM_DEFAULT_TEMPLATE_DESC}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function JudgeTemplateRow({
+  template,
+  isOwner,
+  userId,
+  onEdit,
+  onDelete,
+}: {
+  template: JudgeTemplate;
+  isOwner: boolean;
+  userId: string | undefined;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const allowed = canManageResource(template.created_by, isOwner, userId);
+  return (
+    <Card>
+      <CardContent className="flex items-start justify-between gap-4 p-4">
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="truncate text-[13px] font-semibold">{template.name}</p>
+          <p className="line-clamp-2 text-[12px] leading-relaxed text-text-3">{template.content}</p>
+          <p className="text-[11px] text-text-3">
+            {template.created_by_name ?? "—"} · {formatRelativeTime(template.created_at)}
+          </p>
+        </div>
+        <ManageActions allowed={allowed} onEdit={onEdit} onDelete={onDelete} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function JudgeTemplatesTab({
+  templates,
+  reload,
+  currentProject,
+  isOwner,
+  userId,
+}: {
+  templates: JudgeTemplate[];
+  reload: () => void;
+  currentProject: Project | null;
+  isOwner: boolean;
+  userId: string | undefined;
+}) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<JudgeTemplate | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<JudgeTemplate | null>(null);
+
+  const openNew = () => {
+    setEditing(null);
+    setDialogOpen(true);
+  };
+  const openEdit = (t: JudgeTemplate) => {
+    setEditing(t);
+    setDialogOpen(true);
+  };
+
+  const remove = async () => {
+    if (!deleteTarget) return;
+    try {
+      await api.deleteJudgeTemplate(deleteTarget.id);
+      toast.success("模板已删除");
+      reload();
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setDeleteTarget(null);
+    }
+  };
+
+  if (!currentProject) return <p className="text-sm text-muted-foreground">请先选择一个项目。</p>;
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 border-b py-3.5">
+        <div>
+          <CardTitle className="text-sm font-semibold">评分模板</CardTitle>
+          <p className="mt-0.5 max-w-[560px] text-xs text-muted-foreground">
+            按领域维护评审标准（rubric）。模板只定义评审身份与标准；任务输入/输出与 JSON 输出格式由系统固定注入，单条与对比评分共用同一模板。
+          </p>
+        </div>
+        <Button size="sm" className="shrink-0 gap-1.5" onClick={openNew}>
+          <Plus className="h-3.5 w-3.5" />
+          新建模板
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-2.5 p-4">
+        <SystemDefaultTemplateRow />
+        {templates.map((t) => (
+          <JudgeTemplateRow
+            key={t.id}
+            template={t}
+            isOwner={isOwner}
+            userId={userId}
+            onEdit={() => openEdit(t)}
+            onDelete={() => setDeleteTarget(t)}
+          />
+        ))}
+      </CardContent>
+
+      <JudgeTemplateEditorDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        mode={
+          editing
+            ? {
+                kind: "edit",
+                template: editing,
+                existingNames: templates.filter((t) => t.id !== editing.id).map((t) => t.name),
+                onSaved: reload,
+              }
+            : {
+                kind: "create",
+                projectId: currentProject.id,
+                existingNames: templates.map((t) => t.name),
+                onSaved: reload,
+              }
+        }
+      />
+
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>删除模板</DialogTitle>
+            <DialogDescription>删除「{deleteTarget?.name}」后不可恢复。确认继续？</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              取消
+            </Button>
+            <Button variant="destructive" onClick={remove}>
+              确认删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
 // ---------- 成员 ----------
 
 // Gradients built only from existing semantic CSS variables (no hardcoded hex).
@@ -1344,6 +1510,7 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [pricing, setPricing] = useState<Pricing[]>([]);
+  const [judgeTemplates, setJudgeTemplates] = useState<JudgeTemplate[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -1352,10 +1519,12 @@ export default function SettingsPage() {
     if (!currentProject) {
       setProviders([]);
       setPricing([]);
+      setJudgeTemplates([]);
       return;
     }
     api.getProviders(currentProject.id).then(setProviders).catch((e) => setError(String(e)));
     api.getPricing(currentProject.id).then(setPricing).catch((e) => setError(String(e)));
+    api.getJudgeTemplates(currentProject.id).then(setJudgeTemplates).catch((e) => setError(String(e)));
   }, [currentProject]);
 
   useEffect(reload, [reload]);
@@ -1380,7 +1549,7 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <PageHeader crumbs={[{ label: "设置" }]} subtitle="项目、API Key、模型 provider、定价与成员。" />
+      <PageHeader crumbs={[{ label: "设置" }]} subtitle="项目、API Key、模型 provider、定价、评分模板与成员。" />
 
       <main className="mx-auto max-w-6xl p-6">
         {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
@@ -1390,6 +1559,7 @@ export default function SettingsPage() {
             <TabsTrigger value="projects">项目与密钥</TabsTrigger>
             <TabsTrigger value="providers">模型 Provider</TabsTrigger>
             <TabsTrigger value="pricing">定价</TabsTrigger>
+            <TabsTrigger value="judge-templates">评分模板</TabsTrigger>
             <TabsTrigger value="members">成员</TabsTrigger>
           </TabsList>
 
@@ -1415,6 +1585,16 @@ export default function SettingsPage() {
             <PricingTab
               pricing={pricing}
               providers={providers}
+              reload={reload}
+              currentProject={currentProject}
+              isOwner={isOwner}
+              userId={user?.id}
+            />
+          </TabsContent>
+
+          <TabsContent value="judge-templates">
+            <JudgeTemplatesTab
+              templates={judgeTemplates}
               reload={reload}
               currentProject={currentProject}
               isOwner={isOwner}

@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ChevronDown, Gavel } from "lucide-react";
-import { api, Evaluation, JudgeModel, JudgeRunResult } from "@/lib/api";
+import { api, Evaluation, JudgeModel, JudgeRunResult, JudgeTemplate } from "@/lib/api";
 import { formatCost } from "@/lib/format";
 import { MetricText } from "@/components/MetricText";
 import { EmptyState } from "@/components/EmptyState";
@@ -33,6 +33,14 @@ const CONTEXT_OPTIONS: { value: ContextMode; label: string }[] = [
   { value: "with_trace", label: "完整对话" },
   { value: "output_only", label: "仅最终输出" },
 ];
+
+// 「系统默认」不是一条 judge_templates 记录，选中它时请求体里省略 judge_template_id，
+// 后端 run_judge() 回落到内置通用 rubric（见 backend/services/judge_service.py）。
+const SYSTEM_DEFAULT_TEMPLATE = "__system_default__";
+
+function judgeTemplateStorageKey(projectId: string): string {
+  return `promptscope.judgeTemplate.${projectId}`;
+}
 
 // evaluations 已按 created_at 倒序返回；同一 (judge_model, context_mode) 组合
 // 只保留最新一条（force 重评后旧记录不会被覆盖，只会追加新记录）。
@@ -165,6 +173,11 @@ function EvalCard({
             </span>
           )}
           <ContextModeChip mode={ev.context_mode} />
+          {ev.judge_template_name && (
+            <span className="rounded-md border border-border-soft bg-bg-grid px-1.5 py-0.5 font-mono text-[10.5px] text-text-3">
+              模板 · {ev.judge_template_name}
+            </span>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -214,6 +227,8 @@ export function JudgePanel({
   const [selected, setSelected] = useState<string[]>([]);
   const [ctxMode, setCtxMode] = useState<ContextMode>("output_only");
   const [judgesOpen, setJudgesOpen] = useState(false);
+  const [judgeTemplates, setJudgeTemplates] = useState<JudgeTemplate[]>([]);
+  const [templateId, setTemplateId] = useState<string>(SYSTEM_DEFAULT_TEMPLATE);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [running, setRunning] = useState(false);
@@ -227,7 +242,32 @@ export function JudgePanel({
   useEffect(() => {
     api.getJudgeModels(projectId).then(setJudgeModels).catch(() => setJudgeModels([]));
     api.getEvaluations(subjectId, compareId).then(setEvaluations).catch(() => {});
+    // 评分模板是可选增强：拉取失败（如权限/网络问题）时静默降级为只有「系统默认」，
+    // 不阻塞评分面板本身可用。
+    api.getJudgeTemplates(projectId).then(setJudgeTemplates).catch(() => setJudgeTemplates([]));
+    const stored = typeof window !== "undefined" ? localStorage.getItem(judgeTemplateStorageKey(projectId)) : null;
+    setTemplateId(stored ?? SYSTEM_DEFAULT_TEMPLATE);
   }, [subjectId, compareId, projectId]);
+
+  // 存储的模板 id 若已不存在于当前项目模板列表中（被删除，或跨项目残留的 localStorage
+  // 值），回落到系统默认，避免 Select 展示一个不存在的选项。
+  useEffect(() => {
+    if (templateId === SYSTEM_DEFAULT_TEMPLATE) return;
+    if (judgeTemplates.length === 0) return;
+    if (!judgeTemplates.some((t) => t.id === templateId)) {
+      setTemplateId(SYSTEM_DEFAULT_TEMPLATE);
+    }
+  }, [judgeTemplates, templateId]);
+
+  const selectTemplate = (value: string) => {
+    setTemplateId(value);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(judgeTemplateStorageKey(projectId), value);
+    }
+  };
+
+  const templatePayload =
+    templateId === SYSTEM_DEFAULT_TEMPLATE ? {} : { judge_template_id: templateId };
 
   const toggle = (m: string) =>
     setSelected((prev) => prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]);
@@ -240,7 +280,7 @@ export function JudgePanel({
     try {
       const { results } = await api.evaluate({
         subject_trace_id: subjectId, compare_trace_id: compareId,
-        judge_models: selected, context_mode: ctxMode,
+        judge_models: selected, context_mode: ctxMode, ...templatePayload,
       });
       const errs: Record<string, string> = {};
       results.forEach((r: JudgeRunResult) => {
@@ -268,7 +308,7 @@ export function JudgePanel({
     try {
       const { results } = await api.evaluate({
         subject_trace_id: subjectId, compare_trace_id: compareId,
-        judge_models: [judgeModel], context_mode: ctxMode, force: true,
+        judge_models: [judgeModel], context_mode: ctxMode, force: true, ...templatePayload,
       });
       const r = results[0];
       if (r?.status === "error" && r.error) {
@@ -349,6 +389,20 @@ export function JudgePanel({
                   <SelectContent>
                     {CONTEXT_OPTIONS.map((o) => (
                       <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="w-[170px]">
+                <p className="mb-1.5 text-xs text-muted-foreground">评分模板</p>
+                <Select value={templateId} onValueChange={selectTemplate}>
+                  <SelectTrigger className="h-9 bg-bg-grid text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={SYSTEM_DEFAULT_TEMPLATE}>系统默认</SelectItem>
+                    {judgeTemplates.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

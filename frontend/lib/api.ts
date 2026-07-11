@@ -146,6 +146,16 @@ export interface JudgeModel {
   provider_name: string;
 }
 
+export interface JudgeTemplate {
+  id: string;
+  project_id: string;
+  name: string;
+  content: string;
+  created_by: string | null;
+  created_by_name: string | null;
+  created_at: string;
+}
+
 export interface Evaluation {
   id: string;
   subject_trace_id: string;
@@ -158,6 +168,8 @@ export interface Evaluation {
   reasoning: string | null;
   cost: number | null;
   created_at: string;
+  judge_template_id: string | null;
+  judge_template_name: string | null;
 }
 
 export interface JudgeRunResult {
@@ -309,12 +321,20 @@ export const api = {
   deletePricing: (id: string) => send<{ deleted: boolean }>("DELETE", `/api/pricing/${id}`),
   getJudgeModels: (projectId: string) =>
     get<JudgeModel[]>(`/api/judge-models?project_id=${encodeURIComponent(projectId)}`),
+  getJudgeTemplates: (projectId: string) =>
+    get<JudgeTemplate[]>(`/api/judge-templates?project_id=${encodeURIComponent(projectId)}`),
+  createJudgeTemplate: (body: { project_id: string; name: string; content: string }) =>
+    send<JudgeTemplate>("POST", "/api/judge-templates", body),
+  updateJudgeTemplate: (id: string, body: { name?: string; content?: string }) =>
+    send<JudgeTemplate>("PUT", `/api/judge-templates/${id}`, body),
+  deleteJudgeTemplate: (id: string) =>
+    send<{ deleted: boolean }>("DELETE", `/api/judge-templates/${id}`),
   getEvaluations: (subjectId: string, compareId?: string) => {
     const q = new URLSearchParams({ subject_trace_id: subjectId });
     if (compareId) q.set("compare_trace_id", compareId);
     return get<Evaluation[]>(`/api/evaluations?${q.toString()}`);
   },
-  evaluate: (body: { subject_trace_id: string; compare_trace_id?: string; judge_models: string[]; context_mode?: string; force?: boolean }) =>
+  evaluate: (body: { subject_trace_id: string; compare_trace_id?: string; judge_models: string[]; context_mode?: string; force?: boolean; judge_template_id?: string }) =>
     send<{ results: JudgeRunResult[] }>("POST", "/api/evaluations", body),
   createReplay: (body: {
     source_trace_id: string;
