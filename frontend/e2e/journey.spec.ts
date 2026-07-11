@@ -148,7 +148,8 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   await page.getByRole("button", { name: "运行评分" }).click();
   // The fake provider has a bogus base URL, so the judge call must fail with
   // a real error surfaced in the panel — never a fabricated result.
-  await expect(page.getByText(/gpt-4o:/)).toBeVisible({ timeout: 20_000 });
+  // 新结果卡结构：错误结果 = 「评分失败」StatusBadge + mono 模型名同卡呈现。
+  await expect(page.getByText("评分失败").first()).toBeVisible({ timeout: 20_000 });
 
   // ---- Step 7: replay from trace detail, expect a real failure (fake provider) ----
   await page.goto("/traces");
