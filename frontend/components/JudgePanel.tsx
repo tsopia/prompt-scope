@@ -6,6 +6,7 @@ import { api, Evaluation, JudgeModel, JudgeRunResult } from "@/lib/api";
 import { formatCost } from "@/lib/format";
 import { MetricText } from "@/components/MetricText";
 import { EmptyState } from "@/components/EmptyState";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -60,15 +61,14 @@ function verdictText(ev: Evaluation): string {
   return ev.verdict ?? "—";
 }
 
+// D3 三态映射（见 CLAUDE.md）：replaceable→绿, "两者相当"(打平)→中性灰（StatusBadge
+// 无对应 kind，保留自定义样式), 其余 not_replaceable("倾向保留 A")→琥珀 —— 与设计稿
+// docs/design/Compare.dc.html 的 verdictMap（kind: pass/warn/tie）逐一对应，不是随意配色；
+// 绿/琥珀两态复用 StatusBadge 而非各自手搓 pill，避免与全局徽章样式漂移。
 function VerdictBadge({ ev }: { ev: Evaluation }) {
   const text = verdictText(ev);
   if (ev.verdict === "replaceable") {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-0.5 text-[11.5px] font-semibold text-success-fg">
-        <span className="h-1.5 w-1.5 rounded-full bg-success" />
-        {text}
-      </span>
-    );
+    return <StatusBadge kind="success" label={text} />;
   }
   if (ev.verdict === "not_replaceable" && isTie(ev)) {
     return (
@@ -77,12 +77,7 @@ function VerdictBadge({ ev }: { ev: Evaluation }) {
       </span>
     );
   }
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/15 px-2.5 py-0.5 text-[11.5px] font-semibold text-warning-fg">
-      <span className="h-1.5 w-1.5 rounded-full bg-warning" />
-      {text}
-    </span>
-  );
+  return <StatusBadge kind="warning" label={text} />;
 }
 
 function ScoreBar({ label, score }: { label: string; score: number | null }) {
