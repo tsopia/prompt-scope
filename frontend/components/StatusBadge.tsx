@@ -26,6 +26,12 @@ const KIND_CLASSES: Record<StatusBadgeKind, { pill: string; dot: string; pulse?:
   running: { pill: "bg-live/15 text-live-fg", dot: "bg-live", pulse: true },
 };
 
+// 供只需要一个状态点（无文字标签）的紧凑场景复用，而不是各处重新定义颜色映射。
+export function statusDotClass(kind: StatusBadgeKind): string {
+  const { dot, pulse } = KIND_CLASSES[kind];
+  return cn(dot, pulse && "animate-pulse");
+}
+
 export function StatusBadge({
   kind,
   label,

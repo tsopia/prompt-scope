@@ -6,10 +6,12 @@ import { ChevronDown, ChevronRight, GitCompare, Star } from "lucide-react";
 import { api, TraceDetail, TraceSummary } from "@/lib/api";
 import { alignTraces, flattenTree } from "@/lib/align";
 import { formatCost, formatLatency, formatRelativeTime } from "@/lib/format";
+import { traceStatusKind } from "@/lib/traceStatus";
+import { buildTraceById, groupTracesByName, pickerSubtitle, TraceGroup } from "@/lib/comparePicker";
 import { AlignedTraceView } from "@/components/AlignedTraceView";
 import { JudgePanel } from "@/components/JudgePanel";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { StatusBadge } from "@/components/StatusBadge";
+import { StatusBadge, statusDotClass } from "@/components/StatusBadge";
 import { MetricText } from "@/components/MetricText";
 import { EmptyState } from "@/components/EmptyState";
 import { Card, CardContent } from "@/components/ui/card";
@@ -161,14 +163,68 @@ function TraceHeader({ t, side }: { t: TraceDetail; side: "A" | "B" }) {
 
 // ---------- Hub mode ----------
 
+function TracePickerRow({
+  t, selected, onSelect,
+}: {
+  t: TraceSummary;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const st = traceStatusKind(t);
+  const subtitle = pickerSubtitle(t);
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "flex w-full flex-col gap-0.5 rounded px-2 py-1.5 text-left text-xs hover:bg-accent",
+        selected && "bg-accent",
+      )}
+    >
+      <span className="flex items-center gap-1.5">
+        <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", statusDotClass(st.kind))} />
+        <span className="truncate font-medium">{t.name || t.id.slice(0, 8)}</span>
+        <span className="ml-auto shrink-0">
+          <StatusBadge kind={t.origin === "replay" ? "replay" : "live"} label={t.origin === "replay" ? "回放" : "实时"} />
+        </span>
+        <span className="shrink-0 text-[10px] text-muted-foreground">{formatRelativeTime(t.created_at)}</span>
+      </span>
+      {subtitle && (
+        <span className="truncate pl-3 text-[11px] text-muted-foreground">{subtitle}</span>
+      )}
+    </button>
+  );
+}
+
+function TracePickerGroup({
+  group, value, onChange,
+}: {
+  group: TraceGroup;
+  value: string | null;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <div>
+      <p className="px-2 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-text-3">
+        {group.name} <span className="text-text-3/70">· {group.traces.length}</span>
+      </p>
+      {group.traces.map((t) => (
+        <TracePickerRow key={t.id} t={t} selected={value === t.id} onSelect={() => onChange(t.id)} />
+      ))}
+    </div>
+  );
+}
+
 function TracePicker({
-  label, badgeClass, traces, value, onChange,
+  label, badgeClass, traces, value, onChange, sameAgentAs,
 }: {
   label: string;
   badgeClass: string;
   traces: TraceSummary[];
   value: string | null;
   onChange: (id: string) => void;
+  // B 选择器传入 A 已选 trace 的 name：命中的分组置顶为「同 agent 的运行」。
+  sameAgentAs?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -178,6 +234,9 @@ function TracePicker({
     const needle = q.toLowerCase();
     return (t.name || "").toLowerCase().includes(needle) || t.id.toLowerCase().includes(needle);
   });
+  const groups = groupTracesByName(filtered);
+  const sameGroups = sameAgentAs ? groups.filter((g) => g.name === sameAgentAs) : [];
+  const otherGroups = sameAgentAs ? groups.filter((g) => g.name !== sameAgentAs) : groups;
 
   return (
     <div className="relative min-w-[220px] flex-1">
@@ -205,23 +264,30 @@ function TracePicker({
               className="h-8 text-xs"
             />
           </div>
-          <div className="max-h-56 overflow-y-auto p-1">
+          <div className="max-h-72 overflow-y-auto p-1">
             {filtered.length === 0 && (
               <p className="px-2 py-3 text-center text-xs text-muted-foreground">无匹配</p>
             )}
-            {filtered.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => { onChange(t.id); setOpen(false); setQ(""); }}
-                className={cn(
-                  "flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-accent",
-                  value === t.id && "bg-accent",
-                )}
-              >
-                <span className="truncate">{t.name || t.id.slice(0, 8)}</span>
-                <MetricText value={t.id.slice(0, 8)} className="shrink-0 text-[10px] text-muted-foreground" />
-              </button>
+            {sameGroups.length > 0 && (
+              <div className="mb-1 border-b border-border-soft pb-1">
+                <p className="px-2 py-1 text-[10.5px] font-semibold text-primary">同 agent 的运行</p>
+                {sameGroups.map((g) => (
+                  <TracePickerGroup
+                    key={g.name}
+                    group={g}
+                    value={value}
+                    onChange={(id) => { onChange(id); setOpen(false); setQ(""); }}
+                  />
+                ))}
+              </div>
+            )}
+            {otherGroups.map((g) => (
+              <TracePickerGroup
+                key={g.name}
+                group={g}
+                value={value}
+                onChange={(id) => { onChange(id); setOpen(false); setQ(""); }}
+              />
             ))}
           </div>
         </div>
@@ -230,20 +296,12 @@ function TracePicker({
   );
 }
 
-function NewComparisonCard() {
-  const { currentProject } = useProject();
+function NewComparisonCard({ traces }: { traces: TraceSummary[] }) {
   const router = useRouter();
-  const [traces, setTraces] = useState<TraceSummary[]>([]);
   const [aId, setAId] = useState<string | null>(null);
   const [bId, setBId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!currentProject) return;
-    api.getTraces({ projectId: currentProject.id, limit: 200 })
-      .then((r) => setTraces(r.items))
-      .catch(() => setTraces([]));
-  }, [currentProject]);
-
+  const aTrace = traces.find((t) => t.id === aId) ?? null;
   const canStart = Boolean(aId && bId && aId !== bId);
 
   return (
@@ -253,7 +311,14 @@ function NewComparisonCard() {
         <div className="flex flex-wrap items-center gap-3">
           <TracePicker label="A" badgeClass="bg-primary/15 text-primary" traces={traces} value={aId} onChange={setAId} />
           <span className="shrink-0 text-xs font-semibold text-muted-foreground">vs</span>
-          <TracePicker label="B" badgeClass="bg-replay/15 text-replay-fg" traces={traces} value={bId} onChange={setBId} />
+          <TracePicker
+            label="B"
+            badgeClass="bg-replay/15 text-replay-fg"
+            traces={traces}
+            value={bId}
+            onChange={setBId}
+            sameAgentAs={aTrace?.name || null}
+          />
           <Button
             disabled={!canStart}
             onClick={() => canStart && router.push(`/compare?a=${aId}&b=${bId}`)}
@@ -269,9 +334,10 @@ function NewComparisonCard() {
   );
 }
 
-function SavedCompares({ refreshKey }: { refreshKey: number }) {
+function SavedCompares({ refreshKey, traces }: { refreshKey: number; traces: TraceSummary[] }) {
   const [saved, setSaved] = useState<SavedCompare[]>([]);
   const [cacheCounts, setCacheCounts] = useState<Record<string, number>>({});
+  const traceById = useMemo(() => buildTraceById(traces), [traces]);
 
   useEffect(() => {
     setSaved(readSavedCompares());
@@ -303,6 +369,8 @@ function SavedCompares({ refreshKey }: { refreshKey: number }) {
         <div className="divide-y">
           {saved.map((s) => {
             const n = cacheCounts[`${s.a}:${s.b}`] ?? 0;
+            const subA = pickerSubtitle(traceById.get(s.a));
+            const subB = pickerSubtitle(traceById.get(s.b));
             return (
               <Link
                 key={`${s.a}-${s.b}`}
@@ -312,6 +380,13 @@ function SavedCompares({ refreshKey }: { refreshKey: number }) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{s.name}</p>
                   <p className="truncate text-xs text-muted-foreground">{s.a.slice(0, 8)} ↔ {s.b.slice(0, 8)}</p>
+                  {(subA || subB) && (
+                    <p className="truncate text-[11px] text-text-3">
+                      {subA && <>A: {subA}</>}
+                      {subA && subB && "  ·  "}
+                      {subB && <>B: {subB}</>}
+                    </p>
+                  )}
                 </div>
                 {n > 0 && <StatusBadge kind="success" label={`评分已缓存 ×${n}`} />}
                 <span className="shrink-0 text-xs text-muted-foreground">{formatRelativeTime(new Date(s.ts).toISOString())}</span>
@@ -325,10 +400,11 @@ function SavedCompares({ refreshKey }: { refreshKey: number }) {
   );
 }
 
-function RecentCompares({ onSaved }: { onSaved: () => void }) {
+function RecentCompares({ onSaved, traces }: { onSaved: () => void; traces: TraceSummary[] }) {
   const [recent, setRecent] = useState<RecentCompare[]>([]);
   const [namingEntry, setNamingEntry] = useState<RecentCompare | null>(null);
   const [nameInput, setNameInput] = useState("");
+  const traceById = useMemo(() => buildTraceById(traces), [traces]);
 
   useEffect(() => {
     setRecent(readRecentCompares());
@@ -355,26 +431,39 @@ function RecentCompares({ onSaved }: { onSaved: () => void }) {
       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">最近的对比</p>
       <Card className="overflow-hidden">
         <div className="divide-y">
-          {recent.map((r) => (
-            <Link
-              key={`${r.a}-${r.b}`}
-              href={`/compare?a=${r.a}&b=${r.b}`}
-              className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-accent/60"
-            >
-              <span className="truncate">
-                {(r.aName || r.a.slice(0, 8))} ↔ {(r.bName || r.b.slice(0, 8))}
-              </span>
-              <span className="ml-auto shrink-0 text-xs text-muted-foreground">{formatRelativeTime(new Date(r.ts).toISOString())}</span>
-              <button
-                type="button"
-                title="收藏为命名对比"
-                onClick={(e) => openNaming(e, r)}
-                className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-warning-fg"
+          {recent.map((r) => {
+            const subA = pickerSubtitle(traceById.get(r.a));
+            const subB = pickerSubtitle(traceById.get(r.b));
+            return (
+              <Link
+                key={`${r.a}-${r.b}`}
+                href={`/compare?a=${r.a}&b=${r.b}`}
+                className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-accent/60"
               >
-                <Star className="h-3.5 w-3.5" />
-              </button>
-            </Link>
-          ))}
+                <div className="min-w-0 flex-1">
+                  <span className="block truncate">
+                    {(r.aName || r.a.slice(0, 8))} ↔ {(r.bName || r.b.slice(0, 8))}
+                  </span>
+                  {(subA || subB) && (
+                    <span className="block truncate text-[11px] text-text-3">
+                      {subA && <>A: {subA}</>}
+                      {subA && subB && "  ·  "}
+                      {subB && <>B: {subB}</>}
+                    </span>
+                  )}
+                </div>
+                <span className="shrink-0 text-xs text-muted-foreground">{formatRelativeTime(new Date(r.ts).toISOString())}</span>
+                <button
+                  type="button"
+                  title="收藏为命名对比"
+                  onClick={(e) => openNaming(e, r)}
+                  className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-warning-fg"
+                >
+                  <Star className="h-3.5 w-3.5" />
+                </button>
+              </Link>
+            );
+          })}
         </div>
       </Card>
 
@@ -399,12 +488,22 @@ function RecentCompares({ onSaved }: { onSaved: () => void }) {
 }
 
 function CompareHub() {
+  const { currentProject } = useProject();
+  const [traces, setTraces] = useState<TraceSummary[]>([]);
   const [savedRefreshKey, setSavedRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (!currentProject) return;
+    api.getTraces({ projectId: currentProject.id, limit: 200 })
+      .then((r) => setTraces(r.items))
+      .catch(() => setTraces([]));
+  }, [currentProject]);
+
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6">
-      <NewComparisonCard />
-      <SavedCompares refreshKey={savedRefreshKey} />
-      <RecentCompares onSaved={() => setSavedRefreshKey((k) => k + 1)} />
+      <NewComparisonCard traces={traces} />
+      <SavedCompares refreshKey={savedRefreshKey} traces={traces} />
+      <RecentCompares onSaved={() => setSavedRefreshKey((k) => k + 1)} traces={traces} />
     </div>
   );
 }

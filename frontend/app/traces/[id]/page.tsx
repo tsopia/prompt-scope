@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Loader2, Play, RefreshCw } from "lucide-react";
 import { api, ObservationNode, TraceDetail } from "@/lib/api";
 import { formatCost, formatLatency, formatTokens } from "@/lib/format";
+import { traceStatusKind } from "@/lib/traceStatus";
 import { TraceTree } from "@/components/TraceTree";
 import { ObservationDetail } from "@/components/ObservationDetail";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -20,13 +21,6 @@ function flatten(nodes: ObservationNode[]): ObservationNode[] {
 function nodeStatus(status: string): { kind: StatusBadgeKind; label: string } {
   if (status === "error") return { kind: "error", label: "失败" };
   if (status === "running") return { kind: "running", label: "运行中" };
-  return { kind: "success", label: "通过" };
-}
-
-function traceStatus(trace: TraceDetail): { kind: StatusBadgeKind; label: string } {
-  if (trace.status === "success" && trace.divergence_count > 0) return { kind: "warning", label: "偏离" };
-  if (trace.status === "error") return { kind: "error", label: "失败" };
-  if (trace.status === "running") return { kind: "running", label: "运行中" };
   return { kind: "success", label: "通过" };
 }
 
@@ -84,7 +78,7 @@ export default function TraceDetailPage() {
   if (!trace) return <main className="p-8 text-sm text-muted-foreground">加载中…</main>;
 
   const traceName = trace.name || trace.id.slice(0, 8);
-  const st = traceStatus(trace);
+  const st = traceStatusKind(trace);
   const canStepReplay = trace.origin === "live" && selected?.type === "llm";
   const totalTokens = trace.total_input_tokens + trace.total_output_tokens;
 
@@ -102,6 +96,23 @@ export default function TraceDetailPage() {
               <StatusBadge kind={trace.origin === "replay" ? "replay" : "live"} label={trace.origin === "replay" ? "回放" : "实时"} />
               <StatusBadge kind={st.kind} label={st.label} />
             </div>
+            {trace.summary && (
+              <p className="mt-1.5 max-w-2xl truncate text-sm text-muted-foreground" title={trace.summary}>
+                {trace.summary}
+              </p>
+            )}
+            {typeof trace.metadata?.source_trace_id === "string" && (
+              <p className="mt-1.5 text-xs text-text-3">
+                回放自{" "}
+                <Link
+                  href={`/traces/${trace.metadata.source_trace_id}`}
+                  className="font-mono text-primary hover:underline"
+                >
+                  {(typeof trace.metadata.source_trace_name === "string" && trace.metadata.source_trace_name)
+                    || (trace.metadata.source_trace_id as string).slice(0, 8)}
+                </Link>
+              </p>
+            )}
             <div className="mt-3.5 flex flex-wrap items-center gap-6">
               <div className="flex flex-col gap-0.5">
                 <span className="text-[11px] font-medium text-text-3">总成本</span>

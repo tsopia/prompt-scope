@@ -1,7 +1,8 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { TraceSummary } from "@/lib/api";
+import { ReplaySource, TraceSummary } from "@/lib/api";
 import { formatCost, formatCostFull, formatLatency, formatRelativeTime, formatTokens } from "@/lib/format";
+import { traceStatusKind } from "@/lib/traceStatus";
 import {
   Table,
   TableBody,
@@ -12,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatusBadge, StatusBadgeKind } from "@/components/StatusBadge";
+import { StatusBadge } from "@/components/StatusBadge";
 import { MetricText } from "@/components/MetricText";
 import { cn } from "@/lib/utils";
 
@@ -20,14 +21,54 @@ const LATENCY_WARN_MS = 8000;
 
 const COLUMN_COUNT = 11;
 
-function traceStatus(t: TraceSummary): { kind: StatusBadgeKind; label: string } {
-  if (t.status === "success" && t.divergence_count > 0) return { kind: "warning", label: "偏离" };
-  if (t.status === "error") return { kind: "error", label: "失败" };
-  if (t.status === "running") return { kind: "running", label: "运行中" };
-  return { kind: "success", label: "通过" };
+const HEAD_CLASS = "sticky top-0 z-10 whitespace-nowrap bg-surface-2 text-[11.5px] font-semibold tracking-wide text-text-3";
+
+function truncateName(s: string, max: number): string {
+  return s.length > max ? `${s.slice(0, max)}…` : s;
 }
 
-const HEAD_CLASS = "sticky top-0 z-10 whitespace-nowrap bg-surface-2 text-[11.5px] font-semibold tracking-wide text-text-3";
+// 回放血缘副标题：回放自「{来源 trace 名截断20}」· {override_model?} {· 思考/非思考}
+export function ReplayLineageSubtitle({ source }: { source: ReplaySource }) {
+  const label = source.source_trace_name
+    ? truncateName(source.source_trace_name, 20)
+    : source.source_trace_id.slice(0, 8);
+  const thinkingLabel =
+    source.thinking === undefined ? null : source.thinking ? "思考" : "非思考";
+  return (
+    <span className="truncate text-[11px] text-text-3">
+      回放自「{label}」
+      {source.override_model && (
+        <>
+          {" · "}
+          <span className="font-mono">{source.override_model}</span>
+        </>
+      )}
+      {thinkingLabel && <> {" · "}{thinkingLabel}</>}
+    </span>
+  );
+}
+
+// 名称单元格第二行副标题，按优先级：
+// 回放 + replay_source -> 血缘描述；否则 summary（模型摘要，text-2 级）
+// -> input_preview（服务端截断，text-3 级）-> 兜底 mono trace id。
+// mono id 始终额外渲染为极小的第三行（非 hover 门控，保持可选中复制），
+// 并在整个名称单元格上加 title=完整 id 作为 hover 提示的补充入口。
+export function TraceNameSubtitle({ t }: { t: TraceSummary }) {
+  if (t.origin === "replay" && t.replay_source) {
+    return <ReplayLineageSubtitle source={t.replay_source} />;
+  }
+  if (t.summary) {
+    return <span className="truncate text-[11px] text-muted-foreground">{t.summary}</span>;
+  }
+  if (t.input_preview) {
+    return <span className="truncate text-[11px] text-text-3">{t.input_preview}</span>;
+  }
+  return <span className="truncate font-mono text-[11px] text-text-3">{t.id}</span>;
+}
+
+function hasRichSubtitle(t: TraceSummary): boolean {
+  return Boolean((t.origin === "replay" && t.replay_source) || t.summary || t.input_preview);
+}
 
 export function TraceTable({
   traces,
@@ -99,7 +140,7 @@ export function TraceTable({
             ))
           : traces.map((t) => {
               const selected = compareIds.includes(t.id);
-              const st = traceStatus(t);
+              const st = traceStatusKind(t);
               const warnLatency = (t.latency_ms ?? 0) >= LATENCY_WARN_MS;
               return (
                 <TableRow
@@ -118,11 +159,14 @@ export function TraceTable({
                     />
                   </TableCell>
                   <TableCell className="max-w-0">
-                    <div className="flex flex-col gap-0.5 overflow-hidden">
+                    <div className="flex flex-col gap-0.5 overflow-hidden" title={t.id}>
                       <span className="truncate text-[13.5px] font-medium text-foreground">
                         {t.name || t.id.slice(0, 8)}
                       </span>
-                      <span className="truncate font-mono text-[11px] text-text-3">{t.id}</span>
+                      <TraceNameSubtitle t={t} />
+                      {hasRichSubtitle(t) && (
+                        <span className="truncate font-mono text-[10px] text-text-3/70">{t.id}</span>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>

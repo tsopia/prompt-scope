@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Inbox, KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
-import { api, ApiKeyInfo, Member, Pricing, Project, Provider } from "@/lib/api";
+import { api, ApiKeyInfo, JudgeModel, Member, Pricing, Project, Provider } from "@/lib/api";
 import { useProject } from "@/contexts/ProjectContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatRelativeTime } from "@/lib/format";
@@ -48,6 +48,8 @@ const HEAD_CLASS = "bg-surface-2 text-[11.5px] font-semibold tracking-wide text-
 
 // ---------- 项目信息 ----------
 
+const NO_SUMMARY_MODEL = "__none__";
+
 function ProjectInfoCard({
   project,
   refreshProjects,
@@ -57,8 +59,18 @@ function ProjectInfoCard({
 }) {
   const [name, setName] = useState(project.name);
   const [saving, setSaving] = useState(false);
+  const [judgeModels, setJudgeModels] = useState<JudgeModel[]>([]);
+  const [summaryModel, setSummaryModel] = useState(project.summary_model ?? NO_SUMMARY_MODEL);
+  const [savingSummaryModel, setSavingSummaryModel] = useState(false);
 
   useEffect(() => setName(project.name), [project.id, project.name]);
+  useEffect(
+    () => setSummaryModel(project.summary_model ?? NO_SUMMARY_MODEL),
+    [project.id, project.summary_model],
+  );
+  useEffect(() => {
+    api.getJudgeModels(project.id).then(setJudgeModels).catch(() => setJudgeModels([]));
+  }, [project.id]);
 
   const save = async () => {
     const trimmed = name.trim();
@@ -76,6 +88,25 @@ function ProjectInfoCard({
       setName(project.name);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveSummaryModel = async (value: string) => {
+    const prev = summaryModel;
+    setSummaryModel(value);
+    setSavingSummaryModel(true);
+    try {
+      await api.updateProject(project.id, {
+        name: project.name,
+        summary_model: value === NO_SUMMARY_MODEL ? null : value,
+      });
+      toast.success("摘要模型配置已更新");
+      await refreshProjects();
+    } catch (e) {
+      toast.error(String(e));
+      setSummaryModel(prev);
+    } finally {
+      setSavingSummaryModel(false);
     }
   };
 
@@ -101,6 +132,29 @@ function ProjectInfoCard({
             {project.id}
           </code>
           <span className="text-xs text-text-3">不可修改</span>
+        </div>
+        <label className="self-start text-[12.5px] font-medium text-muted-foreground">摘要模型</label>
+        <div className="space-y-1.5">
+          <Select
+            value={summaryModel}
+            disabled={savingSummaryModel}
+            onValueChange={saveSummaryModel}
+          >
+            <SelectTrigger aria-label="摘要模型" className="max-w-[320px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_SUMMARY_MODEL}>关闭（默认）</SelectItem>
+              {judgeModels.map((m) => (
+                <SelectItem key={m.model} value={m.model}>
+                  {m.model}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="max-w-[420px] text-xs text-text-3">
+            配置后，新上报的链路会用该模型自动生成一句话摘要（消耗少量 tokens）；不配置则使用输入内容截断。
+          </p>
         </div>
       </CardContent>
     </Card>

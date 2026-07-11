@@ -11,6 +11,14 @@ export class ApiError extends Error {
 export interface Project {
   id: string;
   name: string;
+  summary_model: string | null;
+}
+
+export interface ReplaySource {
+  source_trace_id: string;
+  source_trace_name?: string;
+  override_model?: string;
+  thinking?: boolean;
 }
 
 export interface TraceSummary {
@@ -27,6 +35,9 @@ export interface TraceSummary {
   started_at: string | null;
   created_at: string;
   divergence_count: number;
+  summary: string | null;
+  input_preview: string | null;
+  replay_source: ReplaySource | null;
 }
 
 export interface TraceListResult {
@@ -77,6 +88,7 @@ export interface TraceDetail {
   created_at: string;
   metadata: Record<string, unknown> | null;
   divergence_count: number;
+  summary: string | null;
   observations: ObservationNode[];
 }
 
@@ -322,8 +334,13 @@ export const api = {
     get<VersionTrace[]>(`/api/prompt-versions/${versionId}/traces`),
   createProject: (body: { name: string }) =>
     send<Project & { created_at: string }>("POST", "/api/projects", body),
-  renameProject: (id: string, name: string) =>
-    send<Project & { created_at: string }>("PUT", `/api/projects/${id}`, { name }),
+  // PUT /api/projects/{id}：name 后端 ProjectRename 仍是必填字段（不是 name?），
+  // summary_model 才是真正可选/可显式置 null 的字段（不出现在请求体 -> 保持不变；
+  // 显式传 null -> 清空）。renameProject 保留作为向后兼容别名（仅改名，summary_model
+  // 字段不出现在请求体中，后端保持其原值不变）。
+  updateProject: (id: string, body: { name: string; summary_model?: string | null }) =>
+    send<Project & { created_at: string }>("PUT", `/api/projects/${id}`, body),
+  renameProject: (id: string, name: string) => api.updateProject(id, { name }),
   getProjectKeys: (projectId: string) =>
     get<ApiKeyInfo[]>(`/api/projects/${projectId}/keys`),
   createProjectKey: (projectId: string, name?: string) =>

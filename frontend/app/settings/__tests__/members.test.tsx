@@ -41,7 +41,7 @@ const me: CurrentUser = {
   auth_source: "local",
 };
 
-const project: Project = { id: "proj-1", name: "Test Project" };
+const project: Project = { id: "proj-1", name: "Test Project", summary_model: null };
 
 const members: Member[] = [
   {
