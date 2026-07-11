@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode, type SVGProps } from "react";
-import { LogOut, Monitor, Moon, Sun } from "lucide-react";
+import { LogOut, Monitor, Moon, Plus, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 
 import { useProject } from "@/contexts/ProjectContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSidebar } from "@/components/layout/SidebarContext";
+import { CreateProjectDialog } from "@/components/CreateProjectDialog";
 import { api, type Project } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
@@ -20,7 +21,7 @@ import {
 // Icons below are copied verbatim (viewBox/paths) from docs/design/Traces.dc.html's
 // _injectIcons() nav + theme SVG maps, with stroke colors swapped from the design's
 // var(--accent)/currentColor to plain currentColor so they inherit our token classes.
-function LogoIcon(props: SVGProps<SVGSVGElement>) {
+export function LogoIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg width="26" height="26" viewBox="0 0 24 24" fill="none" {...props}>
       <circle cx="12" cy="12" r="9.2" stroke="currentColor" strokeWidth="1.4" opacity="0.9" />
@@ -185,14 +186,26 @@ function WorkspaceAvatar({ name, className }: { name: string; className?: string
 }
 
 function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
-  const { projects, currentProject, setCurrentProject } = useProject();
+  const { projects, currentProject, setCurrentProject, refreshProjects } = useProject();
   const [open, setOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
   useEffect(() => {
     if (collapsed) setOpen(false);
   }, [collapsed]);
 
   const pick = (p: Project) => {
+    setCurrentProject(p);
+    setOpen(false);
+  };
+
+  const openCreate = () => {
+    setOpen(false);
+    setCreateOpen(true);
+  };
+
+  const handleCreated = async (p: Project) => {
+    await refreshProjects();
     setCurrentProject(p);
     setOpen(false);
   };
@@ -262,9 +275,19 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
                 </button>
               );
             })}
+            <div className="my-1.5 h-px bg-border-soft" />
+            <button
+              type="button"
+              onClick={openCreate}
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left font-sans text-primary hover:bg-accent"
+            >
+              <Plus className="h-[15px] w-[15px] shrink-0" />
+              <span className="flex-1 truncate text-[13px] font-medium">新建项目</span>
+            </button>
           </div>
         </>
       )}
+      <CreateProjectDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={handleCreated} />
     </div>
   );
 }

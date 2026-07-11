@@ -7,6 +7,10 @@ interface ProjectCtx {
   currentProject: Project | null;
   setCurrentProject: (p: Project) => void;
   refreshProjects: () => Promise<void>;
+  // True once the initial (or any subsequent) projects fetch has resolved —
+  // lets consumers (e.g. the first-run onboarding screen) distinguish
+  // "still loading" from "loaded and genuinely empty" and avoid a flash.
+  loaded: boolean;
 }
 
 const Ctx = createContext<ProjectCtx>({
@@ -14,11 +18,13 @@ const Ctx = createContext<ProjectCtx>({
   currentProject: null,
   setCurrentProject: () => {},
   refreshProjects: async () => {},
+  loaded: false,
 });
 
 export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [currentProject, setCurrent] = useState<Project | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   const setCurrentProject = (p: Project) => {
     setCurrent(p);
@@ -26,16 +32,20 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   };
 
   const refreshProjects = async () => {
-    const list = await api.getProjects();
-    setProjects(list);
-    setCurrent((prev) => {
-      if (prev) {
-        const updated = list.find((p) => p.id === prev.id);
-        if (updated) return updated;
-      }
-      const savedId = localStorage.getItem("promptscope.projectId");
-      return list.find((p) => p.id === savedId) ?? list[0] ?? null;
-    });
+    try {
+      const list = await api.getProjects();
+      setProjects(list);
+      setCurrent((prev) => {
+        if (prev) {
+          const updated = list.find((p) => p.id === prev.id);
+          if (updated) return updated;
+        }
+        const savedId = localStorage.getItem("promptscope.projectId");
+        return list.find((p) => p.id === savedId) ?? list[0] ?? null;
+      });
+    } finally {
+      setLoaded(true);
+    }
   };
 
   useEffect(() => {
@@ -44,7 +54,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ projects, currentProject, setCurrentProject, refreshProjects }}>
+    <Ctx.Provider value={{ projects, currentProject, setCurrentProject, refreshProjects, loaded }}>
       {children}
     </Ctx.Provider>
   );

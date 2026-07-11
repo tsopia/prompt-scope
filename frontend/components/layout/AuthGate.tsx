@@ -3,9 +3,23 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { ProjectProvider } from "@/contexts/ProjectContext";
+import { ProjectProvider, useProject } from "@/contexts/ProjectContext";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { SidebarProvider } from "@/components/layout/SidebarContext";
+import { FirstRunScreen } from "@/components/FirstRunScreen";
+
+/**
+ * Sits inside ProjectProvider, wrapping the routed page content: once the
+ * projects fetch has resolved (ProjectContext.loaded) and come back empty,
+ * shows the first-run onboarding screen instead of page content. Never
+ * flashes during the initial load — `loaded` stays false until the first
+ * fetch settles.
+ */
+function ProjectGate({ children }: { children: React.ReactNode }) {
+  const { projects, loaded } = useProject();
+  if (loaded && projects.length === 0) return <FirstRunScreen />;
+  return <>{children}</>;
+}
 
 /**
  * Gates the app shell behind auth.
@@ -33,7 +47,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       <SidebarProvider>
         <div className="flex h-screen bg-background">
           <AppSidebar />
-          <main className="flex-1 overflow-y-auto">{children}</main>
+          <main className="flex-1 overflow-y-auto">
+            <ProjectGate>{children}</ProjectGate>
+          </main>
         </div>
       </SidebarProvider>
     </ProjectProvider>

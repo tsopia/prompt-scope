@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Inbox, KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
+import { KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
 import { api, ApiError, ApiKeyInfo, JudgeModel, Member, Pricing, Project, Provider } from "@/lib/api";
 import { useProject } from "@/contexts/ProjectContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -488,138 +488,33 @@ function ApiKeysCard({ project, isOwner }: { project: Project; isOwner: boolean 
 }
 
 // ---------- 项目与密钥 tab ----------
-
-function CreateProjectDialog({
-  open,
-  onOpenChange,
-  onCreated,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onCreated: (p: Project) => void;
-}) {
-  const [name, setName] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-
-  useEffect(() => {
-    if (!open) {
-      setName("");
-      setError(null);
-    }
-  }, [open]);
-
-  const submit = async () => {
-    setCreating(true);
-    setError(null);
-    try {
-      const created = await api.createProject({ name });
-      onOpenChange(false);
-      toast.success("项目已创建");
-      onCreated(created);
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        setError("项目名称已存在");
-      } else {
-        setError(String(e));
-      }
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>新建项目</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-2">
-          <Input
-            autoFocus
-            placeholder="项目名称"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="font-mono"
-          />
-          <p className="text-xs text-text-3">创建后你将成为该项目的 owner</p>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            取消
-          </Button>
-          <Button onClick={submit} disabled={creating || !name}>
-            创建
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
+// Project switching/creation is a sidebar-only concern (workspace switcher,
+// see components/layout/AppSidebar.tsx) — this tab manages the CURRENT
+// project only, via useProject().currentProject.
 
 function ProjectsAndKeysTab({
-  projects,
   currentProject,
-  setCurrentProject,
   refreshProjects,
   isOwner,
 }: {
-  projects: Project[];
   currentProject: Project | null;
-  setCurrentProject: (p: Project) => void;
   refreshProjects: () => Promise<void>;
   isOwner: boolean;
 }) {
-  const [createOpen, setCreateOpen] = useState(false);
-
-  const handleCreated = async (p: Project) => {
-    await refreshProjects();
-    setCurrentProject(p);
-  };
+  if (!currentProject) {
+    return (
+      <EmptyState
+        icon={KeyRound}
+        title="暂无当前项目"
+        description="请通过侧边栏切换或新建一个项目。"
+      />
+    );
+  }
 
   return (
-    <div className="grid grid-cols-[280px_1fr] gap-6">
-      <div className="h-fit space-y-3 rounded-xl border border-border bg-card p-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold">项目</h3>
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-3.5 w-3.5" />
-            新建项目
-          </Button>
-        </div>
-        {projects.length === 0 && (
-          <EmptyState icon={Inbox} title="暂无项目" description="新建一个项目开始使用。" />
-        )}
-        <div className="space-y-2">
-          {projects.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => setCurrentProject(p)}
-              className={cn(
-                "w-full rounded-lg border p-3 text-left transition-colors",
-                currentProject?.id === p.id ? "border-primary bg-accent-subtle" : "hover:bg-surface-hover",
-              )}
-            >
-              <span className="truncate text-sm font-medium">{p.name}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="min-w-0 space-y-5">
-        {!currentProject && (
-          <EmptyState icon={KeyRound} title="选择一个项目" description="从左侧选择或新建一个项目以管理其信息与 API Key。" />
-        )}
-        {currentProject && (
-          <>
-            <ProjectInfoCard project={currentProject} refreshProjects={refreshProjects} isOwner={isOwner} />
-            <ApiKeysCard project={currentProject} isOwner={isOwner} />
-          </>
-        )}
-      </div>
-
-      <CreateProjectDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={handleCreated} />
+    <div className="max-w-3xl space-y-5">
+      <ProjectInfoCard project={currentProject} refreshProjects={refreshProjects} isOwner={isOwner} />
+      <ApiKeysCard project={currentProject} isOwner={isOwner} />
     </div>
   );
 }
@@ -1445,7 +1340,7 @@ function MembersTab({
 // ---------- 页面 ----------
 
 export default function SettingsPage() {
-  const { projects, currentProject, setCurrentProject, refreshProjects } = useProject();
+  const { currentProject, refreshProjects } = useProject();
   const { user } = useAuth();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [pricing, setPricing] = useState<Pricing[]>([]);
@@ -1500,9 +1395,7 @@ export default function SettingsPage() {
 
           <TabsContent value="projects">
             <ProjectsAndKeysTab
-              projects={projects}
               currentProject={currentProject}
-              setCurrentProject={setCurrentProject}
               refreshProjects={refreshProjects}
               isOwner={isOwner}
             />
