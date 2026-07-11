@@ -24,6 +24,13 @@ import { cn } from "@/lib/utils";
 const NO_OVERRIDE = "__source__";
 const CUSTOM_BASE = "__custom__";
 
+type ThinkingMode = "default" | "enabled" | "disabled";
+const THINKING_OPTS: { key: ThinkingMode; label: string }[] = [
+  { key: "default", label: "跟随模型默认" },
+  { key: "enabled", label: "开启" },
+  { key: "disabled", label: "关闭" },
+];
+
 function flatten(nodes: ObservationNode[]): ObservationNode[] {
   return nodes.flatMap((n) => [n, ...flatten(n.children)]);
 }
@@ -184,9 +191,12 @@ function HistoryEntry({ run, sourceId }: { run: ReplayRun; sourceId: string }) {
   const [expanded, setExpanded] = useState(false);
   const kind = runStatusKind(run.status);
   const hasDetail = Boolean(run.error) || (run.divergences && run.divergences.length > 0);
+  const thinkingParam = run.override_model_params?.thinking as { type?: string } | undefined;
+  const thinkingLabel = thinkingParam?.type === "enabled" ? "思考" : thinkingParam?.type === "disabled" ? "非思考" : null;
   const parts = [
     run.override_model,
     run.override_model_params?.temperature !== undefined ? `temp ${run.override_model_params?.temperature}` : null,
+    thinkingLabel,
   ].filter(Boolean);
   const metaParts = [
     `${(run.divergences ?? []).length} 偏离`,
@@ -353,6 +363,9 @@ function ReplayContent() {
   // 覆盖模型：只有用户主动切换过才作为 override_model 提交；否则视为「沿用源模型」
   const [model, setModel] = useState(NO_OVERRIDE);
 
+  // 思考模式：跟随模型默认时不下发 thinking 字段；开启/关闭时下发 {type: "enabled"|"disabled"}
+  const [thinking, setThinking] = useState<ThinkingMode>("default");
+
   // 温度 + 高级参数：逐项 dirty 追踪，只把用户真正碰过的键塞进 override_model_params
   const [temperature, setTemperature] = useState(0.7);
   const [tempDirty, setTempDirty] = useState(false);
@@ -493,6 +506,7 @@ function ReplayContent() {
       if (stopSeq.trim() !== "") {
         modelParams.stop = stopSeq.split(",").map((s) => s.trim()).filter(Boolean);
       }
+      if (thinking !== "default") modelParams.thinking = { type: thinking };
 
       const run = await api.createReplay({
         source_trace_id: id,
@@ -598,6 +612,31 @@ function ReplayContent() {
             </div>
 
             <div>
+              <label className="mb-1.5 block text-xs font-semibold text-muted-foreground">思考模式</label>
+              <div className="flex gap-0.5 rounded-md border border-border-soft bg-bg-grid p-0.5">
+                {THINKING_OPTS.map(({ key, label }) => {
+                  const active = thinking === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      disabled={running}
+                      onClick={() => setThinking(key)}
+                      className={cn(
+                        "h-[30px] flex-1 rounded-[7px] px-1.5 font-sans text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+                        active
+                          ? "bg-surface-2 text-primary shadow-[inset_0_0_0_1px_hsl(var(--border))]"
+                          : "text-text-3 hover:text-foreground"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <label className="text-xs font-semibold text-muted-foreground">温度</label>
                 <MetricText value={temperature.toFixed(1)} className="text-sm font-semibold text-primary" />
@@ -616,6 +655,11 @@ function ReplayContent() {
                 <span>0.0 精确</span>
                 <span>2.0 发散</span>
               </div>
+              {thinking === "enabled" && (
+                <p className="mt-1.5 text-[12px] text-text-3">
+                  思考模式下 temperature/top_p/惩罚项将被模型忽略
+                </p>
+              )}
             </div>
 
             <AdvancedParams

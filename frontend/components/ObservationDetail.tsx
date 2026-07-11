@@ -1,6 +1,6 @@
 "use client";
 import { Fragment, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { Brain, ChevronRight } from "lucide-react";
 import { ObservationNode } from "@/lib/api";
 import { formatCost, formatLatency, formatTokens } from "@/lib/format";
 import { CodeBlock } from "@/components/CodeBlock";
@@ -10,6 +10,40 @@ import { cn } from "@/lib/utils";
 
 function jsonText(value: unknown): string {
   return typeof value === "string" ? value : JSON.stringify(value, null, 2);
+}
+
+/** llm 观测的 metadata.reasoning_content（思考过程文本），无则返回 null。 */
+function getReasoningContent(node: ObservationNode): string | null {
+  const v = node.metadata?.reasoning_content;
+  return typeof v === "string" && v.length > 0 ? v : null;
+}
+
+/** 思考过程折叠卡片：默认收起，比正式回答更「安静」的视觉样式。 */
+function ReasoningCard({ content }: { content: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-11 w-full items-center justify-between border-none bg-transparent px-4 font-mono text-xs font-semibold tracking-wide text-muted-foreground"
+      >
+        <span className="flex items-center gap-2">
+          <Brain className="h-3.5 w-3.5 text-text-3" />
+          <span>思考过程</span>
+          <span className="font-mono font-normal text-text-3">· {content.length} 字</span>
+        </span>
+        <ChevronRight className={cn("h-3.5 w-3.5 text-text-3 transition-transform", open && "rotate-90")} />
+      </button>
+      {open && (
+        <div className="px-4 pb-4 pt-0.5">
+          <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-lg border border-border-soft bg-bg-grid p-3.5 font-mono text-xs leading-relaxed text-muted-foreground">
+            {content}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function toolDefName(def: Record<string, unknown>): string {
@@ -152,6 +186,7 @@ function ToolCallBlock({ calls }: { calls: Array<Record<string, unknown>> }) {
 function LlmDetail({ node }: { node: ObservationNode }) {
   const params = Object.entries(node.model_params ?? {});
   const toolDefs = (node.tool_definitions ?? []) as Record<string, unknown>[];
+  const reasoning = getReasoningContent(node);
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
@@ -196,6 +231,8 @@ function LlmDetail({ node }: { node: ObservationNode }) {
           </div>
         </DetailCard>
       </div>
+
+      {reasoning && <ReasoningCard content={reasoning} />}
 
       <DetailCard title="消息序列" extra={<span className="font-mono font-normal text-text-3">{node.messages?.length ?? 0}</span>}>
         <div className="flex flex-col gap-3">
@@ -306,6 +343,7 @@ function CompactObservationDetail({ node }: { node: ObservationNode }) {
   const messages = node.messages;
   const visibleMessages = messages?.slice(0, MESSAGE_PREVIEW_COUNT);
   const hiddenCount = messages ? messages.length - MESSAGE_PREVIEW_COUNT : 0;
+  const reasoning = getReasoningContent(node);
 
   return (
     <div className="p-2">
@@ -355,6 +393,11 @@ function CompactObservationDetail({ node }: { node: ObservationNode }) {
             <div className="mb-3">
               <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">模型参数</p>
               <CodeBlock code={jsonText(node.model_params)} language="json" />
+            </div>
+          )}
+          {reasoning && (
+            <div className="mb-3">
+              <ReasoningCard content={reasoning} />
             </div>
           )}
           {visibleMessages && (
