@@ -17,17 +17,19 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   // ---- Step 0: register + log in (backend is auth-gated end to end) ----
   await registerAndLogin(page, E2E_USER_EMAIL, E2E_USER_PASSWORD);
 
-  // ---- Step 1: create project + API key from /settings ----
-  // Created by the now-logged-in user, so project_members gets an "owner"
-  // row for them and every subsequent membership-gated read below succeeds.
-  await page.goto("/settings");
-  await page.getByRole("tab", { name: "项目与密钥" }).click();
+  // ---- Step 1: fresh user lands on the first-run screen; create project there ----
+  // A brand-new user has zero projects, so the global first-run screen replaces
+  // page content. Creating through it exercises the real onboarding path and
+  // records an "owner" project_members row, so every membership-gated read below succeeds.
+  await expect(page.getByText("创建你的第一个项目")).toBeVisible();
   await page.getByRole("button", { name: "新建项目" }).click();
   await page.getByPlaceholder("项目名称").fill(PROJECT_NAME);
   await page.getByRole("dialog").getByRole("button", { name: "创建" }).click();
   await expect(page.getByText("项目已创建")).toBeVisible();
 
-  // Newly created project becomes current; wait for its info card (name input) to load.
+  // Project becomes current; settings now manages the current project only.
+  await page.goto("/settings");
+  await page.getByRole("tab", { name: "项目与密钥" }).click();
   await expect(page.getByLabel("项目名称")).toHaveValue(PROJECT_NAME);
   await page.getByRole("button", { name: "新建密钥" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "创建" }).click();
@@ -173,14 +175,15 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   await page.goto("/prompts");
   await page.getByRole("button", { name: "新建 prompt" }).click();
   await page.getByPlaceholder("prompt 名称（唯一）").fill("e2e-prompt");
-  await page.getByPlaceholder("初始版本内容").fill("You are a helpful assistant.\nBe concise.");
-  await page.getByRole("button", { name: "创建", exact: true }).click();
+  // 大编辑器对话框：内容文本域无 placeholder，用 dialog 作用域定位
+  await page.getByRole("dialog").locator("textarea").fill("You are a helpful assistant.\nBe concise.");
+  await page.getByRole("dialog").getByRole("button", { name: "创建", exact: true }).click();
 
   await expect(page.getByRole("heading", { name: "e2e-prompt" })).toBeVisible();
   await page.getByRole("button", { name: "基于此版本新建" }).click();
   const forkTextarea = page.getByRole("dialog").locator("textarea");
   await forkTextarea.fill("You are a helpful assistant.\nBe concise.\nAlways greet the user.");
-  await page.getByRole("button", { name: "提交新版本" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "创建", exact: true }).click();
 
   await expect(page.getByText("v2").first()).toBeVisible();
   // check both version cards to trigger the diff view
