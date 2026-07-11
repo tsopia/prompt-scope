@@ -126,6 +126,8 @@ export interface Provider {
   api_key_set: boolean;
   created_at: string;
   project_id: string | null;
+  created_by: string | null;
+  created_by_name: string | null;
 }
 
 export interface Pricing {
@@ -135,6 +137,8 @@ export interface Pricing {
   output_price_per_1k: number;
   provider_id: string | null;
   project_id: string | null;
+  created_by: string | null;
+  created_by_name: string | null;
 }
 
 export interface JudgeModel {

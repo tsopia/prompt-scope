@@ -39,12 +39,65 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { canManageResource } from "@/lib/resourceAccess";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("zh-CN");
 }
 
 const HEAD_CLASS = "bg-surface-2 text-[11.5px] font-semibold tracking-wide text-text-3";
+
+// ---------- creator-or-owner write gating (provider/pricing) ----------
+
+const MANAGE_TOOLTIP = "仅创建者或 owner 可修改";
+
+function ManageActions({
+  allowed,
+  onEdit,
+  onDelete,
+}: {
+  allowed: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const buttons = (
+    <div className="flex justify-end gap-1">
+      <span tabIndex={allowed ? undefined : 0}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          title={allowed ? "编辑" : undefined}
+          disabled={!allowed}
+          onClick={onEdit}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+      </span>
+      <span tabIndex={allowed ? undefined : 0}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-destructive hover:text-destructive"
+          title={allowed ? "删除" : undefined}
+          disabled={!allowed}
+          onClick={onDelete}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </span>
+    </div>
+  );
+  if (allowed) return buttons;
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{buttons}</TooltipTrigger>
+        <TooltipContent>{MANAGE_TOOLTIP}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 // ---------- 项目信息 ----------
 
@@ -807,10 +860,14 @@ function ProvidersTab({
   providers,
   reload,
   currentProject,
+  isOwner,
+  userId,
 }: {
   providers: Provider[];
   reload: () => void;
   currentProject: Project | null;
+  isOwner: boolean;
+  userId: string | undefined;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Provider | null>(null);
@@ -875,6 +932,7 @@ function ProvidersTab({
                   <TableCell>
                     <div className="flex flex-col gap-0.5">
                       <span className="font-medium">{p.name}</span>
+                      <span className="text-[11px] text-text-3">创建者：{p.created_by_name ?? "—"}</span>
                       {p.note && <span className="text-[11px] text-text-3">{p.note}</span>}
                     </div>
                   </TableCell>
@@ -895,20 +953,11 @@ function ProvidersTab({
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" title="编辑" onClick={() => openEdit(p)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        title="删除"
-                        onClick={() => setDeleteTarget(p)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
+                    <ManageActions
+                      allowed={canManageResource(p.created_by, isOwner, userId)}
+                      onEdit={() => openEdit(p)}
+                      onDelete={() => setDeleteTarget(p)}
+                    />
                   </TableCell>
                 </TableRow>
               ))}
@@ -954,11 +1003,15 @@ function PricingRow({
   providers,
   onSaved,
   onDelete,
+  isOwner,
+  userId,
 }: {
   pricing: Pricing;
   providers: Provider[];
   onSaved: () => void;
   onDelete: () => void;
+  isOwner: boolean;
+  userId: string | undefined;
 }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
@@ -1041,6 +1094,7 @@ function PricingRow({
             </SelectContent>
           </Select>
         </TableCell>
+        <TableCell className="text-[12px] text-text-3">{pricing.created_by_name ?? "—"}</TableCell>
         <TableCell>
           <Input
             className="text-right font-mono"
@@ -1069,29 +1123,19 @@ function PricingRow({
     );
   }
 
+  const allowed = canManageResource(pricing.created_by, isOwner, userId);
+
   return (
     <TableRow>
       <TableCell className="font-mono font-medium">{pricing.model}</TableCell>
       <TableCell className="text-muted-foreground">
         {providers.find((p) => p.id === pricing.provider_id)?.name ?? "—"}
       </TableCell>
+      <TableCell className="text-[12px] text-text-3">{pricing.created_by_name ?? "—"}</TableCell>
       <TableCell className="text-right font-mono tabular-nums">${pricing.input_price_per_1k}</TableCell>
       <TableCell className="text-right font-mono tabular-nums">${pricing.output_price_per_1k}</TableCell>
       <TableCell className="text-right">
-        <div className="flex justify-end gap-1">
-          <Button variant="ghost" size="icon" className="h-8 w-8" title="编辑" onClick={startEdit}>
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-destructive hover:text-destructive"
-            title="删除"
-            onClick={() => setDeleteOpen(true)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+        <ManageActions allowed={allowed} onEdit={startEdit} onDelete={() => setDeleteOpen(true)} />
         <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
           <DialogContent>
             <DialogHeader>
@@ -1118,11 +1162,15 @@ function PricingTab({
   providers,
   reload,
   currentProject,
+  isOwner,
+  userId,
 }: {
   pricing: Pricing[];
   providers: Provider[];
   reload: () => void;
   currentProject: Project | null;
+  isOwner: boolean;
+  userId: string | undefined;
 }) {
   const [form, setForm] = useState({ model: "", input: "", output: "", provider_id: "" });
   const [creating, setCreating] = useState(false);
@@ -1171,6 +1219,7 @@ function PricingTab({
               <TableRow className="hover:bg-transparent">
                 <TableHead className={HEAD_CLASS}>模型</TableHead>
                 <TableHead className={HEAD_CLASS}>关联 Provider</TableHead>
+                <TableHead className={HEAD_CLASS}>创建者</TableHead>
                 <TableHead className={cn(HEAD_CLASS, "text-right")}>每 1K 输入</TableHead>
                 <TableHead className={cn(HEAD_CLASS, "text-right")}>每 1K 输出</TableHead>
                 <TableHead className={cn(HEAD_CLASS, "text-right")}>操作</TableHead>
@@ -1178,7 +1227,15 @@ function PricingTab({
             </TableHeader>
             <TableBody>
               {pricing.map((r) => (
-                <PricingRow key={r.id} pricing={r} providers={providers} onSaved={reload} onDelete={reload} />
+                <PricingRow
+                  key={r.id}
+                  pricing={r}
+                  providers={providers}
+                  onSaved={reload}
+                  onDelete={reload}
+                  isOwner={isOwner}
+                  userId={userId}
+                />
               ))}
             </TableBody>
           </Table>
@@ -1452,11 +1509,24 @@ export default function SettingsPage() {
           </TabsContent>
 
           <TabsContent value="providers">
-            <ProvidersTab providers={providers} reload={reload} currentProject={currentProject} />
+            <ProvidersTab
+              providers={providers}
+              reload={reload}
+              currentProject={currentProject}
+              isOwner={isOwner}
+              userId={user?.id}
+            />
           </TabsContent>
 
           <TabsContent value="pricing">
-            <PricingTab pricing={pricing} providers={providers} reload={reload} currentProject={currentProject} />
+            <PricingTab
+              pricing={pricing}
+              providers={providers}
+              reload={reload}
+              currentProject={currentProject}
+              isOwner={isOwner}
+              userId={user?.id}
+            />
           </TabsContent>
 
           <TabsContent value="members">
