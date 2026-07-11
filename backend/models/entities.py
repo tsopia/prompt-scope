@@ -158,6 +158,23 @@ class ReplayRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class JudgeTemplate(Base):
+    """项目内可编辑的评分模板库：一条记录即一个可编辑的 RUBRIC（评审身份 +
+    领域标准），由 services.judge_service.compose_judge_prompt 与固定的任务
+    输入/输出骨架 + 锁定的 JSON 输出格式尾部拼装成最终 judge prompt。
+    「系统默认」不是本表的一行，而是 judge_service.DEFAULT_RUBRIC 代码常量。"""
+    __tablename__ = "judge_templates"
+    __table_args__ = (UniqueConstraint("project_id", "name"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=gen_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    content: Mapped[str] = mapped_column(Text)  # 可编辑的 rubric 正文
+    created_by: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Evaluation(Base):
     __tablename__ = "evaluations"
 
@@ -173,6 +190,12 @@ class Evaluation(Base):
     verdict: Mapped[str | None] = mapped_column(String(32), nullable=True)
     reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
     cost: Mapped[float | None] = mapped_column(Float, nullable=True)
+    judge_template_id: Mapped[str | None] = mapped_column(
+        ForeignKey("judge_templates.id"), nullable=True)
+    # NULL = 使用系统默认 rubric（judge_service.DEFAULT_RUBRIC）
+    prompt_fingerprint: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # 实际使用的 rubric 内容的 sha256[:16]；缓存命中按内容指纹而非模板 id 比较，
+    # 见 services.judge_service.run_judge 的缓存查找注释
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

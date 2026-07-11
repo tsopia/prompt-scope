@@ -30,6 +30,23 @@ def test_ensure_columns_noop_on_current_schema():
     assert "score_b" in cols
 
 
+def test_ensure_columns_adds_judge_template_columns_to_evaluations():
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
+                           poolclass=StaticPool)
+    # 手工建一个缺 judge_template_id/prompt_fingerprint 列的 evaluations 表
+    # （模拟多评分模板功能上线前的旧库）
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE evaluations (id VARCHAR(32) PRIMARY KEY, "
+            "project_id VARCHAR(32), subject_trace_id VARCHAR(64), "
+            "compare_trace_id VARCHAR(64), judge_model VARCHAR(128), "
+            "context_mode VARCHAR(16), score FLOAT, score_b FLOAT, "
+            "verdict VARCHAR(32), reasoning TEXT, cost FLOAT, created_at DATETIME)"))
+    ensure_columns(bind=engine)
+    cols = {c["name"] for c in inspect(engine).get_columns("evaluations")}
+    assert {"judge_template_id", "prompt_fingerprint"} <= cols
+
+
 def test_ensure_columns_adds_trace_summary_column():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
                            poolclass=StaticPool)

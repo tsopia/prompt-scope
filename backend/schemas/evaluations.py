@@ -10,6 +10,7 @@ class EvaluateRequest(BaseModel):
     judge_models: list[str] = Field(min_length=1)
     context_mode: Literal["output_only", "with_trace"] = "output_only"
     force: bool = False
+    judge_template_id: str | None = None
 
 
 class EvaluationOut(BaseModel):
@@ -24,6 +25,8 @@ class EvaluationOut(BaseModel):
     verdict: str | None
     reasoning: str | None
     cost: float | None
+    judge_template_id: str | None
+    judge_template_name: str | None = None
     created_at: datetime
 
 
@@ -43,6 +46,7 @@ class BatchEvaluateRequest(BaseModel):
     judge_models: list[str] = Field(min_length=1)
     context_mode: Literal["output_only", "with_trace"] = "output_only"
     force: bool = False
+    judge_template_id: str | None = None
 
 
 class BatchEvaluateItem(BaseModel):

@@ -16,6 +16,7 @@ from routers import prompts as prompts_router
 from routers import projects as projects_router
 from routers import auth as auth_router
 from routers import members as members_router
+from routers import judge_templates as judge_templates_router
 
 
 @asynccontextmanager
@@ -55,6 +56,7 @@ app.include_router(prompts_router.router, prefix="/api")
 app.include_router(projects_router.router, prefix="/api")
 app.include_router(auth_router.router, prefix="/api")
 app.include_router(members_router.router, prefix="/api")
+app.include_router(judge_templates_router.router, prefix="/api")
 
 
 @app.get("/api/health")
