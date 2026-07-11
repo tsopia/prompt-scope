@@ -578,7 +578,7 @@ function ReplayContent() {
 
         <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
           {/* ===== 配置列 ===== */}
-          <div className="space-y-4">
+          <div className="h-fit space-y-4 rounded-xl border border-border bg-card p-5">
             <div>
               <h2 className="mb-1 text-sm font-semibold">回放配置</h2>
               <p className="text-xs leading-relaxed text-muted-foreground">

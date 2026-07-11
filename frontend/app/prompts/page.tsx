@@ -323,7 +323,7 @@ export default function PromptsPage() {
       />
 
       <main className="flex min-h-0 flex-1">
-        <div className="flex w-[288px] shrink-0 flex-col border-r border-border">
+        <div className="flex w-[288px] shrink-0 flex-col border-r border-border bg-card">
           <div className="border-b border-border-soft px-3.5 pb-3 pt-3.5">
             <Button
               className="h-[38px] w-full gap-2 rounded-[9px] text-[13px] font-semibold"

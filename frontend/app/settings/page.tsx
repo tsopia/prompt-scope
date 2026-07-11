@@ -580,7 +580,7 @@ function ProjectsAndKeysTab({
 
   return (
     <div className="grid grid-cols-[280px_1fr] gap-6">
-      <div className="space-y-3">
+      <div className="h-fit space-y-3 rounded-xl border border-border bg-card p-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">项目</h3>
           <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setCreateOpen(true)}>
