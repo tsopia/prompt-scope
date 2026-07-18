@@ -184,7 +184,7 @@ class Evaluation(Base):
     compare_trace_id: Mapped[str | None] = mapped_column(ForeignKey("traces.id"), nullable=True)
     judge_model: Mapped[str] = mapped_column(String(128))
     context_mode: Mapped[str] = mapped_column(String(16), default="output_only")
-    # output_only | with_trace
+    # output_only | with_trace | tools_aligned
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
     score_b: Mapped[float | None] = mapped_column(Float, nullable=True)
     verdict: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -196,6 +196,16 @@ class Evaluation(Base):
     prompt_fingerprint: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # 实际使用的 rubric 内容的 sha256[:16]；缓存命中按内容指纹而非模板 id 比较，
     # 见 services.judge_service.run_judge 的缓存查找注释
+    dimensions: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # 结构化分维度打分：单一评审 [{"name":..., "score":...}]，成对评审
+    # [{"name":..., "score_a":..., "score_b":...}]；judge 输出缺失/畸形时为
+    # NULL（绝不用 0 之类的假分数顶替，见 services.judge_service._extract_dimensions）
+    evidence: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # judge 引用的最具决定性的一条证据（≤200 字），缺失为 NULL
+    evidence_step: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    # evidence 的出处（如"步骤 3 · param_mismatch"），缺失为 NULL
+    confidence: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # judge 对自己打分的置信度，1(低)-3(高)；缺失/越界为 NULL
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

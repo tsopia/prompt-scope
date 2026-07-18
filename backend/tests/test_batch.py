@@ -98,6 +98,30 @@ def test_batch_evaluate_mixed_results(client, db_session, seeded, monkeypatch):
         assert "未配置" in r["error"]
 
 
+def test_batch_evaluate_exposes_structured_fields(client, db_session, seeded, monkeypatch):
+    def fake_run_judge(db, subject_trace_id, judge_model, **kwargs):
+        return Evaluation(
+            id=f"ev-{subject_trace_id}", project_id=seeded.id,
+            subject_trace_id=subject_trace_id,
+            compare_trace_id=kwargs.get("compare_trace_id"),
+            judge_model=judge_model, context_mode="output_only",
+            score=9.0, verdict="pass", reasoning="fine",
+            dimensions=[{"name": "正确性", "score": 9.0}],
+            evidence="ev", evidence_step="步骤 1", confidence=3,
+            created_at=utcnow())
+
+    monkeypatch.setattr(judge_service, "run_judge", fake_run_judge)
+    resp = client.post("/api/evaluations/batch", json={
+        "subject_trace_ids": ["tr-a"], "judge_models": ["judge-model"]})
+    assert resp.status_code == 200, resp.text
+    ev_out = resp.json()["results"][0]["evaluation"]
+    assert ev_out["dimensions"] == [{"name": "正确性", "score": 9.0,
+                                     "score_a": None, "score_b": None}]
+    assert ev_out["evidence"] == "ev"
+    assert ev_out["evidence_step"] == "步骤 1"
+    assert ev_out["confidence"] == 3
+
+
 def test_batch_evaluate_too_many_ids_422(client, seeded):
     resp = client.post("/api/evaluations/batch", json={
         "subject_trace_ids": [f"tr-{i}" for i in range(51)],

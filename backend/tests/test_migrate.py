@@ -47,6 +47,25 @@ def test_ensure_columns_adds_judge_template_columns_to_evaluations():
     assert {"judge_template_id", "prompt_fingerprint"} <= cols
 
 
+def test_ensure_columns_adds_structured_judge_output_columns_to_evaluations():
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
+                           poolclass=StaticPool)
+    # 手工建一个缺 dimensions/evidence/evidence_step/confidence 列的 evaluations 表
+    # （模拟结构化 judge 输出功能上线前的旧库）
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE evaluations (id VARCHAR(32) PRIMARY KEY, "
+            "project_id VARCHAR(32), subject_trace_id VARCHAR(64), "
+            "compare_trace_id VARCHAR(64), judge_model VARCHAR(128), "
+            "context_mode VARCHAR(16), score FLOAT, score_b FLOAT, "
+            "verdict VARCHAR(32), reasoning TEXT, cost FLOAT, "
+            "judge_template_id VARCHAR(32), prompt_fingerprint VARCHAR(32), "
+            "created_at DATETIME)"))
+    ensure_columns(bind=engine)
+    cols = {c["name"] for c in inspect(engine).get_columns("evaluations")}
+    assert {"dimensions", "evidence", "evidence_step", "confidence"} <= cols
+
+
 def test_ensure_columns_adds_trace_summary_column():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
                            poolclass=StaticPool)

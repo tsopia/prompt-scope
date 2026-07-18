@@ -12,6 +12,22 @@ from services.providers import resolve_provider
 MAX_FIELD_CHARS = 4000
 MAX_STEP_CHARS = 200
 MAX_CONTEXT_STEPS = 50
+MAX_EVIDENCE_CHARS = 200
+MAX_EVIDENCE_STEP_CHARS = 160
+VALID_CONFIDENCE = (1, 2, 3)
+
+JUDGE_DIMENSIONS = ["正确性", "意图一致", "成本效率"]
+# 固定的分维度打分维度集合。骨架里的 JSON 输出格式尾部按这三个维度的名字
+# 字面写死（见 PAIR_SKELETON/SINGLE_SKELETON），下面的
+# test_skeletons_mention_every_judge_dimension 保证两者不会漂移。
+
+SKELETON_VERSION = 2
+# 骨架版本号：本次改动让 SKELETON（不是 rubric）也变了——所有 judge 现在都被
+# 要求多输出 dimensions/evidence/evidence_step/confidence——但 prompt_fingerprint
+# 历史上只哈希 rubric，不哈希骨架本身，于是骨架变了、fingerprint 却不变，会让
+# 所有历史缓存被当成命中而复用旧格式的评分（没有新字段）。把 SKELETON_VERSION
+# 拼进 fingerprint 计算（见 _fingerprint()）后，所有旧评分的 fingerprint 都会
+# 变化，从而一次性失效重新打分；未来再改骨架时把这个数字加一即可。
 
 # ============================================================
 # 评分 prompt 由两部分拼装（多评分模板 / Phase 10）：
@@ -51,15 +67,25 @@ PAIR_SKELETON = """{rubric}
 
 【候选输出 A】(基准，模型: {model_a})
 {output_a}
+【A 整体指标】{metrics_a}
 
 【候选输出 B】(候选替代，模型: {model_b})
 {output_b}
+【B 整体指标】{metrics_b}
 {trace_context}
-请分别给 A、B 打分（0-10），并给出结论：若 B 在以上维度不劣于 A 则判 replaceable；
-若两者质量相当且 B 没有明显缺陷，也可判 replaceable；否则判 not_replaceable。
+请给出：
+1. dimensions：对「正确性」「意图一致」「成本效率」三个维度分别给 A、B 打 0-10 分；
+   「成本效率」请依据上方【整体指标】给出的真实成本/延迟/token 数据打分，不要凭空猜测。
+2. 总体 score_a、score_b（0-10），并给出结论 verdict：若 B 在以上维度不劣于 A 则判 replaceable；
+   若两者质量相当且 B 没有明显缺陷，也可判 replaceable；否则判 not_replaceable。
+3. evidence：从材料中挑选最具决定性的一条具体证据（例如某个工具调用入参的差异、成本或延迟的
+   差值），不超过 200 字；如果确实没有可引用的具体证据，填 null。
+4. evidence_step：evidence 的出处（例如"步骤 3 · param_mismatch"、"全链路 · 成本对比"）；
+   evidence 为 null 时这里也是 null。
+5. confidence：你对以上判断的置信度，整数 1（低）到 3（高）。
 
 只输出 JSON，不要任何其他文字：
-{{"score_a": <number>, "score_b": <number>, "verdict": "replaceable" 或 "not_replaceable", "reasoning": "<中文理由>"}}"""
+{{"score_a": <number>, "score_b": <number>, "verdict": "replaceable" 或 "not_replaceable", "reasoning": "<中文理由>", "dimensions": [{{"name": "正确性", "score_a": <0-10>, "score_b": <0-10>}}, {{"name": "意图一致", "score_a": <0-10>, "score_b": <0-10>}}, {{"name": "成本效率", "score_a": <0-10>, "score_b": <0-10>}}], "evidence": "<string 或 null>", "evidence_step": "<string 或 null>", "confidence": <1-3 的整数>}}"""
 
 SINGLE_SKELETON = """{rubric}
 
@@ -70,11 +96,18 @@ SINGLE_SKELETON = """{rubric}
 
 【候选输出】(模型: {model})
 {output}
+【整体指标】{metrics}
 {trace_context}
-请打分（0-10）并判断是否合格。
+请给出：
+1. dimensions：对「正确性」「意图一致」「成本效率」三个维度分别打 0-10 分；
+   「成本效率」请依据上方【整体指标】给出的真实成本/延迟/token 数据打分，不要凭空猜测。
+2. 总体 score（0-10）并判断是否合格 verdict（pass/fail）。
+3. evidence：挑选最具决定性的一条具体证据，不超过 200 字；如果没有可引用的具体证据，填 null。
+4. evidence_step：evidence 的出处；evidence 为 null 时这里也是 null。
+5. confidence：你对以上判断的置信度，整数 1（低）到 3（高）。
 
 只输出 JSON，不要任何其他文字：
-{{"score": <number>, "verdict": "pass" 或 "fail", "reasoning": "<中文理由>"}}"""
+{{"score": <number>, "verdict": "pass" 或 "fail", "reasoning": "<中文理由>", "dimensions": [{{"name": "正确性", "score": <0-10>}}, {{"name": "意图一致", "score": <0-10>}}, {{"name": "成本效率", "score": <0-10>}}], "evidence": "<string 或 null>", "evidence_step": "<string 或 null>", "confidence": <1-3 的整数>}}"""
 
 
 def compose_judge_prompt(rubric: str, *, pair: bool) -> str:
@@ -89,8 +122,19 @@ def compose_judge_prompt(rubric: str, *, pair: bool) -> str:
     return skeleton.replace("{rubric}", rubric, 1)
 
 
+def _fingerprint(rubric: str) -> str:
+    """rubric 内容 + 骨架版本号的 sha256[:16]。
+
+    拼上 SKELETON_VERSION 而不是只哈希 rubric，是因为缓存命中与否既取决于
+    "用什么评审标准评的"，也取决于"骨架本身要求 judge 输出什么格式"——骨架变了
+    （比如这次新增 dimensions/evidence/confidence 字段的要求），哪怕 rubric
+    一字未改，历史评分也已经不满足新契约，必须失效重评。
+    """
+    return hashlib.sha256(f"{SKELETON_VERSION}:{rubric}".encode()).hexdigest()[:16]
+
+
 def builtin_fingerprint() -> str:
-    return hashlib.sha256(DEFAULT_RUBRIC.encode()).hexdigest()[:16]
+    return _fingerprint(DEFAULT_RUBRIC)
 
 
 def _is_message_list(value) -> bool:
@@ -171,11 +215,95 @@ def _trace_context(trace: Trace, other: Trace | None) -> str:
     return "\n".join(lines)
 
 
+def _trace_metrics(trace: Trace) -> str:
+    """trace 的整体聚合指标（成本/延迟/token），供骨架里的【整体指标】占位符使用，
+    让 judge 的「成本效率」维度打分和 evidence 引用真实数字，而不是凭空猜测。"""
+    cost = "未知" if trace.total_cost is None else f"${trace.total_cost:.4f}"
+    latency = "未知" if trace.latency_ms is None else f"{trace.latency_ms}ms"
+    return (f"成本={cost} 延迟={latency} "
+            f"输入tokens={trace.total_input_tokens} 输出tokens={trace.total_output_tokens}")
+
+
+def _tool_step_line(ob) -> str:
+    return (f"[{ob.name}] 入参={_dump(ob.tool_input)[:MAX_STEP_CHARS]} "
+            f"结果={_dump(ob.tool_output)[:MAX_STEP_CHARS]}")
+
+
+def _dump_tool_calls(observations, limit: int) -> list[str]:
+    tools = [o for o in observations if o.type == "tool"]
+    if not tools:
+        return ["（无工具调用）"]
+    lines = []
+    for i, ob in enumerate(tools):
+        if i >= limit:
+            lines.append(f"…（共 {len(tools)} 个工具调用，仅展示前 {limit} 个）")
+            break
+        lines.append(_tool_step_line(ob))
+    return lines
+
+
+def _tools_aligned_context(trace: Trace, other: Trace | None) -> str:
+    """context_mode="tools_aligned"：只给 judge 看两条 trace 的工具调用
+    （名称+入参+出参），不含 LLM 消息本身，方便对齐 A/B 的工具使用差异。"""
+    lines = ["", "【A 的工具调用】" if other is not None else "【工具调用】"]
+    lines.extend(_dump_tool_calls(trace.observations, MAX_CONTEXT_STEPS))
+    if other is not None:
+        lines.append("【B 的工具调用】")
+        lines.extend(_dump_tool_calls(other.observations, MAX_CONTEXT_STEPS))
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _extract_json(content: str) -> dict:
     start, end = content.find("{"), content.rfind("}")
     if start == -1 or end <= start:
         raise ValueError("no JSON object in judge output")
     return json.loads(content[start:end + 1])
+
+
+def _clamp_score(value: float) -> float:
+    return max(0.0, min(10.0, value))
+
+
+def _extract_dimensions(value, *, pair: bool) -> list[dict] | None:
+    """防御性解析 dimensions：绝不为了凑格式而编造分数——任何解析不出的地方
+    宁可整体为 None（单条目宁可被丢弃），也不能塞假的 0 分。
+
+    - value 不是非空 list：整体判定为没有分维度数据，返回 None。
+    - 逐条目校验：必须是 dict，name 必须属于 JUDGE_DIMENSIONS，对应的分数
+      字段（单一评审 score；成对评审 score_a + score_b）必须都能转成
+      float——任何一条不满足就丢弃这一条，不中断其他条目的解析。
+    - 分数一律 clamp 到 [0, 10]（judge 偶尔会给出超范围的数）。
+    - 过滤后一条都不剩（全部畸形）等价于没有可用数据，同样返回 None。
+    """
+    if not isinstance(value, list) or not value:
+        return None
+    score_keys = ("score_a", "score_b") if pair else ("score",)
+    result = []
+    for item in value:
+        if not isinstance(item, dict) or item.get("name") not in JUDGE_DIMENSIONS:
+            continue
+        try:
+            scores = {k: _clamp_score(float(item[k])) for k in score_keys}
+        except (KeyError, TypeError, ValueError):
+            continue
+        result.append({"name": item["name"], **scores})
+    return result or None
+
+
+def _extract_confidence(value) -> int | None:
+    try:
+        confidence = int(value)
+    except (TypeError, ValueError):
+        return None
+    return confidence if confidence in VALID_CONFIDENCE else None
+
+
+def _extract_bounded_text(value, max_chars: int) -> str | None:
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    return value[:max_chars] if value else None
 
 
 def run_judge(db: Session, subject_trace_id: str, judge_model: str,
@@ -198,9 +326,9 @@ def run_judge(db: Session, subject_trace_id: str, judge_model: str,
         if template is None or template.project_id != subject.project_id:
             raise HTTPException(status_code=400, detail="评分模板不属于该项目")
     rubric = template.content if template is not None else DEFAULT_RUBRIC
-    fingerprint = hashlib.sha256(rubric.encode()).hexdigest()[:16]
+    fingerprint = _fingerprint(rubric)
     # fingerprint 恰好等于 builtin_fingerprint() 时（模板未指定或内容与默认
-    # rubric 相同），无需特判——两者都是同一份内容的 sha256[:16]。
+    # rubric 相同），无需特判——两者都是同一份内容+骨架版本号的 sha256[:16]。
 
     if not force:
         # 缓存按内容指纹而非 judge_template_id 比较：模板被编辑后指纹变化，
@@ -221,17 +349,23 @@ def run_judge(db: Session, subject_trace_id: str, judge_model: str,
             return cached
 
     provider = resolve_provider(db, judge_model, subject.project_id)
-    trace_context = (_trace_context(subject, compare)
-                     if context_mode == "with_trace" else "")
+    if context_mode == "with_trace":
+        trace_context = _trace_context(subject, compare)
+    elif context_mode == "tools_aligned":
+        trace_context = _tools_aligned_context(subject, compare)
+    else:
+        trace_context = ""
     if compare is not None:
         prompt = compose_judge_prompt(rubric, pair=True).format(
             input=_dump(subject.input), model_a=_trace_models(subject),
-            output_a=_dump(subject.output), model_b=_trace_models(compare),
-            output_b=_dump(compare.output), trace_context=trace_context)
+            output_a=_dump(subject.output), metrics_a=_trace_metrics(subject),
+            model_b=_trace_models(compare), output_b=_dump(compare.output),
+            metrics_b=_trace_metrics(compare), trace_context=trace_context)
     else:
         prompt = compose_judge_prompt(rubric, pair=False).format(
             input=_dump(subject.input), model=_trace_models(subject),
-            output=_dump(subject.output), trace_context=trace_context)
+            output=_dump(subject.output), metrics=_trace_metrics(subject),
+            trace_context=trace_context)
 
     try:
         result = chat_completion(provider, judge_model,
@@ -257,6 +391,15 @@ def run_judge(db: Session, subject_trace_id: str, judge_model: str,
             status_code=502,
             detail=f"judge 输出无法解析: {result['content'][:300]}") from e
 
+    # 新字段（dimensions/evidence/evidence_step/confidence）的解析都在核心
+    # verdict/score 解析成功之后进行，且各自都是防御性的（绝不抛异常）——
+    # 一个只返回旧字段的 judge 必须仍然评分成功，新字段全部落 NULL，这是
+    # 优雅降级路径，不是错误。
+    dimensions = _extract_dimensions(parsed.get("dimensions"), pair=compare is not None)
+    evidence = _extract_bounded_text(parsed.get("evidence"), MAX_EVIDENCE_CHARS)
+    evidence_step = _extract_bounded_text(parsed.get("evidence_step"), MAX_EVIDENCE_STEP_CHARS)
+    confidence = _extract_confidence(parsed.get("confidence"))
+
     evaluation = Evaluation(
         project_id=subject.project_id, subject_trace_id=subject_trace_id,
         compare_trace_id=compare_trace_id, judge_model=judge_model,
@@ -264,7 +407,9 @@ def run_judge(db: Session, subject_trace_id: str, judge_model: str,
         verdict=verdict, reasoning=str(parsed.get("reasoning", "")),
         cost=compute_cost(db, judge_model, result["input_tokens"],
                           result["output_tokens"], subject.project_id),
-        judge_template_id=judge_template_id, prompt_fingerprint=fingerprint)
+        judge_template_id=judge_template_id, prompt_fingerprint=fingerprint,
+        dimensions=dimensions, evidence=evidence, evidence_step=evidence_step,
+        confidence=confidence)
     db.add(evaluation)
     db.commit()
     return evaluation

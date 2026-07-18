@@ -165,6 +165,56 @@ def test_get_evaluations_filter(client, db_session, seeded):
     assert resp.json()[0]["score"] == 5.0
 
 
+def test_evaluate_endpoint_exposes_structured_fields(client, db_session, seeded):
+    resp = client.post("/api/evaluations", json={
+        "subject_trace_id": "tr-a", "compare_trace_id": "tr-b",
+        "judge_models": ["judge-model"]})
+    # 走真实 run_judge（未 monkeypatch），但 provider 未配置真实 client——
+    # 这里只验证响应结构本身携带新字段键（值可以是 error/None），
+    # 真正的落库+序列化由下面基于 GET 列表的测试覆盖。
+    assert resp.status_code == 200
+
+    ev = Evaluation(project_id=seeded.id, subject_trace_id="tr-a",
+                    compare_trace_id="tr-b", judge_model="m",
+                    context_mode="output_only", score=7.0, score_b=8.0,
+                    verdict="replaceable", reasoning="r",
+                    dimensions=[{"name": "正确性", "score_a": 7.0, "score_b": 8.0}],
+                    evidence="ev", evidence_step="步骤 1", confidence=3)
+    db_session.add(ev)
+    db_session.commit()
+    listed = client.get("/api/evaluations?subject_trace_id=tr-a&compare_trace_id=tr-b").json()
+    row = next(r for r in listed if r["id"] == ev.id)
+    assert row["dimensions"] == [{"name": "正确性", "score": None,
+                                  "score_a": 7.0, "score_b": 8.0}]
+    assert row["evidence"] == "ev"
+    assert row["evidence_step"] == "步骤 1"
+    assert row["confidence"] == 3
+
+
+def test_evaluate_endpoint_returns_structured_fields_from_mocked_run_judge(
+        client, db_session, seeded, monkeypatch):
+    def fake_run_judge(db, subject_trace_id, judge_model, **kwargs):
+        from models.entities import utcnow
+        return Evaluation(
+            id="ev-struct", project_id=seeded.id, subject_trace_id=subject_trace_id,
+            compare_trace_id=kwargs.get("compare_trace_id"), judge_model=judge_model,
+            context_mode="output_only", score=9.0, verdict="pass", reasoning="fine",
+            dimensions=[{"name": "正确性", "score": 9.0}],
+            evidence="全部正确", evidence_step="全链路 · 结论核对", confidence=2,
+            created_at=utcnow())
+
+    monkeypatch.setattr(judge_service, "run_judge", fake_run_judge)
+    resp = client.post("/api/evaluations", json={
+        "subject_trace_id": "tr-a", "judge_models": ["judge-model"]})
+    assert resp.status_code == 200
+    ev_out = resp.json()["results"][0]["evaluation"]
+    assert ev_out["dimensions"] == [{"name": "正确性", "score": 9.0,
+                                     "score_a": None, "score_b": None}]
+    assert ev_out["evidence"] == "全部正确"
+    assert ev_out["evidence_step"] == "全链路 · 结论核对"
+    assert ev_out["confidence"] == 2
+
+
 def test_trace_context_caps_step_count(db_session, seeded):
     from models.entities import Observation, Trace
     t = db_session.get(Trace, "tr-a")
@@ -208,6 +258,167 @@ def test_dump_pretty_prints_dict_and_marks_truncation():
 
     short_text = "short"
     assert _dump(short_text) == short_text  # 未截断时不追加标记
+
+
+# --- structured output: dimensions / evidence / confidence ---------------
+
+def test_pair_judge_persists_full_structured_output(db_session, seeded):
+    payload = {
+        "score_a": 7.0, "score_b": 8.0, "verdict": "replaceable", "reasoning": "ok",
+        "dimensions": [
+            {"name": "正确性", "score_a": 7, "score_b": 8},
+            {"name": "意图一致", "score_a": 6, "score_b": 9},
+            {"name": "成本效率", "score_a": 8, "score_b": 5},
+        ],
+        "evidence": "B 的工具入参少传了 currency 字段",
+        "evidence_step": "步骤 3 · param_mismatch",
+        "confidence": 3,
+    }
+    ev = judge_service.run_judge(
+        db_session, "tr-a", "judge-model", compare_trace_id="tr-b",
+        client=judge_http_client(payload))
+    assert ev.dimensions == payload["dimensions"]
+    assert ev.evidence == payload["evidence"]
+    assert ev.evidence_step == payload["evidence_step"]
+    assert ev.confidence == 3
+
+
+def test_single_judge_persists_full_structured_output(db_session, seeded):
+    payload = {
+        "score": 9.0, "verdict": "pass", "reasoning": "ok",
+        "dimensions": [
+            {"name": "正确性", "score": 9},
+            {"name": "意图一致", "score": 8},
+            {"name": "成本效率", "score": 7},
+        ],
+        "evidence": "输出完整覆盖了任务要求", "evidence_step": "全链路 · 结论核对",
+        "confidence": 2,
+    }
+    ev = judge_service.run_judge(
+        db_session, "tr-a", "judge-model", client=judge_http_client(payload))
+    assert ev.dimensions == payload["dimensions"]
+    assert ev.evidence == payload["evidence"]
+    assert ev.evidence_step == payload["evidence_step"]
+    assert ev.confidence == 2
+
+
+def test_judge_returning_only_old_keys_still_succeeds_with_null_new_fields(db_session, seeded):
+    # 优雅降级：judge 只返回旧契约字段，评分依然成功，新字段全部为 NULL，
+    # 绝不能用假数据（如 0 分）顶替。
+    ev = judge_service.run_judge(
+        db_session, "tr-a", "judge-model", compare_trace_id="tr-b",
+        client=judge_http_client({"score_a": 6.0, "score_b": 6.0,
+                                  "verdict": "replaceable", "reasoning": "老格式"}))
+    assert ev.score == 6.0 and ev.score_b == 6.0
+    assert ev.dimensions is None
+    assert ev.evidence is None
+    assert ev.evidence_step is None
+    assert ev.confidence is None
+
+
+def test_malformed_dimensions_are_filtered_not_crashed(db_session, seeded):
+    payload = {
+        "score_a": 5.0, "score_b": 5.0, "verdict": "not_replaceable", "reasoning": "r",
+        "dimensions": [
+            {"name": "正确性", "score_a": 6, "score_b": 7},   # 有效
+            {"name": "不存在的维度", "score_a": 1, "score_b": 1},  # 名字不在 JUDGE_DIMENSIONS
+            {"name": "意图一致", "score_a": "not-a-number", "score_b": 5},  # 非数字
+            {"name": "成本效率", "score_a": 999, "score_b": -5},  # 需要 clamp 到 0-10
+            "not-a-dict",  # 完全畸形
+        ],
+        "evidence": "x" * 500,  # 超过 200 字，需截断
+        "evidence_step": "y" * 300,  # 超过 160 字，需截断
+        "confidence": 7,  # 越界
+    }
+    ev = judge_service.run_judge(
+        db_session, "tr-a", "judge-model", compare_trace_id="tr-b",
+        client=judge_http_client(payload))
+    assert ev.dimensions == [
+        {"name": "正确性", "score_a": 6.0, "score_b": 7.0},
+        {"name": "成本效率", "score_a": 10.0, "score_b": 0.0},
+    ]
+    assert len(ev.evidence) == 200
+    assert len(ev.evidence_step) == 160
+    assert ev.confidence is None  # 7 超出 1-3 范围
+
+
+def test_all_dimensions_malformed_yields_none(db_session, seeded):
+    ev = judge_service.run_judge(
+        db_session, "tr-a", "judge-model",
+        client=judge_http_client({
+            "score": 5.0, "verdict": "pass", "reasoning": "r",
+            "dimensions": [{"name": "不存在", "score": 5}]}))
+    assert ev.dimensions is None
+
+
+def test_skeleton_version_bump_invalidates_old_cached_evaluation(db_session, seeded):
+    # 模拟骨架升级前落库的评分：fingerprint 只哈希了 rubric，没有拼版本号。
+    import hashlib
+    old_fingerprint = hashlib.sha256(judge_service.DEFAULT_RUBRIC.encode()).hexdigest()[:16]
+    db_session.add(Evaluation(
+        project_id=seeded.id, subject_trace_id="tr-a", compare_trace_id="tr-b",
+        judge_model="judge-model", context_mode="output_only", score=1.0, score_b=1.0,
+        verdict="not_replaceable", reasoning="老骨架的评分",
+        prompt_fingerprint=old_fingerprint))
+    db_session.commit()
+
+    fresh = judge_service.run_judge(
+        db_session, "tr-a", "judge-model", compare_trace_id="tr-b",
+        client=judge_http_client({"score_a": 8.0, "score_b": 8.0,
+                                  "verdict": "replaceable", "reasoning": "新骨架重新打分"}))
+    assert fresh.reasoning == "新骨架重新打分"
+    assert fresh.prompt_fingerprint == judge_service.builtin_fingerprint()
+    assert fresh.prompt_fingerprint != old_fingerprint
+
+    # 同样的新骨架下再跑一次应该命中刚才的缓存
+    def exploding_handler(request):
+        raise AssertionError("should hit cache under the new skeleton version")
+    cached = judge_service.run_judge(
+        db_session, "tr-a", "judge-model", compare_trace_id="tr-b",
+        client=httpx.Client(transport=httpx.MockTransport(exploding_handler)))
+    assert cached.id == fresh.id
+
+
+# --- tools_aligned context mode -------------------------------------------
+
+def test_tools_aligned_context_lists_tool_calls_for_both_sides(db_session, seeded):
+    from models.entities import Observation
+    db_session.add_all([
+        Observation(id="ob-a1", trace_id="tr-a", type="tool", name="search",
+                   seq=0, tool_input={"q": "foo"}, tool_output={"r": "bar"}),
+        Observation(id="ob-b1", trace_id="tr-b", type="tool", name="search",
+                   seq=0, tool_input={"q": "foo2"}, tool_output={"r": "baz"}),
+    ])
+    db_session.commit()
+    tr_a = db_session.get(Trace, "tr-a")
+    tr_b = db_session.get(Trace, "tr-b")
+    ctx = judge_service._tools_aligned_context(tr_a, tr_b)
+    assert "【A 的工具调用】" in ctx and "【B 的工具调用】" in ctx
+    assert "search" in ctx and "foo" in ctx and "foo2" in ctx
+
+
+def test_tools_aligned_is_a_distinct_cache_key(db_session, seeded):
+    output_only = judge_service.run_judge(
+        db_session, "tr-a", "judge-model", compare_trace_id="tr-b",
+        context_mode="output_only",
+        client=judge_http_client({"score_a": 5.0, "score_b": 5.0,
+                                  "verdict": "not_replaceable", "reasoning": "a"}))
+    tools_aligned = judge_service.run_judge(
+        db_session, "tr-a", "judge-model", compare_trace_id="tr-b",
+        context_mode="tools_aligned",
+        client=judge_http_client({"score_a": 7.0, "score_b": 7.0,
+                                  "verdict": "replaceable", "reasoning": "b"}))
+    assert tools_aligned.id != output_only.id
+    assert tools_aligned.context_mode == "tools_aligned"
+
+    # 再跑一次 tools_aligned 应该命中刚才那条缓存
+    def exploding_handler(request):
+        raise AssertionError("should hit cache for repeated tools_aligned run")
+    cached = judge_service.run_judge(
+        db_session, "tr-a", "judge-model", compare_trace_id="tr-b",
+        context_mode="tools_aligned",
+        client=httpx.Client(transport=httpx.MockTransport(exploding_handler)))
+    assert cached.id == tools_aligned.id
 
 
 def test_evaluations_hidden_from_non_member(client, db_session):

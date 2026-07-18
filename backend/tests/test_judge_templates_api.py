@@ -135,37 +135,55 @@ def test_default_rubric_contains_identity_and_criteria():
 def test_compose_judge_prompt_locks_json_tail_and_keeps_task_sections():
     single = judge_service.compose_judge_prompt(
         judge_service.DEFAULT_RUBRIC, pair=False).format(
-        input="IN", model="M", output="OUT", trace_context="")
+        input="IN", model="M", output="OUT", metrics="MET", trace_context="")
     assert judge_service.DEFAULT_RUBRIC in single
     assert "【任务输入】" in single and "IN" in single
     assert "【候选输出】" in single and "OUT" in single
-    assert ('{"score": <number>, "verdict": "pass" 或 "fail", '
-           '"reasoning": "<中文理由>"}') in single
+    assert '"score": <number>' in single
+    assert '"verdict": "pass" 或 "fail"' in single
+    assert '"reasoning": "<中文理由>"' in single
+    assert '"dimensions"' in single
+    assert '"evidence"' in single and '"evidence_step"' in single
+    assert '"confidence"' in single
 
     pair = judge_service.compose_judge_prompt(
         judge_service.DEFAULT_RUBRIC, pair=True).format(
-        input="IN", model_a="MA", output_a="OA", model_b="MB", output_b="OB",
-        trace_context="")
+        input="IN", model_a="MA", output_a="OA", metrics_a="MA-MET",
+        model_b="MB", output_b="OB", metrics_b="MB-MET", trace_context="")
     assert judge_service.DEFAULT_RUBRIC in pair
     assert "【候选输出 A】" in pair and "【候选输出 B】" in pair
-    assert ('{"score_a": <number>, "score_b": <number>, '
-           '"verdict": "replaceable" 或 "not_replaceable", '
-           '"reasoning": "<中文理由>"}') in pair
+    assert '"score_a": <number>' in pair and '"score_b": <number>' in pair
+    assert '"verdict": "replaceable" 或 "not_replaceable"' in pair
+    assert '"reasoning": "<中文理由>"' in pair
+    assert '"dimensions"' in pair
+    assert '"evidence"' in pair and '"evidence_step"' in pair
+    assert '"confidence"' in pair
+
+
+def test_skeletons_mention_every_judge_dimension():
+    # 骨架里 JSON 尾部的维度名是字面写死的（不是从 JUDGE_DIMENSIONS 动态拼出来
+    # 的），这个测试防止两者未来漂移。
+    for dim in judge_service.JUDGE_DIMENSIONS:
+        assert dim in judge_service.SINGLE_SKELETON
+        assert dim in judge_service.PAIR_SKELETON
 
 
 def test_custom_rubric_replaces_default_in_composed_prompt():
     custom = "你是宽松的评审，只关心结论对不对。"
     prompt = judge_service.compose_judge_prompt(custom, pair=False).format(
-        input="IN", model="M", output="OUT", trace_context="")
+        input="IN", model="M", output="OUT", metrics="MET", trace_context="")
     assert custom in prompt
     assert judge_service.DEFAULT_RUBRIC not in prompt
     # locked JSON tail unaffected by rubric swap
     assert '"verdict": "pass" 或 "fail"' in prompt
+    assert '"dimensions"' in prompt
 
 
 def test_builtin_fingerprint_is_stable_sha256_prefix():
     import hashlib
-    expected = hashlib.sha256(judge_service.DEFAULT_RUBRIC.encode()).hexdigest()[:16]
+    expected = hashlib.sha256(
+        f"{judge_service.SKELETON_VERSION}:{judge_service.DEFAULT_RUBRIC}".encode()
+    ).hexdigest()[:16]
     assert judge_service.builtin_fingerprint() == expected
     assert len(judge_service.builtin_fingerprint()) == 16
 
