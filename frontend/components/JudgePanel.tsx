@@ -16,7 +16,7 @@ import {
 import { MetricText } from "@/components/MetricText";
 import { EmptyState } from "@/components/EmptyState";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -535,11 +535,8 @@ export function JudgePanel({
   );
 
   return (
-    <Card className="sticky top-6 self-start">
-      <CardHeader className="pb-3">
-        <p className="text-sm font-semibold">多模型评分</p>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <Card>
+      <CardContent className="space-y-4 pt-6">
         {judgeModels.length === 0 ? (
           <EmptyState
             icon={Gavel}

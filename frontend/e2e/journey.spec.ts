@@ -99,13 +99,12 @@ test("full journey: project -> ingest -> traces -> compare -> judge -> replay ->
   await page.getByRole("link", { name: "开始对比" }).click();
   await expect(page).toHaveURL(/\/compare\?a=.+&b=.+/);
 
-  // four metric cards (single mount now — compare page renders either the desktop
-  // grid or the mobile tabs, never both; .first() kept defensively but no longer
-  // strictly required at the Desktop Chrome viewport this suite runs at)
-  await expect(page.getByText("总成本").first()).toBeVisible();
-  await expect(page.getByText("总延迟").first()).toBeVisible();
-  await expect(page.getByText("Tokens (in)").first()).toBeVisible();
-  await expect(page.getByText("步数").first()).toBeVisible();
+  // 差异摘要 four metric cards (陪审团改版后标签：成本/延迟/输入 token/输出 token)
+  await expect(page.getByText("差异摘要").first()).toBeVisible();
+  await expect(page.getByText("成本", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("延迟", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("输入 token").first()).toBeVisible();
+  await expect(page.getByText("输出 token").first()).toBeVisible();
 
   // aligned rows with a param mismatch warning chip (different city args)
   await expect(page.getByText("参数偏离").first()).toBeVisible();

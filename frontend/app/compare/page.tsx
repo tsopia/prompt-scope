@@ -18,9 +18,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useProject } from "@/contexts/ProjectContext";
-import { useIsDesktop } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 
 // D1（UI 重设计计划附录）：收藏/最近的对比本次只落 localStorage，不新增后端持久化表
@@ -550,7 +548,6 @@ function CompareContent() {
   const [a, setA] = useState<TraceDetail | null>(null);
   const [b, setB] = useState<TraceDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const isDesktop = useIsDesktop();
 
   useEffect(() => {
     setA(null); setB(null); setError(null);
@@ -631,37 +628,23 @@ function CompareContent() {
     </div>
   );
 
-  const judgeColumn = (
-    <JudgePanel
-      subjectId={a.id}
-      compareId={b.id}
-      projectId={a.project_id}
-      modelA={firstLlmModel(a)}
-      modelB={firstLlmModel(b)}
-    />
-  );
-
+  // 设计稿是单列全宽三段堆叠：差异摘要 → 对齐视图 → 多模型评分。陪审团评分 UI
+  // （计分板/光谱/聊天气泡）需要全宽，不塞进右侧窄栏、也不藏进 tab。
   return (
     <div className="p-6">
-      {isDesktop ? (
-        <div className="grid grid-cols-[1fr_360px] gap-6">
-          {mainColumn}
-          {judgeColumn}
-        </div>
-      ) : (
-        <Tabs defaultValue="aligned">
-          <TabsList>
-            <TabsTrigger value="aligned">对齐视图</TabsTrigger>
-            <TabsTrigger value="judge">多模型评分</TabsTrigger>
-          </TabsList>
-          <TabsContent value="aligned" className="mt-4">
-            {mainColumn}
-          </TabsContent>
-          <TabsContent value="judge" className="mt-4">
-            {judgeColumn}
-          </TabsContent>
-        </Tabs>
-      )}
+      <div className="mx-auto max-w-5xl space-y-6">
+        {mainColumn}
+        <section className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-text-3">多模型评分</p>
+          <JudgePanel
+            subjectId={a.id}
+            compareId={b.id}
+            projectId={a.project_id}
+            modelA={firstLlmModel(a)}
+            modelB={firstLlmModel(b)}
+          />
+        </section>
+      </div>
     </div>
   );
 }
