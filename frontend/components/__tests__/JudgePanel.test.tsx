@@ -1,6 +1,7 @@
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { api, type Evaluation, type JudgeModel, type JudgeTemplate } from "@/lib/api";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { JudgePanel } from "../JudgePanel";
 
 // jsdom 未实现 scrollIntoView / hasPointerCapture，Radix Select 打开下拉时会调用它们。
@@ -68,10 +69,18 @@ const evaluation: Evaluation = {
   created_at: "2026-01-04T00:00:00Z",
   judge_template_id: "tmpl-1",
   judge_template_name: "严格版",
+  dimensions: null,
+  evidence: null,
+  evidence_step: null,
+  confidence: null,
 };
 
 function renderPanel() {
-  return render(<JudgePanel subjectId="trace-a" compareId="trace-b" projectId="proj-1" />);
+  return render(
+    <TooltipProvider>
+      <JudgePanel subjectId="trace-a" compareId="trace-b" projectId="proj-1" />
+    </TooltipProvider>,
+  );
 }
 
 // 选中裁判模型：先打开 DropdownMenu（触发按钮文案是「已选 N 个模型」，不是模型名本身），
@@ -162,5 +171,76 @@ describe("JudgePanel — 评分模板", () => {
     await waitFor(() => {
       expect(screen.getByText("模板 · 严格版")).toBeDefined();
     });
+  });
+});
+
+describe("JudgePanel — 上下文模式", () => {
+  beforeEach(() => {
+    memoryStorage.clear();
+    vi.mocked(api.getJudgeModels).mockReset().mockResolvedValue(judgeModels);
+    vi.mocked(api.getJudgeTemplates).mockReset().mockResolvedValue([]);
+    vi.mocked(api.getEvaluations).mockReset().mockResolvedValue([]);
+  });
+
+  it("offers all three context modes, including the new 工具输出对齐", async () => {
+    renderPanel();
+    await waitFor(() => expect(screen.getByText("仅最终输出")).toBeDefined());
+
+    fireEvent.click(screen.getByText("仅最终输出"));
+    await screen.findByText("完整对话", { selector: "[role=option] *, [role=option]" });
+    expect(screen.getByText("工具输出对齐", { selector: "[role=option] *, [role=option]" })).toBeDefined();
+  });
+});
+
+describe("JudgePanel — 陪审团式评分结果（维度/证据/置信）", () => {
+  const baseEval = evaluation;
+
+  beforeEach(() => {
+    memoryStorage.clear();
+    vi.mocked(api.getJudgeModels).mockReset().mockResolvedValue(judgeModels);
+    vi.mocked(api.getJudgeTemplates).mockReset().mockResolvedValue([]);
+  });
+
+  it("omits dimension bars, evidence block and confidence dots when all three are null", async () => {
+    vi.mocked(api.getEvaluations).mockReset().mockResolvedValue([baseEval]);
+    renderPanel();
+
+    await waitFor(() => expect(screen.getByText("gpt-4o")).toBeDefined());
+    expect(screen.queryByText("证据")).toBeNull();
+    expect(screen.queryByText("置信")).toBeNull();
+  });
+
+  it("renders dimension split bars, evidence block and confidence dots when present", async () => {
+    const richEval: Evaluation = {
+      ...baseEval,
+      dimensions: [
+        { name: "准确性", score: null, score_a: 8, score_b: 6 },
+        { name: "完整性", score: null, score_a: 7, score_b: 7 },
+      ],
+      evidence: "B 在 charge_payment 使用了 saved_card，与 A 的 default_card 不一致。",
+      evidence_step: "step 4",
+      confidence: 3,
+    };
+    vi.mocked(api.getEvaluations).mockReset().mockResolvedValue([richEval]);
+    renderPanel();
+
+    await waitFor(() => expect(screen.getByText("准确性")).toBeDefined());
+    expect(screen.getByText("完整性")).toBeDefined();
+    expect(screen.getByText("证据")).toBeDefined();
+    expect(screen.getByText("step 4")).toBeDefined();
+    expect(screen.getByText(/charge_payment/)).toBeDefined();
+    expect(screen.getByText("置信")).toBeDefined();
+  });
+
+  it("aggregates verdicts into a 合议汇总 tally and consensus sentence", async () => {
+    const judgeB: Evaluation = {
+      ...baseEval, id: "eval-2", judge_model: "claude-3.5-sonnet",
+      verdict: "replaceable", score: 8, score_b: 9,
+    };
+    vi.mocked(api.getEvaluations).mockReset().mockResolvedValue([baseEval, judgeB]);
+    renderPanel();
+
+    await waitFor(() => expect(screen.getByText("合议汇总")).toBeDefined());
+    expect(screen.getByText("2 位裁判")).toBeDefined();
   });
 });

@@ -1,15 +1,25 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ChevronDown, Gavel } from "lucide-react";
-import { api, Evaluation, JudgeModel, JudgeRunResult, JudgeTemplate } from "@/lib/api";
+import { ChevronDown, Gavel, Zap } from "lucide-react";
+import { api, DimensionScore, Evaluation, JudgeModel, JudgeRunResult, JudgeTemplate } from "@/lib/api";
 import { formatCost } from "@/lib/format";
+import {
+  classifyVerdict,
+  consensusSentence,
+  judgeSpectrumPosition,
+  majorityLabel,
+  splitPct,
+  tallyVerdicts,
+  type VerdictTally,
+} from "@/lib/juryTally";
 import { MetricText } from "@/components/MetricText";
 import { EmptyState } from "@/components/EmptyState";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -25,13 +35,13 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-// D2: 后端支持 output_only / with_trace / tools_aligned 三种口径，本次前端只映射既有
-// 两种（完整对话→with_trace，仅最终输出→output_only）；tools_aligned 属降级项延后
-// （见 docs/superpowers/plans/2026-07-10-ui-redesign-implementation-plan.md D2）。
-type ContextMode = "with_trace" | "output_only";
+// 后端（backend/schemas/evaluations.py EvaluateRequest.context_mode）支持三种口径：
+// with_trace（完整对话）/ output_only（仅最终输出）/ tools_aligned（工具输出对齐）。
+type ContextMode = "with_trace" | "output_only" | "tools_aligned";
 const CONTEXT_OPTIONS: { value: ContextMode; label: string }[] = [
   { value: "with_trace", label: "完整对话" },
   { value: "output_only", label: "仅最终输出" },
+  { value: "tools_aligned", label: "工具输出对齐" },
 ];
 
 // 「系统默认」不是一条 judge_templates 记录，选中它时请求体里省略 judge_template_id，
@@ -54,31 +64,25 @@ function dedupeLatestByJudgeContext(evaluations: Evaluation[]): Evaluation[] {
   });
 }
 
-// D3: 后端 Evaluation.verdict 只有 replaceable/not_replaceable 两态原始判决（见
-// CLAUDE.md Key Design Decisions）；三值展示文案（可替代/两者相当/倾向保留 A）按
-// verdict + 分差在前端映射，后端三值 schema 本次降级延后。
-const TIE_THRESHOLD = 0.3;
-
-function isTie(ev: Evaluation): boolean {
-  return ev.score !== null && ev.score_b !== null && Math.abs(ev.score - ev.score_b) <= TIE_THRESHOLD;
-}
-
+// verdict 三态展示文案（可替代/两者相当/倾向保留 A）由 lib/juryTally.classifyVerdict
+// 统一判定（replaceable→B, not_replaceable+分差小→TIE, 其余 not_replaceable→A），
+// 这里只负责映射成中文文案，判定逻辑不重复。
 function verdictText(ev: Evaluation): string {
-  if (ev.verdict === "replaceable") return "B 可替代 A";
-  if (ev.verdict === "not_replaceable") return isTie(ev) ? "两者相当" : "倾向保留 A";
-  return ev.verdict ?? "—";
+  const category = classifyVerdict(ev);
+  if (category === "B") return "B 可替代 A";
+  if (category === "A") return "倾向保留 A";
+  return "两者相当";
 }
 
-// D3 三态映射（见 CLAUDE.md）：replaceable→绿, "两者相当"(打平)→中性灰（StatusBadge
-// 无对应 kind，保留自定义样式), 其余 not_replaceable("倾向保留 A")→琥珀 —— 与设计稿
-// docs/design/Compare.dc.html 的 verdictMap（kind: pass/warn/tie）逐一对应，不是随意配色；
-// 绿/琥珀两态复用 StatusBadge 而非各自手搓 pill，避免与全局徽章样式漂移。
+// 三态映射（见 CLAUDE.md 状态色约定）：B（可替代）→绿, TIE（两者相当）→中性灰,
+// A（倾向保留 A）→琥珀。复用 StatusBadge 而非各自手搓 pill，避免与全局徽章样式漂移。
 function VerdictBadge({ ev }: { ev: Evaluation }) {
+  const category = classifyVerdict(ev);
   const text = verdictText(ev);
-  if (ev.verdict === "replaceable") {
+  if (category === "B") {
     return <StatusBadge kind="success" label={text} />;
   }
-  if (ev.verdict === "not_replaceable" && isTie(ev)) {
+  if (category === "TIE") {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full border border-border-soft bg-bg-grid px-2.5 py-0.5 text-[11.5px] font-semibold text-text-3">
         {text}
@@ -88,39 +92,93 @@ function VerdictBadge({ ev }: { ev: Evaluation }) {
   return <StatusBadge kind="warning" label={text} />;
 }
 
-// context_mode 展示 chip：复用 CONTEXT_OPTIONS 的中文文案，未知取值原样展示（防御性兜底）。
-function ContextModeChip({ mode }: { mode: string }) {
-  const label = CONTEXT_OPTIONS.find((o) => o.value === mode)?.label ?? mode;
-  return (
-    <span className="rounded-md border border-border-soft bg-bg-grid px-1.5 py-0.5 font-mono text-[10.5px] text-text-3">
-      {label}
-    </span>
-  );
-}
-
 const scoreText = (score: number | null): string => (score !== null ? score.toFixed(1) : "—");
 
-// pair 模式紧凑展示「A 8.2 · B 8.6」，分高的一侧加粗强调；single 模式只有一个分数。
-function ScoreDisplay({ ev }: { ev: Evaluation }) {
-  if (ev.score_b === null) {
+// A/B 对决条：A 分数 · 按比例分色的横条 · B 分数。单侧评审（score_b 为 null）时退化成单个分数。
+function DuelBar({ scoreA, scoreB }: { scoreA: number | null; scoreB: number | null }) {
+  if (scoreA === null && scoreB === null) return null;
+  if (scoreB === null) {
     return (
-      <span className="font-mono text-sm font-semibold tabular-nums text-foreground">
-        {scoreText(ev.score)}
+      <span className="font-mono text-sm font-semibold tabular-nums">
+        {scoreText(scoreA)}
         <span className="ml-1 font-sans text-xs font-normal text-muted-foreground">/ 10</span>
       </span>
     );
   }
-  const aHigher = (ev.score ?? -Infinity) >= (ev.score_b ?? -Infinity);
+  const aPct = splitPct(scoreA, scoreB);
   return (
-    <span className="font-mono text-sm tabular-nums">
-      <span className={cn(aHigher ? "font-semibold text-foreground" : "text-muted-foreground")}>
-        A {scoreText(ev.score)}
+    <div className="flex items-center gap-2.5">
+      <span className="w-14 shrink-0 font-mono text-xs font-semibold tabular-nums text-primary">
+        A {scoreText(scoreA)}
       </span>
-      <span className="mx-1.5 text-text-3">·</span>
-      <span className={cn(!aHigher ? "font-semibold text-foreground" : "text-muted-foreground")}>
-        B {scoreText(ev.score_b)}
+      <div className="flex h-2 flex-1 overflow-hidden rounded-full bg-bg-grid">
+        <div className="h-full bg-primary" style={{ width: `${aPct}%` }} />
+        <div className="h-full bg-replay" style={{ width: `${100 - aPct}%` }} />
+      </div>
+      <span className="w-14 shrink-0 text-right font-mono text-xs font-semibold tabular-nums text-replay-fg">
+        B {scoreText(scoreB)}
       </span>
-    </span>
+    </div>
+  );
+}
+
+// 一条评审维度：成对评审用 score_a/score_b 拆分横条，单一评审只有 score 时是单色实心条。
+function DimensionRow({ dim }: { dim: DimensionScore }) {
+  const isPair = dim.score_a !== null || dim.score_b !== null;
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="w-24 shrink-0 truncate text-text-3">{dim.name}</span>
+      {isPair ? (
+        <>
+          <div className="flex h-1.5 flex-1 overflow-hidden rounded-full bg-bg-grid">
+            <div className="h-full bg-primary" style={{ width: `${splitPct(dim.score_a, dim.score_b)}%` }} />
+            <div className="h-full bg-replay" style={{ width: `${100 - splitPct(dim.score_a, dim.score_b)}%` }} />
+          </div>
+          <MetricText
+            value={`${scoreText(dim.score_a)} · ${scoreText(dim.score_b)}`}
+            className="w-16 shrink-0 text-right text-[11px] text-muted-foreground"
+          />
+        </>
+      ) : (
+        <>
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-bg-grid">
+            <div className="h-full bg-primary" style={{ width: `${((dim.score ?? 0) / 10) * 100}%` }} />
+          </div>
+          <MetricText value={scoreText(dim.score)} className="w-16 shrink-0 text-right text-[11px] text-muted-foreground" />
+        </>
+      )}
+    </div>
+  );
+}
+
+function EvidenceBlock({ evidence, step }: { evidence: string; step: string | null }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2 text-[11.5px] text-text-3">
+        <span>证据</span>
+        {step && (
+          <span className="rounded-md border border-border-soft bg-bg-grid px-1.5 py-0.5 font-mono text-[10.5px] text-text-3">
+            {step}
+          </span>
+        )}
+      </div>
+      <div className="whitespace-pre-wrap rounded-md bg-bg-grid p-3 font-mono text-[12px] leading-relaxed text-muted-foreground">
+        {evidence}
+      </div>
+    </div>
+  );
+}
+
+function ConfidenceDots({ confidence }: { confidence: 1 | 2 | 3 }) {
+  return (
+    <div className="flex items-center gap-1.5 text-[11.5px] text-text-3">
+      <span>置信</span>
+      <span className="flex items-center gap-1">
+        {[1, 2, 3].map((i) => (
+          <span key={i} className={cn("h-1.5 w-1.5 rounded-full", i <= confidence ? "bg-primary" : "bg-muted")} />
+        ))}
+      </span>
+    </div>
   );
 }
 
@@ -153,26 +211,115 @@ function ReasoningPanel({ text }: { text: string }) {
   );
 }
 
-function EvalCard({
-  ev, cached, onRerun, rerunning,
+// 合议摘要条：真实裁判 verdict 的客观聚合展示，不是额外的一位裁判。
+function JurySummaryStrip({ evaluations }: { evaluations: Evaluation[] }) {
+  const t = tallyVerdicts(evaluations);
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-md border border-border-soft bg-bg-grid px-3 py-2 text-xs">
+      <span className="font-semibold text-foreground">{t.total} 位裁判</span>
+      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+        <span className="h-1.5 w-1.5 rounded-full bg-replay" />
+        {t.b} 判 B 可替代
+      </span>
+      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+        <span className="h-1.5 w-1.5 rounded-full bg-warning" />
+        {t.a} 判 A 保留
+      </span>
+      <span className="ml-auto font-semibold text-foreground">最终：{majorityLabel(t)}</span>
+    </div>
+  );
+}
+
+function boardAverage(evs: Evaluation[], key: "score" | "score_b"): number | null {
+  const vals = evs.map((e) => e[key]).filter((v): v is number => v !== null);
+  if (vals.length === 0) return null;
+  return vals.reduce((s, v) => s + v, 0) / vals.length;
+}
+
+// 计分板：A/B 均分对决 + 频谱条（每位裁判的判决沿「保留 A ←→ B 可替代」轴定位）。
+function Scoreboard({ evaluations, modelA, modelB }: { evaluations: Evaluation[]; modelA: string; modelB: string }) {
+  const boardA = boardAverage(evaluations, "score");
+  const boardB = boardAverage(evaluations, "score_b");
+  return (
+    <div className="space-y-3 rounded-md border border-border-soft p-3">
+      <div className="flex items-center justify-between gap-2 text-sm">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary/15 text-[10px] font-bold text-primary">
+            A
+          </span>
+          <span className="truncate font-medium text-muted-foreground">{modelA}</span>
+          <MetricText value={boardA !== null ? boardA.toFixed(1) : "—"} className="text-base font-bold" />
+        </span>
+        <span className="shrink-0 text-xs font-semibold text-text-3">VS</span>
+        <span className="flex min-w-0 items-center justify-end gap-2">
+          <MetricText value={boardB !== null ? boardB.toFixed(1) : "—"} className="text-base font-bold" />
+          <span className="truncate font-medium text-muted-foreground">{modelB}</span>
+          <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-replay/15 text-[10px] font-bold text-replay-fg">
+            B
+          </span>
+        </span>
+      </div>
+      <div className="space-y-1.5">
+        <div className="flex justify-between text-[10px] text-text-3">
+          <span>← 保留 A</span>
+          <span>B 可替代 →</span>
+        </div>
+        <div className="relative h-1.5 rounded-full bg-bg-grid">
+          {evaluations.map((ev) => {
+            const category = classifyVerdict(ev);
+            const dotClass = category === "B" ? "bg-replay" : category === "A" ? "bg-warning" : "bg-text-3";
+            return (
+              <Tooltip key={ev.id}>
+                <TooltipTrigger asChild>
+                  <span
+                    className={cn(
+                      "absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 cursor-default rounded-full border-2 border-background",
+                      dotClass,
+                    )}
+                    style={{ left: `${judgeSpectrumPosition(ev)}%` }}
+                  />
+                </TooltipTrigger>
+                <TooltipContent>
+                  {ev.judge_model} · {verdictText(ev)}
+                </TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 一位裁判的完整发言：verdict + 对决条 + 维度（可选）+ 证据（可选）+ 理由 + 置信（可选）。
+// dimensions/evidence/confidence 任一为 null/空时整体省略对应子块——绝不补 0 或假文案。
+function JuryBubble({
+  ev, cached, onRerun, rerunning, index,
 }: {
   ev: Evaluation;
   cached: boolean;
   onRerun: (judgeModel: string) => void;
   rerunning: boolean;
+  index: number;
 }) {
   return (
-    <Card>
+    <Card
+      className="animate-in fade-in-0 slide-in-from-bottom-1 duration-300"
+      style={{ animationDelay: `${Math.min(index, 6) * 60}ms` }}
+    >
       <CardContent className="space-y-3 p-4">
         <div className="flex flex-wrap items-center gap-2">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border-soft bg-bg-grid text-[11px] font-bold text-muted-foreground">
+            {ev.judge_model.charAt(0).toUpperCase()}
+          </span>
           <span className="font-mono text-[12.5px] font-semibold">{ev.judge_model}</span>
           <VerdictBadge ev={ev} />
           {cached && (
-            <span className="rounded-md border border-border px-1.5 py-0.5 font-mono text-[10.5px] text-text-3">
-              已缓存
+            <span className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-[10.5px] text-text-3">
+              <Zap className="h-3 w-3" />
+              缓存命中
             </span>
           )}
-          <ContextModeChip mode={ev.context_mode} />
           {ev.judge_template_name && (
             <span className="rounded-md border border-border-soft bg-bg-grid px-1.5 py-0.5 font-mono text-[10.5px] text-text-3">
               模板 · {ev.judge_template_name}
@@ -188,18 +335,69 @@ function EvalCard({
             重新评分
           </Button>
         </div>
-        <ScoreDisplay ev={ev} />
+
+        <DuelBar scoreA={ev.score} scoreB={ev.score_b} />
+
+        {ev.dimensions && ev.dimensions.length > 0 && (
+          <div className="space-y-1.5 border-t border-border-soft pt-2.5">
+            {ev.dimensions.map((d) => (
+              <DimensionRow key={d.name} dim={d} />
+            ))}
+          </div>
+        )}
+
+        {ev.evidence && <EvidenceBlock evidence={ev.evidence} step={ev.evidence_step} />}
+
         {ev.reasoning && <ReasoningPanel text={ev.reasoning} />}
-        <p className="text-xs text-muted-foreground">
-          <MetricText value={formatCost(ev.cost)} /> · {new Date(ev.created_at).toLocaleString("zh-CN")}
-        </p>
+
+        <div className="flex items-center justify-between gap-2">
+          {ev.confidence !== null ? <ConfidenceDots confidence={ev.confidence} /> : <span />}
+          <p className="shrink-0 text-xs text-muted-foreground">
+            <MetricText value={formatCost(ev.cost)} /> · {new Date(ev.created_at).toLocaleString("zh-CN")}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// 合议汇总：真实 verdict 的客观聚合投票 + 一句话结论，标注为「合议汇总」而非又一位裁判。
+function ConsensusBubble({ evaluations }: { evaluations: Evaluation[] }) {
+  const t: VerdictTally = tallyVerdicts(evaluations);
+  return (
+    <Card className="animate-in fade-in-0 border-dashed duration-300">
+      <CardContent className="space-y-2.5 p-4">
+        <p className="text-xs font-semibold text-text-3">合议汇总</p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {evaluations.map((ev) => {
+            const category = classifyVerdict(ev);
+            const cls =
+              category === "B"
+                ? "bg-replay/15 text-replay-fg"
+                : category === "A"
+                  ? "bg-warning/15 text-warning-fg"
+                  : "border border-border-soft bg-bg-grid text-text-3";
+            const label = category === "B" ? "B" : category === "A" ? "A" : "=";
+            return (
+              <Tooltip key={ev.id}>
+                <TooltipTrigger asChild>
+                  <span className={cn("flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold", cls)}>
+                    {label}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{ev.judge_model}</TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </div>
+        <p className="text-sm font-medium">{consensusSentence(t)}</p>
       </CardContent>
     </Card>
   );
 }
 
 // 批量/单条评分调用中某个 judge 失败时（results[].status === "error"），不再降级成裸文字，
-// 而是复用与 EvalCard 相同的 Card 外框，保持"目的性破坏"（destructive）语义一致。
+// 而是复用与结果卡相同的 Card 外框，保持"目的性破坏"（destructive）语义一致。
 function ErrorCard({ judgeModel, error }: { judgeModel: string; error: string }) {
   return (
     <Card className="border-destructive/40">
@@ -218,10 +416,14 @@ export function JudgePanel({
   subjectId,
   compareId,
   projectId,
+  modelA = "A 模型",
+  modelB = "B 模型",
 }: {
   subjectId: string;
   compareId: string;
   projectId: string;
+  modelA?: string;
+  modelB?: string;
 }) {
   const [judgeModels, setJudgeModels] = useState<JudgeModel[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -420,21 +622,40 @@ export function JudgePanel({
           <ErrorCard key={model} judgeModel={model} error={err} />
         ))}
 
-        <div className={cn("space-y-3", visibleEvaluations.length === 0 && !running && "hidden")}>
-          {running && runningModels.map((m) => (
-            <Card key={m}>
-              <CardContent className="space-y-3 p-4">
-                <Skeleton className="h-5 w-32" />
-                <Skeleton className="h-2 w-full" />
-                <Skeleton className="h-2 w-full" />
-                <Skeleton className="h-4 w-full" />
-              </CardContent>
-            </Card>
-          ))}
-          {visibleEvaluations.map((ev) => (
-            <EvalCard key={ev.id} ev={ev} cached={isCached(ev)} onRerun={rerun} rerunning={rerunningModel === ev.judge_model} />
-          ))}
-        </div>
+        {running && runningModels.length > 0 && (
+          <div className="space-y-3">
+            {runningModels.map((m) => (
+              <Card key={m}>
+                <CardContent className="space-y-3 p-4">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-2 w-full" />
+                  <Skeleton className="h-2 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {visibleEvaluations.length > 0 && (
+          <div className="space-y-4">
+            <JurySummaryStrip evaluations={visibleEvaluations} />
+            <Scoreboard evaluations={visibleEvaluations} modelA={modelA} modelB={modelB} />
+            <div className="space-y-3">
+              {visibleEvaluations.map((ev, i) => (
+                <JuryBubble
+                  key={ev.id}
+                  ev={ev}
+                  cached={isCached(ev)}
+                  onRerun={rerun}
+                  rerunning={rerunningModel === ev.judge_model}
+                  index={i}
+                />
+              ))}
+            </div>
+            <ConsensusBubble evaluations={visibleEvaluations} />
+          </div>
+        )}
 
         {!running && visibleEvaluations.length === 0 && judgeModels.length > 0 && (
           <div className="flex flex-col items-center gap-2 py-6 text-center">

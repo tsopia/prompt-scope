@@ -87,36 +87,39 @@ function writeSavedCompare(entry: SavedCompare) {
   }
 }
 
-function pct(a: number | null, b: number | null): string {
-  if (a === null || b === null || a === 0) return "—";
-  const d = ((b - a) / a) * 100;
-  if (d === 0) return "±0%";
-  return `${d > 0 ? "↑" : "↓"} ${Math.abs(d).toFixed(0)}%`;
+// Δ(B−A)：箭头 + 原始差值（与该指标同单位）+ 百分比。颜色始终中性（text-2），
+// 不对「变好/变坏」做红绿判定——delta 只呈现方向和幅度，不替用户下判断。
+function deltaParts(
+  a: number | null, b: number | null, fmt: (n: number) => string,
+): { arrow: string; delta: string; pct: string } {
+  if (a === null || b === null) return { arrow: "±", delta: "—", pct: "" };
+  const diff = b - a;
+  const arrow = diff === 0 ? "±" : diff > 0 ? "↑" : "↓";
+  const pctText = a !== 0 ? `${Math.abs((diff / a) * 100).toFixed(0)}%` : "";
+  return { arrow, delta: fmt(Math.abs(diff)), pct: pctText };
 }
 
 function Summary({ a, b }: { a: TraceDetail; b: TraceDetail }) {
-  const stepsA = flattenTree(a.observations).length;
-  const stepsB = flattenTree(b.observations).length;
   const items = [
     {
-      label: "总成本",
+      label: "成本",
       va: formatCost(a.total_cost), vb: formatCost(b.total_cost),
-      delta: pct(a.total_cost, b.total_cost),
+      d: deltaParts(a.total_cost, b.total_cost, formatCost),
     },
     {
-      label: "总延迟",
+      label: "延迟",
       va: formatLatency(a.latency_ms), vb: formatLatency(b.latency_ms),
-      delta: pct(a.latency_ms, b.latency_ms),
+      d: deltaParts(a.latency_ms, b.latency_ms, formatLatency),
     },
     {
-      label: "Tokens (in)",
-      va: String(a.total_input_tokens), vb: String(b.total_input_tokens),
-      delta: pct(a.total_input_tokens, b.total_input_tokens),
+      label: "输入 token",
+      va: a.total_input_tokens.toLocaleString(), vb: b.total_input_tokens.toLocaleString(),
+      d: deltaParts(a.total_input_tokens, b.total_input_tokens, (n) => n.toLocaleString()),
     },
     {
-      label: "步数",
-      va: String(stepsA), vb: String(stepsB),
-      delta: pct(stepsA, stepsB),
+      label: "输出 token",
+      va: a.total_output_tokens.toLocaleString(), vb: b.total_output_tokens.toLocaleString(),
+      d: deltaParts(a.total_output_tokens, b.total_output_tokens, (n) => n.toLocaleString()),
     },
   ];
   return (
@@ -124,7 +127,7 @@ function Summary({ a, b }: { a: TraceDetail; b: TraceDetail }) {
       {items.map((it) => (
         <Card key={it.label}>
           <CardContent className="space-y-2.5 p-4">
-            <p className="text-xs text-muted-foreground">{it.label}</p>
+            <p className="text-xs text-text-3">{it.label}</p>
             <div className="flex items-center justify-between text-sm">
               <span className="flex h-3.5 w-3.5 items-center justify-center rounded bg-primary/15 text-[9px] font-bold text-primary">A</span>
               <MetricText value={it.va} className="text-[15px] font-semibold" />
@@ -133,10 +136,13 @@ function Summary({ a, b }: { a: TraceDetail; b: TraceDetail }) {
               <span className="flex h-3.5 w-3.5 items-center justify-center rounded bg-replay/15 text-[9px] font-bold text-replay-fg">B</span>
               <MetricText value={it.vb} className="text-[15px] font-semibold" />
             </div>
-            <div className="flex items-center justify-between border-t border-border-soft pt-2.5 text-[11px] text-muted-foreground">
+            <div className="flex items-center justify-between border-t border-border-soft pt-2.5 text-[11px] text-text-3">
               <span>Δ (B−A)</span>
-              {/* delta 用中性色（text-muted-foreground），只靠箭头方向传递信息，不做红绿判定 */}
-              <MetricText value={it.delta} className="text-xs font-semibold text-muted-foreground" />
+              <span className="inline-flex items-center gap-1 font-mono text-xs font-semibold tabular-nums text-muted-foreground">
+                <span>{it.d.arrow}</span>
+                {it.d.delta}
+                {it.d.pct && <span className="font-normal text-text-3">{it.d.pct}</span>}
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -158,6 +164,33 @@ function TraceHeader({ t, side }: { t: TraceDetail; side: "A" | "B" }) {
       <MetricText value={t.id.slice(0, 10)} className="text-xs text-muted-foreground" />
       <StatusBadge kind={t.origin === "replay" ? "replay" : "live"} />
     </div>
+  );
+}
+
+// 对齐视图表头用「模型 · 来源」而不是 trace 名字——名字已经在上面的 TraceHeader 里展示过，
+// 这一行呼应设计稿里「A · {modelA} · {originA}」的格式。取第一条有 model 字段的 llm
+// observation 作为该侧的代表模型；没有 llm 节点（纯 tool trace）时退化为「—」。
+function firstLlmModel(t: TraceDetail): string {
+  const found = flattenTree(t.observations).find((n) => n.type === "llm" && n.model);
+  return found?.model || "—";
+}
+
+function originLabel(t: TraceDetail): string {
+  return t.origin === "replay" ? "回放" : "实时";
+}
+
+function AlignedSideTag({ t, side }: { t: TraceDetail; side: "A" | "B" }) {
+  const badgeClass = side === "A" ? "bg-primary/15 text-primary" : "bg-replay/15 text-replay-fg";
+  return (
+    <span className={cn("flex items-center gap-1.5 text-xs font-semibold text-muted-foreground", side === "B" && "justify-end")}>
+      <span className={cn("flex h-4 w-4 shrink-0 items-center justify-center rounded text-[10px] font-bold", badgeClass)}>
+        {side}
+      </span>
+      <Link href={`/traces/${t.id}`} className="font-mono hover:text-primary">
+        {firstLlmModel(t)}
+      </Link>
+      <span className="text-text-3">· {originLabel(t)}</span>
+    </span>
   );
 }
 
@@ -564,20 +597,49 @@ function CompareContent() {
   if (!b) return <div className="p-6"><p className="text-sm text-muted-foreground">加载中…</p></div>;
 
   const mainColumn = (
-    <div className="space-y-4">
-      <Summary a={a} b={b} />
-      <Card className="overflow-hidden">
-        <div className="flex divide-x border-b bg-surface-2">
-          <TraceHeader t={a} side="A" />
-          <div className="w-16 shrink-0" />
-          <TraceHeader t={b} side="B" />
+    <div className="space-y-6">
+      <section className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-text-3">差异摘要</p>
+        <Summary a={a} b={b} />
+      </section>
+      <section className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-text-3">对齐视图</p>
+          <div className="flex items-center gap-4 text-[11px] text-text-3">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-sm bg-warning" />参数偏离
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-sm bg-primary" />仅一侧
+            </span>
+          </div>
         </div>
-        <AlignedTraceView rows={rows} />
-      </Card>
+        <Card className="overflow-hidden">
+          <div className="flex divide-x border-b bg-surface-2">
+            <TraceHeader t={a} side="A" />
+            <div className="w-16 shrink-0" />
+            <TraceHeader t={b} side="B" />
+          </div>
+          <div className="grid grid-cols-[1fr_140px_1fr] items-center border-b border-border-soft bg-bg-grid px-4 py-2">
+            <AlignedSideTag t={a} side="A" />
+            <p className="text-center text-[11px] text-text-3">对齐</p>
+            <AlignedSideTag t={b} side="B" />
+          </div>
+          <AlignedTraceView rows={rows} />
+        </Card>
+      </section>
     </div>
   );
 
-  const judgeColumn = <JudgePanel subjectId={a.id} compareId={b.id} projectId={a.project_id} />;
+  const judgeColumn = (
+    <JudgePanel
+      subjectId={a.id}
+      compareId={b.id}
+      projectId={a.project_id}
+      modelA={firstLlmModel(a)}
+      modelB={firstLlmModel(b)}
+    />
+  );
 
   return (
     <div className="p-6">

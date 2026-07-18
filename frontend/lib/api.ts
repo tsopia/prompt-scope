@@ -156,6 +156,15 @@ export interface JudgeTemplate {
   created_at: string;
 }
 
+// 一个评审维度的分数。成对评审（有 compare_trace_id）只填 score_a/score_b；
+// 单一评审只填 score。三者都可能是 null —— 旧缓存记录或没有输出结构化维度的裁判。
+export interface DimensionScore {
+  name: string;
+  score: number | null;
+  score_a: number | null;
+  score_b: number | null;
+}
+
 export interface Evaluation {
   id: string;
   subject_trace_id: string;
@@ -170,6 +179,12 @@ export interface Evaluation {
   created_at: string;
   judge_template_id: string | null;
   judge_template_name: string | null;
+  // dimensions/evidence/evidence_step/confidence 均可能为 null（旧缓存评分，或裁判本次
+  // 未产出结构化字段）——渲染时必须整体省略对应子块，绝不能补 0 或空字符串伪造数据。
+  dimensions: DimensionScore[] | null;
+  evidence: string | null;
+  evidence_step: string | null;
+  confidence: 1 | 2 | 3 | null;
 }
 
 export interface JudgeRunResult {

@@ -20,8 +20,8 @@ function jsonText(value: unknown): string {
   return typeof value === "string" ? value : JSON.stringify(value, null, 2);
 }
 
-function Cell({ node, missing, missingLabel }: {
-  node: ObservationNode | null; missing?: boolean; missingLabel?: string;
+function Cell({ node, missing, missingLabel, warn }: {
+  node: ObservationNode | null; missing?: boolean; missingLabel?: string; warn?: boolean;
 }) {
   if (!node) {
     return (
@@ -31,7 +31,14 @@ function Cell({ node, missing, missingLabel }: {
     );
   }
   return (
-    <div className="flex flex-1 min-w-0 items-center gap-2 px-3 py-2 text-sm">
+    <div
+      className={cn(
+        "flex flex-1 min-w-0 items-center gap-2 px-3 py-2 text-sm",
+        // 参数偏离行：单元格额外加一条警示色左边框，与行级 bg-warning/5 底色配合，
+        // 而不是重新发明一套配色。
+        warn && "border-l-2 border-warning/70",
+      )}
+    >
       <span className={cn("shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium", TYPE_CLASSES[node.type])}>
         {node.type}
       </span>
@@ -80,7 +87,7 @@ function MidBadge({ row }: { row: AlignedRow }) {
     );
   }
   if (row.status === "matched") {
-    return <MarkChip className="border border-border-soft bg-bg-grid text-text-3">对齐</MarkChip>;
+    return <MarkChip className="border border-border-soft bg-bg-grid text-text-3">双侧一致</MarkChip>;
   }
   const label = row.status === "only_left" ? "仅 A" : "仅 B";
   return <MarkChip className="bg-primary/15 text-primary" dotClassName="bg-primary">{label}</MarkChip>;
@@ -105,11 +112,11 @@ function Row({ row }: { row: AlignedRow }) {
             <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-90")} />
           )}
         </div>
-        <Cell node={row.left} missing={row.status === "only_right"} missingLabel="此步仅存在于右侧" />
+        <Cell node={row.left} missing={row.status === "only_right"} missingLabel="此步仅存在于右侧" warn={row.status === "matched" && row.paramDiff} />
         <div className="flex w-16 shrink-0 items-center justify-center text-xs">
           <MidBadge row={row} />
         </div>
-        <Cell node={row.right} missing={row.status === "only_left"} missingLabel="此步仅存在于左侧" />
+        <Cell node={row.right} missing={row.status === "only_left"} missingLabel="此步仅存在于左侧" warn={row.status === "matched" && row.paramDiff} />
       </div>
       {expanded && (
         <div className="flex items-stretch border-t bg-muted/20">
