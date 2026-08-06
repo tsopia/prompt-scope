@@ -9,16 +9,45 @@ concurrency:
   group: deploy
   cancel-in-progress: false
 
+env:
+  REGISTRY: ccr.ccs.tencentyun.com
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build images
-        run: |
-          docker build -t promptscope-backend ./backend
-          docker build --build-arg API_PROXY_HOST=http://backend:8000 -t promptscope-frontend ./frontend
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to Tencent TCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.TCR_USERNAME }}
+          password: ${{ secrets.TCR_PASSWORD }}
+
+      # 层缓存(type=gha)让依赖层在 lockfile/requirements 不变时逐字节复用，
+      # push 时 registry 已有的层直接跳过——跨境上传的只有真正变化的层。
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/promptscope-backend:latest
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          build-args: |
+            API_PROXY_HOST=http://backend:8000
+          tags: ${{ env.REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/promptscope-frontend:latest
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,scope=frontend,mode=max
 
       - name: Setup SSH
         run: |
@@ -27,12 +56,17 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Ship images to server
+      # 服务器从 TCR 拉取(腾讯云内网线路，秒级)，retag 成本地镜像名后 compose up，
+      # 这样 docker-compose.prod.yml 不感知 registry，Mac 手动 save/load 的兜底部署路径不受影响。
+      - name: Server pulls and restarts
         run: |
-          docker save promptscope-backend promptscope-frontend | gzip | \
-            ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" 'gunzip | docker load'
-
-      - name: Restart services
-        run: |
-          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
-            'cd ~/projects/promptscope && docker compose -f docker-compose.prod.yml --env-file .env.prod up -d && docker image prune -f'
+          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "
+            set -e
+            docker pull '${{ env.REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/promptscope-backend:latest'
+            docker pull '${{ env.REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/promptscope-frontend:latest'
+            docker tag '${{ env.REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/promptscope-backend:latest' promptscope-backend:latest
+            docker tag '${{ env.REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/promptscope-frontend:latest' promptscope-frontend:latest
+            cd ~/projects/promptscope
+            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+            docker image prune -f
+          "
