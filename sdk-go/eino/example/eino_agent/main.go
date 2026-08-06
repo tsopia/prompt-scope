@@ -23,8 +23,8 @@ import (
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 
-	promptscope "github.com/promptscope/sdk-go"
-	einohandler "github.com/promptscope/sdk-go/eino"
+	promptscope "github.com/tsopia/prompt-scope/sdk-go"
+	einohandler "github.com/tsopia/prompt-scope/sdk-go/eino"
 )
 
 func main() {

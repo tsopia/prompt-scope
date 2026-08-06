@@ -6,15 +6,21 @@
 
 ## 安装
 
-当前未发布到独立仓库（`go.mod` 中的 module path `github.com/promptscope/sdk-go` 是占位符，等 SDK 拆分为独立开源仓库后会迁移，见下方“未来事项”）。以路径引用的方式在本仓库内使用：
-
-```go
-import "github.com/promptscope/sdk-go"
+```bash
+go get github.com/tsopia/prompt-scope/sdk-go@latest
 ```
 
-或配合 `go.mod` 的 `replace` 指令指向本地路径。
+```go
+import "github.com/tsopia/prompt-scope/sdk-go"
+```
 
-依赖：Go 标准库，无第三方依赖。
+eino 集成（自动上报 ChatModel/Tool 调用，见 [`eino/README.md`](eino/README.md)）是独立的子 module：
+
+```bash
+go get github.com/tsopia/prompt-scope/sdk-go/eino@latest
+```
+
+依赖：Go 标准库，无第三方依赖（eino 子 module 额外依赖 `github.com/cloudwego/eino`）。
 
 ## 快速上手
 
@@ -25,7 +31,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/promptscope/sdk-go"
+	"github.com/tsopia/prompt-scope/sdk-go"
 )
 
 func main() {
@@ -138,7 +144,6 @@ SDK **不做任何客户端校验**（与 Python SDK 一致）：例如 `llm` �
 - **无重试/超时默认值**：与 Python SDK 一样，网络失败直接返回错误；如需重试或超时策略，通过 `WithHTTPClient` 传入自定义配置的 `*http.Client`。
 - **无批量/异步上报**：每个 `Flush`/`End` 调用是一次同步 HTTP POST，没有后台队列或批处理。
 - **无 context.Context 支持**：`Flush`/`End` 不接受 `context.Context`，无法从调用方传入取消/超时（Python SDK 同样没有）。
-- **模块路径是占位符**：`go.mod` 的 `github.com/promptscope/sdk-go` 会在 SDK 拆分为独立开源仓库时变更，届时现有 import path 需要迁移。
 - **无 replay 相关辅助方法**：只覆盖上报（ingest）路径；查询/回放 API 目前没有 Go 客户端封装。
 - **`Span` 是 Go SDK 独有的便捷方法**：Python SDK 目前没有对应的 `span(...)` 方法（span 观测目前只能通过直接构造字典上报）；两侧最终发送的 JSON 形状一致。
 

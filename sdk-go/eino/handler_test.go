@@ -13,7 +13,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 
-	promptscope "github.com/promptscope/sdk-go"
+	promptscope "github.com/tsopia/prompt-scope/sdk-go"
 )
 
 // --- test scaffolding ------------------------------------------------------

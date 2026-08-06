@@ -1,4 +1,4 @@
-// Package eino wires the PromptScope Go SDK (github.com/promptscope/sdk-go)
+// Package eino wires the PromptScope Go SDK (github.com/tsopia/prompt-scope/sdk-go)
 // into cloudwego/eino's callbacks system, so that ChatModel and Tool
 // invocations inside an eino graph/chain are automatically reported to
 // PromptScope as llm/tool observations -- no manual tc.LLM/tc.Tool calls
@@ -27,7 +27,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 	einoutils "github.com/cloudwego/eino/utils/callbacks"
 
-	promptscope "github.com/promptscope/sdk-go"
+	promptscope "github.com/tsopia/prompt-scope/sdk-go"
 )
 
 // NewHandler builds a callbacks.Handler that reports ChatModel and Tool

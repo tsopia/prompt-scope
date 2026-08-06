@@ -22,7 +22,9 @@ export PROMPTSCOPE_API_KEY=ps-xxxx
 go run ./example/eino_agent
 ```
 
-依赖：`github.com/cloudwego/eino`（本目录是独立的 Go module，`go.mod` 通过 `replace` 指向 `../` 引用核心 SDK）。
+安装：`go get github.com/tsopia/prompt-scope/sdk-go/eino@latest`
+
+依赖：`github.com/cloudwego/eino` + 核心 SDK `github.com/tsopia/prompt-scope/sdk-go`（本目录是独立的 Go module；仓库内开发时 `go.mod` 通过 `replace` 指向 `../`，消费者侧按 require 的发布版本解析）。
 
 ## 映射规则
 

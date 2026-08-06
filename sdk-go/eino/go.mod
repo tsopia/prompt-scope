@@ -1,10 +1,10 @@
-module github.com/promptscope/sdk-go/eino
+module github.com/tsopia/prompt-scope/sdk-go/eino
 
 go 1.26.1
 
 require (
 	github.com/cloudwego/eino v0.9.12
-	github.com/promptscope/sdk-go v0.0.0-00010101000000-000000000000
+	github.com/tsopia/prompt-scope/sdk-go v0.1.0
 )
 
 require (
@@ -37,4 +37,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/promptscope/sdk-go => ../
+replace github.com/tsopia/prompt-scope/sdk-go => ../

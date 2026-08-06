@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/promptscope/sdk-go"
+	"github.com/tsopia/prompt-scope/sdk-go"
 )
 
 func main() {
