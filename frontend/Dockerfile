@@ -2,6 +2,9 @@ FROM node:20-slim
 
 WORKDIR /app
 
+ARG NPM_REGISTRY=https://registry.npmjs.org
+ENV NPM_CONFIG_REGISTRY=$NPM_REGISTRY
+
 RUN npm install -g bun
 
 COPY package.json bun.lock ./
